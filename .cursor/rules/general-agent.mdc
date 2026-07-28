@@ -1,0 +1,12 @@
+---
+description: General Agent — eigenständiges Projekt
+alwaysApply: true
+---
+
+# General Agent
+
+- Dieses Repo ist **general-agent** (Universal Knowledge Analyzer).
+- Es ist **kein** Teil von `personal-agent`, Behördenpost, LifeXP oder post.life-xp.de.
+- Keine Code-, Env-, Supabase- oder Deploy-Annahmen aus anderen Projekten übernehmen.
+- Git remote: `https://github.com/danielsoboll/Universal-agent.git`
+- UI-Sprache: Deutsch. Secrets nie committen. Push nur auf explizite Anfrage.
