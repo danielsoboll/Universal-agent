@@ -16,7 +16,7 @@ function requireApiKey(): string {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) {
     throw new AIProviderError({
-      message: "OPENAI_API_KEY ist nicht konfiguriert.",
+      message: "OPENAI_API_KEY nicht konfiguriert",
       category: "not_configured",
       retryable: false,
     });
@@ -25,6 +25,7 @@ function requireApiKey(): string {
 }
 
 function createOpenAIClient(): OpenAI {
+  // Lazily constructed only when a method is called — never at import/build time.
   return new OpenAI({
     apiKey: requireApiKey(),
     timeout: AI_CONFIG.timeoutMs,
@@ -50,6 +51,16 @@ export class OpenAIProvider implements AIProvider {
   async testConnection(): Promise<ProviderHealthResult> {
     const model = AI_CONFIG.chatModel;
     const started = Date.now();
+
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      return {
+        reachable: false,
+        model,
+        durationMs: Date.now() - started,
+        errorCategory: "not_configured",
+        message: "OPENAI_API_KEY nicht konfiguriert",
+      };
+    }
 
     try {
       const client = createOpenAIClient();
@@ -85,7 +96,10 @@ export class OpenAIProvider implements AIProvider {
         model,
         durationMs,
         errorCategory: mapped.category,
-        message: mapped.message,
+        message:
+          mapped.category === "not_configured"
+            ? "OPENAI_API_KEY nicht konfiguriert"
+            : mapped.message,
       };
     }
   }

@@ -27,7 +27,12 @@ export default async function HomePage() {
     memberships.map((m) => [m.project_id, m.role as string]),
   );
 
-  const showProviderHealth = await canRunProviderHealthCheck();
+  const showProviderHealth = await canRunProviderHealthCheck().catch((error) => {
+    console.error("[HomePage] provider health gate failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return false;
+  });
 
   return (
     <>

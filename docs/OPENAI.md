@@ -21,9 +21,17 @@ In Project → Settings → Environment Variables für **alle drei** setzen:
 
 Wert nur im Dashboard / Secret Store — nicht in Git.
 
-Lokal: Eintrag in `.env.local` (siehe `.env.example`).
+Lokal darf `OPENAI_API_KEY` fehlen: Build und App bleiben stabil; OpenAI-Aufrufe
+liefern dann klar `OPENAI_API_KEY nicht konfiguriert` / `fehlerkategorie: not_configured`.
 
-## Code
+Der eigentliche Verbindungstest erfolgt auf **Vercel Production** (dort den Key setzen):
+
+```bash
+npm run openai:health:production
+```
+
+Optional: `PRODUCTION_APP_URL`, `VERCEL_AUTOMATION_BYPASS_SECRET` (bei Deployment Protection).
+
 
 | Pfad | Rolle |
 |---|---|

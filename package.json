@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "openai:health": "tsx scripts/openai-health.ts",
+    "openai:health:production": "tsx scripts/openai-health-production.ts",
     "test:security": "tsx scripts/security-tests.ts"
   },
   "dependencies": {
