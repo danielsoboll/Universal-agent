@@ -23,7 +23,10 @@ export type SourceRow = {
   name: string;
   source_type: string;
   original_filename: string | null;
+  storage_bucket: string | null;
   storage_path: string | null;
+  mime_type: string | null;
+  file_size: number | null;
   processing_status: string;
   created_at: string;
 };

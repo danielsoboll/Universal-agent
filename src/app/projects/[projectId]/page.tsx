@@ -1,10 +1,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
+import { SourceUploadForm } from "@/components/SourceUploadForm";
 import { getProjectAccess } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/server";
-import { createSourceWithUpload, startProcessingJobPlaceholder } from "@/actions/sources";
 import { createChatSession, saveUserChatMessage } from "@/actions/chat";
+import { formatBytes } from "@/lib/sourceUpload";
+
+function formatDateTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("de-DE", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "Europe/Berlin",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
 export default async function ProjectPage({
   params,
@@ -26,7 +39,7 @@ export default async function ProjectPage({
       supabase
         .from("sources")
         .select(
-          "id, name, source_type, original_filename, storage_path, processing_status, created_at",
+          "id, name, source_type, original_filename, mime_type, file_size, storage_path, storage_bucket, processing_status, created_at",
         )
         .eq("project_id", projectId)
         .order("created_at", { ascending: false }),
@@ -77,18 +90,7 @@ export default async function ProjectPage({
         <section className="panel p-6">
           <h2 className="text-xl font-semibold">Quellen</h2>
           {canEdit ? (
-            <form action={createSourceWithUpload} className="mt-4 flex flex-wrap items-end gap-3">
-              <input type="hidden" name="projectId" value={projectId} />
-              <div className="min-w-64 flex-1">
-                <label className="label" htmlFor="file">
-                  Datei hochladen
-                </label>
-                <input className="input" id="file" name="file" type="file" required />
-              </div>
-              <button className="btn btn-primary" type="submit">
-                Hochladen
-              </button>
-            </form>
+            <SourceUploadForm projectId={projectId} />
           ) : (
             <p className="muted mt-2 text-sm">
               Viewer können Quellen nur lesen.
@@ -100,26 +102,19 @@ export default async function ProjectPage({
               <li className="muted py-3 text-sm">Keine Quellen.</li>
             ) : (
               (sources ?? []).map((source) => (
-                <li
-                  key={source.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <div>
-                    <p className="font-medium">{source.name}</p>
-                    <p className="muted text-xs">
-                      {source.source_type} · {source.processing_status}
-                      {source.storage_path ? ` · ${source.storage_path}` : ""}
-                    </p>
-                  </div>
-                  {canEdit ? (
-                    <form action={startProcessingJobPlaceholder}>
-                      <input type="hidden" name="projectId" value={projectId} />
-                      <input type="hidden" name="sourceId" value={source.id} />
-                      <button className="btn btn-secondary" type="submit">
-                        Job starten
-                      </button>
-                    </form>
-                  ) : null}
+                <li key={source.id} className="py-3">
+                  <p className="font-medium">
+                    {source.original_filename || source.name}
+                  </p>
+                  <p className="muted mt-1 text-xs">
+                    Typ: {source.source_type}
+                    {" · "}
+                    Größe: {formatBytes(source.file_size)}
+                    {" · "}
+                    Status: {source.processing_status}
+                    {" · "}
+                    Upload: {formatDateTime(source.created_at)}
+                  </p>
                 </li>
               ))
             )}
@@ -136,6 +131,10 @@ export default async function ProjectPage({
                 <li key={job.id}>
                   <span className="font-mono text-xs">{job.id.slice(0, 8)}</span>{" "}
                   · {job.job_type} · <strong>{job.status}</strong>
+                  {" · "}
+                  <span className="muted text-xs">
+                    {formatDateTime(job.created_at)}
+                  </span>
                 </li>
               ))
             )}

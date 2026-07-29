@@ -32,6 +32,7 @@ create type public.source_type as enum (
 );
 
 create type public.processing_status as enum (
+  'uploading',
   'uploaded',
   'extracting',
   'extracted',
@@ -63,6 +64,7 @@ create type public.analysis_run_status as enum (
 );
 
 create type public.job_status as enum (
+  'queued',
   'pending',
   'running',
   'completed',
@@ -71,6 +73,7 @@ create type public.job_status as enum (
 );
 
 create type public.job_type as enum (
+  'ingest_source',
   'extract_source',
   'segment_document',
   'prepare_unit',
@@ -182,6 +185,7 @@ create table public.sources (
   name text not null,
   source_type public.source_type not null default 'unknown',
   original_filename text,
+  storage_bucket text,
   storage_path text,
   mime_type text,
   file_size bigint,
@@ -1040,8 +1044,8 @@ create policy source_originals_insert
     and exists (
       select 1
       from public.sources as s
-      where s.id = ((storage.foldername(name))[2])::uuid
-        and s.project_id = ((storage.foldername(name))[1])::uuid
+      where s.id = ((storage.foldername(storage.objects.name))[2])::uuid
+        and s.project_id = ((storage.foldername(storage.objects.name))[1])::uuid
     )
   );
 
@@ -1057,8 +1061,8 @@ create policy source_originals_update
     and exists (
       select 1
       from public.sources as s
-      where s.id = ((storage.foldername(name))[2])::uuid
-        and s.project_id = ((storage.foldername(name))[1])::uuid
+      where s.id = ((storage.foldername(storage.objects.name))[2])::uuid
+        and s.project_id = ((storage.foldername(storage.objects.name))[1])::uuid
     )
   );
 

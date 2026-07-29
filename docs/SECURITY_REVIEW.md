@@ -53,6 +53,7 @@ Zugriff nur bei **aktiver** `project_members`-Zeile (`is_active = true`).
 | `knowledge_unit_reviews` | SELECT Member; CUD Editor/Owner (`reviewer_id = auth.uid()`) |
 | `ai_usage_logs` | SELECT nur **Owner**; kein Client-Write |
 | `sources` + Storage | wie zuvor: Member lesen; Editor/Owner schreiben/löschen |
+| Storage path RLS | In EXISTS-Subqueries `storage.objects.name` qualifizieren — sonst bindet `name` an `sources.name` |
 | Helper | `is_project_member` / `can_edit` / `is_project_owner` verlangen `is_active = true` |
 | `projects` SELECT | `owner_id = auth.uid()` **oder** aktives Membership — nötig, damit `INSERT … RETURNING` vor dem AFTER-Trigger greift |
 

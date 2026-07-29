@@ -249,7 +249,8 @@ async function main() {
       project_id: projectA.id,
       name: "ok.txt",
       source_type: "txt",
-      processing_status: "uploaded",
+      processing_status: "uploading",
+      storage_bucket: "source-originals",
     })
     .select("id")
     .single();
@@ -259,22 +260,97 @@ async function main() {
     editorSource.error?.message,
   );
 
+  const editorPath = editorSource.data
+    ? `${projectA.id}/${editorSource.data.id}/ok.txt`
+    : "";
+  const editorUpload = editorSource.data
+    ? await editor.storage
+        .from("source-originals")
+        .upload(editorPath, Buffer.from("hello-editor"), {
+          contentType: "text/plain",
+          upsert: false,
+        })
+    : { error: editorSource.error };
+  record(
+    "Editor kann Storage schreiben",
+    !editorUpload.error,
+    editorUpload.error?.message,
+  );
+
+  if (editorSource.data && !editorUpload.error) {
+    await editor
+      .from("sources")
+      .update({
+        storage_path: editorPath,
+        processing_status: "uploaded",
+        file_size: 12,
+        original_filename: "ok.txt",
+      })
+      .eq("id", editorSource.data.id);
+  }
+
   const editorJob = editorSource.data
     ? await editor
         .from("processing_jobs")
         .insert({
           project_id: projectA.id,
           source_id: editorSource.data.id,
-          job_type: "process_source",
-          status: "pending",
+          job_type: "ingest_source",
+          status: "queued",
         })
-        .select("id")
+        .select("id, status, job_type")
         .single()
     : { error: editorSource.error, data: null };
   record(
-    "Editor kann Jobs starten (insert)",
-    !!editorJob.data && !editorJob.error,
+    "Editor kann ingest_source Job (queued) anlegen",
+    !!editorJob.data &&
+      !editorJob.error &&
+      editorJob.data.status === "queued" &&
+      editorJob.data.job_type === "ingest_source",
     editorJob.error?.message,
+  );
+
+  // Viewer cannot write storage even with a valid source path pattern
+  const viewerUpload = await viewer.storage
+    .from("source-originals")
+    .upload(
+      `${projectA.id}/${editorSource.data?.id ?? "00000000-0000-4000-8000-000000000099"}/viewer-hack.txt`,
+      Buffer.from("nope"),
+      { contentType: "text/plain", upsert: false },
+    );
+  record(
+    "Viewer kann nicht hochladen (Storage)",
+    !!viewerUpload.error,
+    viewerUpload.error?.message,
+  );
+
+  // Non-member cannot create source or write storage on B
+  const outsiderEmail = "outsider.phase1@general-agent.test";
+  const outsiderId = await ensureUser(admin, outsiderEmail, password);
+  void outsiderId;
+  const outsiderToken = await signIn(outsiderEmail, password);
+  const outsider = userClient(outsiderToken);
+  const outsiderSource = await outsider.from("sources").insert({
+    project_id: projectA.id,
+    name: "outsider.txt",
+    source_type: "txt",
+  });
+  record(
+    "Nutzer ohne Mitgliedschaft kann keine Source erzeugen",
+    !!outsiderSource.error,
+    outsiderSource.error?.message,
+  );
+  const outsiderStorage = await outsider.storage
+    .from("source-originals")
+    .upload(
+      `${projectA.id}/00000000-0000-4000-8000-000000000098/x.txt`,
+      Buffer.from("x"),
+      { contentType: "text/plain" },
+    );
+  record(
+    "Nutzer ohne Mitgliedschaft kann Storage nicht schreiben",
+    !!outsiderStorage.error,
+    outsiderStorage.error?.message,
   );
 
   // 6) Editor cannot write knowledge_units / analysis_results
@@ -321,6 +397,34 @@ async function main() {
     memberUpdate.error?.message,
   );
 
+  // Owner can also upload
+  const ownerSource = await owner
+    .from("sources")
+    .insert({
+      project_id: projectA.id,
+      name: "owner.txt",
+      source_type: "txt",
+      processing_status: "uploading",
+      storage_bucket: "source-originals",
+    })
+    .select("id")
+    .single();
+  const ownerPath = ownerSource.data
+    ? `${projectA.id}/${ownerSource.data.id}/owner.txt`
+    : "";
+  const ownerUpload = ownerSource.data
+    ? await owner.storage
+        .from("source-originals")
+        .upload(ownerPath, Buffer.from("owner-file"), {
+          contentType: "text/plain",
+        })
+    : { error: ownerSource.error };
+  record(
+    "Owner kann hochladen (Source + Storage)",
+    !!ownerSource.data && !ownerSource.error && !ownerUpload.error,
+    ownerSource.error?.message || ownerUpload.error?.message,
+  );
+
   // 8) foreign project_id blocked for viewer insert
   const foreignInsert = await viewer.from("sources").insert({
     project_id: projectB.id,
@@ -343,15 +447,29 @@ async function main() {
     foreignDownload.error?.message,
   );
 
-  // 10) Service role key not in client bundle — static check
+  // 10) Bucket is private (no public flag)
+  const { data: bucket } = await admin.storage.getBucket("source-originals");
+  record(
+    "Bucket source-originals ist privat",
+    bucket?.public === false,
+    `public=${String(bucket?.public)}`,
+  );
+
+  // 11) Service role key not in client bundle — static check
   const fs = await import("fs");
   const clientSrc = fs.readFileSync(
     resolve(process.cwd(), "src/lib/supabase/client.ts"),
     "utf8",
   );
+  const envSrc = fs.readFileSync(
+    resolve(process.cwd(), "src/lib/supabase/env.ts"),
+    "utf8",
+  );
   const hasSecretInClient =
     clientSrc.includes("SUPABASE_SECRET") ||
     clientSrc.includes("SERVICE_ROLE") ||
+    envSrc.includes("SUPABASE_SECRET") ||
+    envSrc.includes("SERVICE_ROLE") ||
     clientSrc.includes(service.slice(0, 20));
   record(
     "Service-Role-Key erscheint nicht im Client-Modul",

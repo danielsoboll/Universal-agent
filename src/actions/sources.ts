@@ -1,41 +1,136 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createHash } from "crypto";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  ALLOWED_SOURCE_EXTENSIONS,
+  detectAllowedSourceType,
+  formatUploadLimit,
+  getAllowedExtension,
+  MAX_SOURCE_UPLOAD_BYTES,
+  sanitizeFilename,
+  SOURCE_ORIGINALS_BUCKET,
+} from "@/lib/sourceUpload";
 
-function detectSourceType(filename: string, mimeType: string | undefined) {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "markdown";
-  if (lower.endsWith(".jsonl") || lower.endsWith(".ndjson")) return "jsonl";
-  if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".csv")) return "csv";
-  if (lower.endsWith(".pdf") || mimeType === "application/pdf") return "pdf";
-  if (lower.endsWith(".txt") || mimeType?.startsWith("text/")) return "txt";
-  return "unknown";
+export type CreateSourceState = {
+  error: string | null;
+  ok: boolean;
+  sourceId: string | null;
+};
+
+function formatSupabaseError(error: {
+  message: string;
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+}): string {
+  const parts = [error.message];
+  if (error.code) parts.push(`Code: ${error.code}`);
+  if (error.details) parts.push(error.details);
+  if (error.hint) parts.push(`Hinweis: ${error.hint}`);
+  return parts.join(" · ");
 }
 
-export async function createSourceWithUpload(formData: FormData): Promise<void> {
-  const projectId = String(formData.get("projectId") ?? "");
+async function removeStorageObject(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  storagePath: string,
+) {
+  const { error } = await supabase.storage
+    .from(SOURCE_ORIGINALS_BUCKET)
+    .remove([storagePath]);
+  if (error) {
+    console.error("[createSourceWithUpload] storage cleanup failed", {
+      storagePath,
+      message: error.message,
+    });
+  }
+}
+
+async function removeSourceRow(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  sourceId: string,
+  projectId: string,
+) {
+  const { error } = await supabase
+    .from("sources")
+    .delete()
+    .eq("id", sourceId)
+    .eq("project_id", projectId);
+  if (error) {
+    console.error("[createSourceWithUpload] source cleanup failed", {
+      sourceId,
+      projectId,
+      message: error.message,
+      code: error.code,
+    });
+  }
+}
+
+export async function createSourceWithUpload(
+  _prev: CreateSourceState,
+  formData: FormData,
+): Promise<CreateSourceState> {
+  const projectId = String(formData.get("projectId") ?? "").trim();
   const file = formData.get("file");
 
   if (!projectId) {
-    throw new Error("Projekt fehlt.");
+    return { error: "Projekt fehlt.", ok: false, sourceId: null };
   }
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error("Datei fehlt.");
+  if (!(file instanceof File)) {
+    return { error: "Bitte eine Datei auswählen.", ok: false, sourceId: null };
+  }
+  if (file.size === 0) {
+    return { error: "Die Datei ist leer.", ok: false, sourceId: null };
+  }
+  if (file.size > MAX_SOURCE_UPLOAD_BYTES) {
+    return {
+      error: `Datei zu groß (${formatUploadLimit()} maximal).`,
+      ok: false,
+      sourceId: null,
+    };
+  }
+
+  const extension = getAllowedExtension(file.name);
+  const sourceType = detectAllowedSourceType(file.name);
+  if (!extension || !sourceType) {
+    return {
+      error: `Dateityp nicht erlaubt. Erlaubt: ${ALLOWED_SOURCE_EXTENSIONS.join(", ")}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Nicht angemeldet.");
+
+  if (authError) {
+    console.error("[createSourceWithUpload] auth.getUser failed", {
+      message: authError.message,
+      status: authError.status,
+    });
+    return {
+      error: "Anmeldung konnte nicht geprüft werden. Bitte erneut einloggen.",
+      ok: false,
+      sourceId: null,
+    };
   }
 
-  const { data: membership } = await supabase
+  if (!user) {
+    console.error("[createSourceWithUpload] not authenticated");
+    return {
+      error: "Nicht angemeldet. Bitte einloggen und erneut versuchen.",
+      ok: false,
+      sourceId: null,
+    };
+  }
+
+  const { data: membership, error: membershipError } = await supabase
     .from("project_members")
     .select("role")
     .eq("project_id", projectId)
@@ -43,121 +138,200 @@ export async function createSourceWithUpload(formData: FormData): Promise<void> 
     .eq("is_active", true)
     .maybeSingle();
 
-  if (!membership || !["owner", "editor"].includes(membership.role)) {
-    throw new Error("Keine Berechtigung zum Hochladen.");
+  if (membershipError) {
+    console.error("[createSourceWithUpload] membership check failed", {
+      projectId,
+      userId: user.id,
+      message: membershipError.message,
+      code: membershipError.code,
+      details: membershipError.details,
+      hint: membershipError.hint,
+    });
+    return {
+      error: `Berechtigung konnte nicht geprüft werden. ${formatSupabaseError(membershipError)}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
+  if (!membership || !["owner", "editor"].includes(membership.role)) {
+    console.error("[createSourceWithUpload] forbidden", {
+      projectId,
+      userId: user.id,
+      role: membership?.role ?? null,
+    });
+    return {
+      error: "Keine Berechtigung zum Hochladen (nur Editor oder Owner).",
+      ok: false,
+      sourceId: null,
+    };
+  }
+
+  const originalFilename = file.name;
+  const safeFilename = sanitizeFilename(originalFilename);
   const buffer = Buffer.from(await file.arrayBuffer());
   const checksum = createHash("sha256").update(buffer).digest("hex");
-  const sourceType = detectSourceType(file.name, file.type);
-  const safeName = file.name.replace(/[^\w.\-()+ äöüÄÖÜß]/g, "_");
+  const mimeType = file.type || null;
+
+  console.info("[createSourceWithUpload] start", {
+    projectId,
+    userId: user.id,
+    role: membership.role,
+    originalFilename,
+    safeFilename,
+    sizeBytes: file.size,
+    sourceType,
+  });
 
   const { data: source, error: insertError } = await supabase
     .from("sources")
     .insert({
       project_id: projectId,
-      name: file.name,
+      name: originalFilename,
       source_type: sourceType,
-      original_filename: file.name,
-      mime_type: file.type || null,
+      original_filename: originalFilename,
+      mime_type: mimeType,
       file_size: file.size,
       checksum,
-      processing_status: "uploaded",
+      storage_bucket: SOURCE_ORIGINALS_BUCKET,
+      processing_status: "uploading",
+      metadata: {
+        original_filename: originalFilename,
+        safe_filename: safeFilename,
+        uploaded_by: user.id,
+      },
     })
     .select("id")
     .single();
 
-  if (insertError) {
-    throw new Error(insertError.message);
+  if (insertError || !source?.id) {
+    console.error("[createSourceWithUpload] source insert failed", {
+      projectId,
+      userId: user.id,
+      message: insertError?.message,
+      code: insertError?.code,
+      details: insertError?.details,
+      hint: insertError?.hint,
+    });
+    const duplicate =
+      insertError?.code === "23505" ||
+      insertError?.message?.toLowerCase().includes("duplicate");
+    return {
+      error: duplicate
+        ? "Diese Datei wurde in diesem Projekt bereits hochgeladen (gleicher Inhalt)."
+        : `Quelle konnte nicht angelegt werden. ${insertError ? formatSupabaseError(insertError) : "Keine ID."}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
-  const storagePath = `${projectId}/${source.id}/${safeName}`;
+  const storagePath = `${projectId}/${source.id}/${safeFilename}`;
 
   const { error: uploadError } = await supabase.storage
-    .from("source-originals")
+    .from(SOURCE_ORIGINALS_BUCKET)
     .upload(storagePath, buffer, {
-      contentType: file.type || "application/octet-stream",
+      contentType: mimeType || "application/octet-stream",
       upsert: false,
     });
 
   if (uploadError) {
-    await supabase.from("sources").delete().eq("id", source.id);
-    throw new Error(`Upload fehlgeschlagen: ${uploadError.message}`);
+    console.error("[createSourceWithUpload] storage upload failed", {
+      projectId,
+      sourceId: source.id,
+      storagePath,
+      message: uploadError.message,
+    });
+    await removeSourceRow(supabase, source.id, projectId);
+    return {
+      error: `Datei-Upload fehlgeschlagen: ${uploadError.message}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
   const { error: updateError } = await supabase
     .from("sources")
-    .update({ storage_path: storagePath })
-    .eq("id", source.id);
+    .update({
+      storage_path: storagePath,
+      storage_bucket: SOURCE_ORIGINALS_BUCKET,
+      processing_status: "uploaded",
+      processing_error: null,
+      metadata: {
+        original_filename: originalFilename,
+        safe_filename: safeFilename,
+        uploaded_by: user.id,
+        size_bytes: file.size,
+        storage_bucket: SOURCE_ORIGINALS_BUCKET,
+        storage_path: storagePath,
+      },
+    })
+    .eq("id", source.id)
+    .eq("project_id", projectId);
 
   if (updateError) {
-    throw new Error(updateError.message);
+    console.error("[createSourceWithUpload] source update after upload failed", {
+      projectId,
+      sourceId: source.id,
+      storagePath,
+      message: updateError.message,
+      code: updateError.code,
+      details: updateError.details,
+      hint: updateError.hint,
+    });
+    await removeStorageObject(supabase, storagePath);
+    await removeSourceRow(supabase, source.id, projectId);
+    return {
+      error: `Metadaten konnten nicht gespeichert werden. ${formatSupabaseError(updateError)}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
-  revalidatePath(`/projects/${projectId}`);
-}
-
-export async function startProcessingJobPlaceholder(
-  formData: FormData,
-): Promise<void> {
-  const projectId = String(formData.get("projectId") ?? "");
-  const sourceId = String(formData.get("sourceId") ?? "");
-
-  if (!projectId || !sourceId) {
-    throw new Error("Projekt oder Quelle fehlt.");
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Nicht angemeldet.");
-  }
-
-  const { data: membership } = await supabase
-    .from("project_members")
-    .select("role")
-    .eq("project_id", projectId)
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (!membership || !["owner", "editor"].includes(membership.role)) {
-    throw new Error("Keine Berechtigung zum Starten von Jobs.");
-  }
-
-  const { data: job, error } = await supabase
+  const { data: job, error: jobError } = await supabase
     .from("processing_jobs")
     .insert({
       project_id: projectId,
-      source_id: sourceId,
-      job_type: "process_source",
-      status: "pending",
+      source_id: source.id,
+      job_type: "ingest_source",
+      status: "queued",
       progress_current: 0,
       progress_total: 1,
-      payload: { placeholder: true, phase: 1 },
+      payload: {
+        source_id: source.id,
+        storage_bucket: SOURCE_ORIGINALS_BUCKET,
+        storage_path: storagePath,
+        original_filename: originalFilename,
+      },
     })
-    .select("id, status")
+    .select("id")
     .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (jobError || !job?.id) {
+    console.error("[createSourceWithUpload] job insert failed", {
+      projectId,
+      sourceId: source.id,
+      storagePath,
+      message: jobError?.message,
+      code: jobError?.code,
+      details: jobError?.details,
+      hint: jobError?.hint,
+    });
+    await removeStorageObject(supabase, storagePath);
+    await removeSourceRow(supabase, source.id, projectId);
+    return {
+      error: `Processing-Job konnte nicht angelegt werden. ${jobError ? formatSupabaseError(jobError) : "Keine Job-ID."}`,
+      ok: false,
+      sourceId: null,
+    };
   }
 
-  try {
-    const admin = createAdminClient();
-    await admin
-      .from("processing_jobs")
-      .update({
-        status: "running",
-        started_at: new Date().toISOString(),
-        result: { note: "Phase-1-Platzhalter — keine KI-Verarbeitung" },
-      })
-      .eq("id", job.id);
-  } catch {
-    // Secret key missing — job remains pending
-  }
+  console.info("[createSourceWithUpload] success", {
+    projectId,
+    sourceId: source.id,
+    jobId: job.id,
+    storagePath,
+  });
 
   revalidatePath(`/projects/${projectId}`);
+  return { error: null, ok: true, sourceId: source.id };
 }
