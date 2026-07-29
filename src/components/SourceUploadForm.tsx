@@ -49,7 +49,8 @@ export function SourceUploadForm({ projectId }: { projectId: string }) {
           className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
           role="status"
         >
-          Datei hochgeladen. Quelle und Ingest-Job sind angelegt.
+          Datei hochgeladen und verarbeitet. Quelle, Job und Knowledge Units sind
+          angelegt.
         </p>
       ) : null}
       <div className="flex flex-wrap items-end gap-3">

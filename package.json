@@ -9,6 +9,7 @@
     "lint": "eslint",
     "openai:health": "tsx scripts/openai-health.ts",
     "openai:health:production": "tsx scripts/openai-health-production.ts",
+    "ingest:sap-sample": "tsx scripts/ingest-sap-sample.ts",
     "test:security": "tsx scripts/security-tests.ts"
   },
   "dependencies": {

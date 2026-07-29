@@ -3,25 +3,16 @@ export const SOURCE_ORIGINALS_BUCKET = "source-originals";
 /** Matches private bucket file_size_limit (100 MiB). */
 export const MAX_SOURCE_UPLOAD_BYTES = 100 * 1024 * 1024;
 
-export const ALLOWED_SOURCE_EXTENSIONS = [
-  ".jsonl",
-  ".txt",
-  ".json",
-  ".csv",
-  ".pdf",
-] as const;
+export const ALLOWED_SOURCE_EXTENSIONS = [".jsonl", ".txt"] as const;
 
 export type AllowedSourceExtension = (typeof ALLOWED_SOURCE_EXTENSIONS)[number];
 
 const EXTENSION_TO_SOURCE_TYPE: Record<
   AllowedSourceExtension,
-  "jsonl" | "txt" | "json" | "csv" | "pdf"
+  "jsonl" | "txt"
 > = {
   ".jsonl": "jsonl",
   ".txt": "txt",
-  ".json": "json",
-  ".csv": "csv",
-  ".pdf": "pdf",
 };
 
 export function getAllowedExtension(filename: string): AllowedSourceExtension | null {

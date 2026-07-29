@@ -332,6 +332,44 @@ export async function createSourceWithUpload(
     storagePath,
   });
 
+  // Run ingest server-side immediately (service role writes docs/KUs).
+  try {
+    const { runIngestSourceJob } = await import("@/lib/ingest/ingestSource");
+    const ingestResult = await runIngestSourceJob({
+      projectId,
+      sourceId: source.id,
+      jobId: job.id,
+    });
+    if (!ingestResult.ok) {
+      console.error("[createSourceWithUpload] ingest failed", {
+        projectId,
+        sourceId: source.id,
+        jobId: job.id,
+        error: ingestResult.error,
+      });
+      revalidatePath(`/projects/${projectId}`);
+      return {
+        error: `Upload ok, Verarbeitung fehlgeschlagen: ${ingestResult.error ?? "unbekannt"}`,
+        ok: false,
+        sourceId: source.id,
+      };
+    }
+  } catch (error) {
+    console.error("[createSourceWithUpload] ingest threw", {
+      projectId,
+      sourceId: source.id,
+      jobId: job.id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    revalidatePath(`/projects/${projectId}`);
+    return {
+      error:
+        "Upload ok, Verarbeitung konnte nicht gestartet werden. Bitte Seite neu laden.",
+      ok: false,
+      sourceId: source.id,
+    };
+  }
+
   revalidatePath(`/projects/${projectId}`);
   return { error: null, ok: true, sourceId: source.id };
 }

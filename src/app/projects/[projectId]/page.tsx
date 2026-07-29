@@ -19,6 +19,21 @@ function formatDateTime(iso: string) {
   }
 }
 
+type IngestMeta = {
+  lines_read?: number;
+  valid_records?: number;
+  invalid_lines?: number;
+  documents_created?: number;
+  knowledge_units_created?: number;
+};
+
+function readIngestMeta(metadata: unknown): IngestMeta | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const ingest = (metadata as { ingest?: unknown }).ingest;
+  if (!ingest || typeof ingest !== "object") return null;
+  return ingest as IngestMeta;
+}
+
 export default async function ProjectPage({
   params,
 }: {
@@ -34,28 +49,50 @@ export default async function ProjectPage({
   const canEdit = role === "owner" || role === "editor";
   const supabase = await createClient();
 
-  const [{ data: sources }, { data: jobs }, { data: sessions }] =
-    await Promise.all([
-      supabase
-        .from("sources")
-        .select(
-          "id, name, source_type, original_filename, mime_type, file_size, storage_path, storage_bucket, processing_status, created_at",
-        )
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("processing_jobs")
-        .select("id, source_id, job_type, status, created_at")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("chat_sessions")
-        .select("id, title, created_at")
-        .eq("project_id", projectId)
-        .order("updated_at", { ascending: false })
-        .limit(10),
-    ]);
+  const [
+    { data: sources },
+    { data: jobs },
+    { data: sessions },
+    { data: units },
+    { count: unitCount },
+    { count: documentCount },
+  ] = await Promise.all([
+    supabase
+      .from("sources")
+      .select(
+        "id, name, source_type, original_filename, mime_type, file_size, storage_path, storage_bucket, processing_status, processing_error, metadata, created_at",
+      )
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("processing_jobs")
+      .select("id, source_id, job_type, status, result, error, created_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("chat_sessions")
+      .select("id, title, created_at")
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("knowledge_units")
+      .select(
+        "id, title, unit_type, processing_status, source_location, created_at, metadata",
+      )
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("knowledge_units")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId),
+    supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId),
+  ]);
 
   const latestSession = sessions?.[0] ?? null;
   const { data: messages } = latestSession
@@ -65,6 +102,18 @@ export default async function ProjectPage({
         .eq("chat_session_id", latestSession.id)
         .order("created_at", { ascending: true })
     : { data: [] };
+
+  const totals = (sources ?? []).reduce(
+    (acc, source) => {
+      const ingest = readIngestMeta(source.metadata);
+      if (!ingest) return acc;
+      acc.linesRead += ingest.lines_read ?? 0;
+      acc.valid += ingest.valid_records ?? 0;
+      acc.invalid += ingest.invalid_lines ?? 0;
+      return acc;
+    },
+    { linesRead: 0, valid: 0, invalid: 0 },
+  );
 
   return (
     <>
@@ -88,6 +137,32 @@ export default async function ProjectPage({
         </div>
 
         <section className="panel p-6">
+          <h2 className="text-xl font-semibold">Verarbeitungsübersicht</h2>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="muted">Gelesene Zeilen</dt>
+              <dd className="font-medium">{totals.linesRead}</dd>
+            </div>
+            <div>
+              <dt className="muted">Gültige Datensätze</dt>
+              <dd className="font-medium">{totals.valid}</dd>
+            </div>
+            <div>
+              <dt className="muted">Fehlerhafte Zeilen</dt>
+              <dd className="font-medium">{totals.invalid}</dd>
+            </div>
+            <div>
+              <dt className="muted">Dokumente</dt>
+              <dd className="font-medium">{documentCount ?? 0}</dd>
+            </div>
+            <div>
+              <dt className="muted">Knowledge Units</dt>
+              <dd className="font-medium">{unitCount ?? 0}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="panel p-6">
           <h2 className="text-xl font-semibold">Quellen</h2>
           {canEdit ? (
             <SourceUploadForm projectId={projectId} />
@@ -101,22 +176,83 @@ export default async function ProjectPage({
             {(sources ?? []).length === 0 ? (
               <li className="muted py-3 text-sm">Keine Quellen.</li>
             ) : (
-              (sources ?? []).map((source) => (
-                <li key={source.id} className="py-3">
-                  <p className="font-medium">
-                    {source.original_filename || source.name}
-                  </p>
-                  <p className="muted mt-1 text-xs">
-                    Typ: {source.source_type}
-                    {" · "}
-                    Größe: {formatBytes(source.file_size)}
-                    {" · "}
-                    Status: {source.processing_status}
-                    {" · "}
-                    Upload: {formatDateTime(source.created_at)}
-                  </p>
-                </li>
-              ))
+              (sources ?? []).map((source) => {
+                const ingest = readIngestMeta(source.metadata);
+                return (
+                  <li key={source.id} className="py-3">
+                    <p className="font-medium">
+                      {source.original_filename || source.name}
+                    </p>
+                    <p className="muted mt-1 text-xs">
+                      Typ: {source.source_type}
+                      {" · "}
+                      Größe: {formatBytes(source.file_size)}
+                      {" · "}
+                      Status: {source.processing_status}
+                      {" · "}
+                      Upload: {formatDateTime(source.created_at)}
+                    </p>
+                    {ingest ? (
+                      <p className="muted mt-1 text-xs">
+                        Zeilen: {ingest.lines_read ?? 0}
+                        {" · "}
+                        gültig: {ingest.valid_records ?? 0}
+                        {" · "}
+                        fehlerhaft: {ingest.invalid_lines ?? 0}
+                        {" · "}
+                        Docs: {ingest.documents_created ?? 0}
+                        {" · "}
+                        KUs: {ingest.knowledge_units_created ?? 0}
+                      </p>
+                    ) : null}
+                    {source.processing_error ? (
+                      <p className="mt-1 text-xs text-amber-800">
+                        {source.processing_error}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </section>
+
+        <section className="panel p-6">
+          <h2 className="text-xl font-semibold">Knowledge Units</h2>
+          <p className="muted mt-1 text-sm">
+            Erste {Math.min(20, units?.length ?? 0)} von {unitCount ?? 0}
+          </p>
+          <ul className="mt-4 divide-y divide-[var(--border)]">
+            {(units ?? []).length === 0 ? (
+              <li className="muted py-3 text-sm">Noch keine Knowledge Units.</li>
+            ) : (
+              (units ?? []).map((unit) => {
+                const line =
+                  unit.source_location &&
+                  typeof unit.source_location === "object" &&
+                  "line_number" in unit.source_location
+                    ? String(
+                        (unit.source_location as { line_number?: unknown })
+                          .line_number ?? "",
+                      )
+                    : "";
+                return (
+                  <li key={unit.id} className="py-3">
+                    <Link
+                      href={`/projects/${projectId}/units/${unit.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {unit.title || unit.id.slice(0, 8)}
+                    </Link>
+                    <p className="muted mt-1 text-xs">
+                      Typ: {unit.unit_type}
+                      {line ? ` · Zeile ${line}` : ""}
+                      {" · "}
+                      Status: {unit.processing_status}
+                    </p>
+                  </li>
+                );
+              })
             )}
           </ul>
         </section>
@@ -135,6 +271,11 @@ export default async function ProjectPage({
                   <span className="muted text-xs">
                     {formatDateTime(job.created_at)}
                   </span>
+                  {job.error ? (
+                    <span className="block text-xs text-amber-800">
+                      {job.error}
+                    </span>
+                  ) : null}
                 </li>
               ))
             )}

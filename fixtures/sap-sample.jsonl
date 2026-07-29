@@ -1,0 +1,5 @@
+{"Programm":"ZMM_REPORT_01","Include":"ZMM_REPORT_01_TOP","Tabelle":"MARA","Feld":"MATNR","Objekt":"ZCL_MATERIAL","Zeilennummer":120,"Kommentar":"Materialstammdaten lesen","Code":"SELECT SINGLE matnr FROM mara INTO lv_matnr WHERE matnr = iv_matnr.","Nutzungstyp":"DB_READ"}
+{"Programm":"ZSD_ORDER","Include":"ZSD_ORDER_F01","Tabelle":"VBAK","Feld":"VBELN","Objekt":"ZFG_SALES","Zeilennummer":45,"Kommentar":"Auftragskopf prüfen","Code":"IF ls_vbak-vbeln IS INITIAL.","Nutzungstyp":"CHECK"}
+{"Programm":"ZFI_POST","Include":"","Tabelle":"BSEG","Feld":"BELNR","Objekt":"ZCL_FI_POST","Zeilennummer":88,"Kommentar":"Belegnummer setzen","Code":"ls_bseg-belnr = lv_belnr.","Nutzungstyp":"ASSIGN"}
+{this is not valid json
+{"Programm":"ZWM_MOVE","Include":"ZWM_MOVE_TOP","Tabelle":"MARD","Feld":"LABST","Objekt":"ZCL_STOCK","Zeilennummer":12,"Kommentar":"Bestand lesen","Code":"SELECT labst FROM mard INTO @DATA(lv_labst).","Nutzungstyp":"DB_READ"}
