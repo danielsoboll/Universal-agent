@@ -54,6 +54,7 @@ Zugriff nur bei **aktiver** `project_members`-Zeile (`is_active = true`).
 | `ai_usage_logs` | SELECT nur **Owner**; kein Client-Write |
 | `sources` + Storage | wie zuvor: Member lesen; Editor/Owner schreiben/löschen |
 | Helper | `is_project_member` / `can_edit` / `is_project_owner` verlangen `is_active = true` |
+| `projects` SELECT | `owner_id = auth.uid()` **oder** aktives Membership — nötig, damit `INSERT … RETURNING` vor dem AFTER-Trigger greift |
 
 ## Review-Struktur
 
