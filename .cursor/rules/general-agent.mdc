@@ -9,4 +9,5 @@ alwaysApply: true
 - Es ist **kein** Teil von `personal-agent`, Behördenpost, LifeXP oder post.life-xp.de.
 - Keine Code-, Env-, Supabase- oder Deploy-Annahmen aus anderen Projekten übernehmen.
 - Git remote: `https://github.com/danielsoboll/Universal-agent.git`
+- Supabase: `pkcucpsrwgactejovdmp` (`https://pkcucpsrwgactejovdmp.supabase.co`)
 - UI-Sprache: Deutsch. Secrets nie committen. Push nur auf explizite Anfrage.

@@ -1,0 +1,12 @@
+-- PLANNED — do not apply in Phase 1.
+-- Activate in Retrieval Phase (Phase 4) after embeddings exist.
+--
+-- HNSW approximate nearest neighbor index for knowledge_units.embedding
+-- Requires pgvector with HNSW support (Supabase default).
+--
+-- When applying: move/copy into supabase/migrations/ with a real timestamp
+-- after confirming embedding volume and query patterns.
+
+-- create index concurrently knowledge_units_embedding_hnsw_idx
+--   on public.knowledge_units
+--   using hnsw (embedding extensions.vector_cosine_ops);
