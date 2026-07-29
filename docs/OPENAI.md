@@ -38,10 +38,21 @@ Lokal: Eintrag in `.env.local` (siehe `.env.example`).
 ## Verbindungstest
 
 ```bash
-npx tsx scripts/openai-health.ts
+npm run openai:health
 ```
 
 Oder in der App (nur aktive Projekt-Owner): Startseite → „Verbindung testen“.
+Oder `POST /api/internal/openai-health` mit gültiger Owner-Session.
 
-Ergebnis enthält nur: erreichbar / nicht erreichbar, Modell, Laufzeit, Fehlerkategorie.
-Kein API-Key, keine vollständige Provider-Antwort.
+Ergebnis enthält nur:
+
+```json
+{
+  "erreichbar": "ja",
+  "modell": "gpt-4.1-mini",
+  "laufzeit_ms": 123,
+  "fehlerkategorie": null
+}
+```
+
+Kein API-Key, keine Prompt-Inhalte, keine vollständige Provider-Antwort.

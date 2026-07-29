@@ -1,18 +1,39 @@
 /**
  * Server-side OpenAI health check (CLI).
- * Run: npx tsx scripts/openai-health.ts
- * Requires OPENAI_API_KEY in .env.local — never prints the key.
+ * Run: npm run openai:health
+ * Requires OPENAI_API_KEY in .env.local — never prints the key or prompts.
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-function loadEnv() {
+function stripQuotes(value: string): string {
+  const v = value.trim();
+  if (v.length >= 2) {
+    const q = v[0];
+    if ((q === '"' || q === "'") && v.endsWith(q)) {
+      return v.slice(1, -1);
+    }
+  }
+  return v;
+}
+
+function loadEnvFile(filename: string) {
   try {
-    const text = readFileSync(resolve(process.cwd(), ".env.local"), "utf8");
-    for (const line of text.split("\n")) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !process.env[m[1]]) {
-        process.env[m[1]] = m[2];
+    const text = readFileSync(resolve(process.cwd(), filename), "utf8");
+    for (const raw of text.split("\n")) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const normalized = line.startsWith("export ")
+        ? line.slice("export ".length).trim()
+        : line;
+      const eq = normalized.indexOf("=");
+      if (eq <= 0) continue;
+      const key = normalized.slice(0, eq).trim();
+      const value = stripQuotes(normalized.slice(eq + 1));
+      if (!key) continue;
+      // Prefer non-empty file values over empty inherited env.
+      if (!process.env[key] || process.env[key]?.trim() === "") {
+        process.env[key] = value;
       }
     }
   } catch {
@@ -20,10 +41,14 @@ function loadEnv() {
   }
 }
 
+function loadEnv() {
+  loadEnvFile(".env.local");
+  loadEnvFile(".env");
+}
+
 async function main() {
   loadEnv();
 
-  // Dynamic import after env load; avoid pulling Next server-only into wrong graph.
   const { OpenAIProvider } = await import("../src/lib/ai/openaiProvider");
   const { logAiUsage } = await import("../src/lib/ai/usageLog");
   const { AI_CONFIG } = await import("../src/lib/ai/config");
@@ -33,11 +58,10 @@ async function main() {
     console.log(
       JSON.stringify(
         {
-          reachable: false,
-          model: AI_CONFIG.chatModel,
-          durationMs: 0,
-          errorCategory: "not_configured",
-          message: "OPENAI_API_KEY fehlt in der Umgebung.",
+          erreichbar: "nein",
+          modell: AI_CONFIG.chatModel,
+          laufzeit_ms: 0,
+          fehlerkategorie: "not_configured",
         },
         null,
         2,
@@ -70,11 +94,10 @@ async function main() {
   console.log(
     JSON.stringify(
       {
-        reachable: result.reachable,
-        model: result.model,
-        durationMs: result.durationMs,
-        errorCategory: result.errorCategory,
-        message: result.message,
+        erreichbar: result.reachable ? "ja" : "nein",
+        modell: result.model,
+        laufzeit_ms: result.durationMs,
+        fehlerkategorie: result.errorCategory,
       },
       null,
       2,
@@ -84,12 +107,13 @@ async function main() {
   if (!result.reachable) process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(
+main().catch(() => {
+  console.log(
     JSON.stringify({
-      reachable: false,
-      errorCategory: "unknown",
-      message: error instanceof Error ? error.message : "CLI-Fehler",
+      erreichbar: "nein",
+      modell: null,
+      laufzeit_ms: 0,
+      fehlerkategorie: "unknown",
     }),
   );
   process.exit(1);

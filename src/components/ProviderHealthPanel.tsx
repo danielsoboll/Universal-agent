@@ -6,7 +6,7 @@ import {
   type AiHealthActionState,
 } from "@/actions/aiHealth";
 
-const initialState: AiHealthActionState = { error: null, result: null };
+const initialState: AiHealthActionState = { error: null, report: null };
 
 export function ProviderHealthPanel() {
   const [state, formAction, pending] = useActionState(
@@ -36,31 +36,25 @@ export function ProviderHealthPanel() {
         </p>
       ) : null}
 
-      {state.result ? (
+      {state.report ? (
         <dl className="mt-3 grid gap-1 text-sm">
           <div>
-            <dt className="muted inline">Status: </dt>
-            <dd className="inline font-medium">
-              {state.result.reachable ? "erreichbar" : "nicht erreichbar"}
-            </dd>
+            <dt className="muted inline">erreichbar: </dt>
+            <dd className="inline font-medium">{state.report.erreichbar}</dd>
           </div>
           <div>
             <dt className="muted inline">Modell: </dt>
-            <dd className="inline">{state.result.model}</dd>
+            <dd className="inline">{state.report.modell}</dd>
           </div>
           <div>
             <dt className="muted inline">Laufzeit: </dt>
-            <dd className="inline">{state.result.durationMs} ms</dd>
+            <dd className="inline">{state.report.laufzeit_ms} ms</dd>
           </div>
           <div>
             <dt className="muted inline">Fehlerkategorie: </dt>
             <dd className="inline">
-              {state.result.errorCategory ?? "—"}
+              {state.report.fehlerkategorie ?? "—"}
             </dd>
-          </div>
-          <div>
-            <dt className="muted inline">Meldung: </dt>
-            <dd className="inline">{state.result.message}</dd>
           </div>
         </dl>
       ) : null}
