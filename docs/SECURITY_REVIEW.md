@@ -93,6 +93,7 @@ Einzelne Source: analog Prefix `{project_id}/{source_id}/`, dann Source-Zeile l�
 
 - `SUPABASE_SECRET_KEY`, `DATABASE_URL`, `OPENAI_API_KEY` — nie Client
 - Client: nur URL + Publishable Key
+- OpenAI-Details: `docs/OPENAI.md` — Provider-Health nur für aktive Projekt-Owner
 
 ## Verbleibende Risiken
 

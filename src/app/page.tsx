@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { ProviderHealthPanel } from "@/components/ProviderHealthPanel";
 import { getMyProjects } from "@/actions/projects";
+import { canRunProviderHealthCheck } from "@/actions/aiHealth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
@@ -24,6 +26,8 @@ export default async function HomePage() {
   const roleByProject = new Map(
     memberships.map((m) => [m.project_id, m.role as string]),
   );
+
+  const showProviderHealth = await canRunProviderHealthCheck();
 
   return (
     <>
@@ -71,6 +75,8 @@ export default async function HomePage() {
             ))
           )}
         </div>
+
+        {showProviderHealth ? <ProviderHealthPanel /> : null}
       </main>
     </>
   );

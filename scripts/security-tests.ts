@@ -476,6 +476,76 @@ async function main() {
     !hasSecretInClient,
   );
 
+  // 12) OpenAI key never public / never in client modules
+  const exampleEnv = fs.readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
+  record(
+    "OPENAI_API_KEY ist kein NEXT_PUBLIC_ Platzhalter",
+    exampleEnv.includes("OPENAI_API_KEY=") &&
+      !exampleEnv.includes("NEXT_PUBLIC_OPENAI"),
+  );
+
+  const clientTsFiles = [
+    "src/lib/supabase/client.ts",
+    "src/components/ProviderHealthPanel.tsx",
+    "src/components/SourceUploadForm.tsx",
+    "src/components/NewProjectForm.tsx",
+  ];
+  let openaiLeakedToClient = false;
+  for (const rel of clientTsFiles) {
+    const src = fs.readFileSync(resolve(process.cwd(), rel), "utf8");
+    if (
+      src.includes("OPENAI_API_KEY") ||
+      src.includes("from \"openai\"") ||
+      src.includes("from 'openai'") ||
+      src.includes("getAIProvider") ||
+      src.includes("OpenAIProvider")
+    ) {
+      openaiLeakedToClient = true;
+    }
+  }
+  record(
+    "Client-Module rufen OpenAI nicht direkt auf",
+    !openaiLeakedToClient,
+  );
+
+  // Owner vs editor/viewer gate for health check (membership query mirrors action)
+  async function isOwner(token: string, userId: string) {
+    const c = userClient(token);
+    const { data } = await c
+      .from("project_members")
+      .select("project_id")
+      .eq("user_id", userId)
+      .eq("role", "owner")
+      .eq("is_active", true)
+      .limit(1);
+    return (data?.length ?? 0) > 0;
+  }
+
+  record(
+    "Owner darf Provider-Health (Membership)",
+    await isOwner(ownerToken, ownerId),
+  );
+  record(
+    "Editor darf Provider-Health nicht (Membership)",
+    !(await isOwner(editorToken, editorId)),
+  );
+  record(
+    "Viewer darf Provider-Health nicht (Membership)",
+    !(await isOwner(viewerToken, viewerId)),
+  );
+
+  // Unauthenticated cannot write ai_usage_logs
+  const anonUsage = await anonClient.from("ai_usage_logs").insert({
+    provider: "openai",
+    model: "test",
+    task: "hack",
+  });
+  record(
+    "Unauthenticated kann keinen Usage-Log schreiben",
+    !!anonUsage.error,
+    anonUsage.error?.message,
+  );
+
   const failed = results.filter((r) => !r.ok);
   console.log("\nSummary:", results.length - failed.length, "/", results.length, "passed");
   if (failed.length) {

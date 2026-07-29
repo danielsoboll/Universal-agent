@@ -21,9 +21,12 @@ npm run dev
 ## Scripts
 
 ```bash
-npx tsx scripts/security-tests.ts
+npm run test:security
+npm run openai:health
 npm run build
 ```
+
+OpenAI (serverseitig): `docs/OPENAI.md` — `OPENAI_API_KEY` nur Server, in Vercel für Production/Preview/Development setzen.
 
 ## Hinweis
 
