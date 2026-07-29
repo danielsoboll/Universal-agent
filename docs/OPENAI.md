@@ -32,6 +32,7 @@ npm run openai:health:production
 
 Optional: `PRODUCTION_APP_URL`, `VERCEL_AUTOMATION_BYPASS_SECRET` (bei Deployment Protection).
 
+## Code
 
 | Pfad | Rolle |
 |---|---|
