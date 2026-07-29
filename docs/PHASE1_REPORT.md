@@ -82,8 +82,9 @@ Hinweis: Next warnt, dass `middleware` zugunsten von `proxy` deprecated ist.
 
 | Variable | Ort | Client? |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `.env.local` | ja |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `.env.local` | ja |
+| `NEXT_PUBLIC_SUPABASE_URL` | `.env.local` / Vercel | ja |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `.env.local` / Vercel (bevorzugt) | ja |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | optionaler Alias | ja |
 | `SUPABASE_SECRET_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | `.env.local` | **nein** |
 | `DATABASE_URL` | optional / Platzhalter | nein |
 | `OPENAI_API_KEY` | noch leer | nein |
