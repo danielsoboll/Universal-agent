@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "customer_id": "TEST_CUSTOMER",
+  "display_name": "Testkunde (Simulation, keine Daten)",
+  "systems": [
+    {
+      "system_id": "T01",
+      "label": "Testsystem"
+    }
+  ],
+  "data_root_project_key": "TEST_CUSTOMER",
+  "enabled_source_types": ["sap_class", "sap_control_table"],
+  "pipeline_defaults": {
+    "prompt_versions": {
+      "unit_analysis": "unit-analysis-v4"
+    },
+    "require_explicit_step": [
+      "analyze.sap_code_units",
+      "analyze.control_tables",
+      "interpret.code_table"
+    ]
+  },
+  "paths": {},
+  "metadata": {
+    "simulation": true,
+    "no_p01_copy": true
+  }
+}

@@ -7,6 +7,8 @@ export const AI_CONFIG = {
   embeddingModel: "text-embedding-3-small",
   embeddingDimensions: 1536,
   timeoutMs: 30_000,
+  /** Longer timeout for local ABAP unit analysis */
+  analysisTimeoutMs: 120_000,
   /** SDK retries for transient 408/429/5xx */
   maxRetries: 2,
   /** Rough USD per 1M tokens for optional cost estimates (only when usage is known). */

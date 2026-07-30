@@ -1,0 +1,146 @@
+[
+  {
+    "id": "q1",
+    "query": "Welche Coca-Cola-Sonderlogik gibt es?",
+    "expected_source_keys": [],
+    "expected_knowledge_unit_types": ["business_rule", "code_table_interpretation"],
+    "expected_terms": ["Coca-Cola", "Sonderlogik"],
+    "forbidden_claims": ["Coca-Cola ist in ZEXTO_PARAMETER dokumentiert"],
+    "minimum_recall": 0,
+    "notes": "Erwartet schwach/leer — kein Coca-Cola-Inhalt im lokalen Bestand."
+  },
+  {
+    "id": "q2",
+    "query": "Wie wird die parallele Übermittlung an das Optitool-Testsystem gesteuert?",
+    "expected_source_keys": [
+      "brule:f99b438e4e44879e",
+      "brule:16952fa2aa8db9e2",
+      "D01|001|ZEXTO_PARAMETER|MANDT=001|KEY01=10"
+    ],
+    "expected_knowledge_unit_types": [
+      "business_rule",
+      "code_table_interpretation",
+      "control_table_row"
+    ],
+    "expected_terms": ["VAL01", "KEY01", "OPTITOOLTEST", "parallele"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.5
+  },
+  {
+    "id": "q3",
+    "query": "Welche Methoden greifen auf ZEXTO_PARAMETER zu?",
+    "expected_source_keys": [
+      "D01|CLASS|ZCL_EXT_TOURANLAGE_OT|METHOD|DOWNLOAD_OPTO_OUTPUT",
+      "D01|CLASS|ZCL_EXT_TOURANLAGE_OT|METHOD|CHECK_FOR_BE_EXPORT",
+      "D01|CLASS|ZCL_EXT_TOURANLAGE_OT|METHOD|DOWNLOAD_OPTO_OUTPUT_NEW",
+      "D01|CLASS|ZCL_EXT_TOURANLAGE_OT|METHOD|ACTIONS_AFTER_EXPORT_NEW"
+    ],
+    "expected_knowledge_unit_types": ["code_unit", "code_table_interpretation", "control_table"],
+    "expected_terms": ["ZEXTO_PARAMETER", "DOWNLOAD_OPTO_OUTPUT", "CHECK_FOR_BE_EXPORT"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.5
+  },
+  {
+    "id": "q4",
+    "query": "Was bewirkt KEY01 10?",
+    "expected_source_keys": [
+      "D01|001|ZEXTO_PARAMETER|MANDT=001|KEY01=10",
+      "brule:f99b438e4e44879e",
+      "brule:16952fa2aa8db9e2"
+    ],
+    "expected_knowledge_unit_types": [
+      "control_table_row",
+      "business_rule",
+      "code_table_interpretation"
+    ],
+    "expected_terms": ["KEY01", "10", "VAL01"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.33
+  },
+  {
+    "id": "q5",
+    "query": "Welche Incoterms erlauben den BE-Export?",
+    "expected_source_keys": [
+      "D01|001|ZEXTO_PARAMETER|MANDT=001|KEY01=1",
+      "brule:ec9f8ffa34467d73"
+    ],
+    "expected_knowledge_unit_types": [
+      "control_table_row",
+      "business_rule",
+      "code_table_interpretation"
+    ],
+    "expected_terms": ["ZV2", "Incoterm", "KEY01", "VAL01"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.5
+  },
+  {
+    "id": "q6",
+    "query": "Welche Werkeliste steuert das EXPOR-Update?",
+    "expected_source_keys": [
+      "D01|001|ZEXTO_PARAMETER|MANDT=001|KEY01=9",
+      "brule:1fa598b821a8e000"
+    ],
+    "expected_knowledge_unit_types": [
+      "control_table_row",
+      "business_rule",
+      "code_table_interpretation"
+    ],
+    "expected_terms": ["0002", "0001", "0026", "EXPOR", "KEY01"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.5
+  },
+  {
+    "id": "q7",
+    "query": "Welche Steuerwerte beeinflussen den Optitool-Export?",
+    "expected_source_keys": [
+      "D01|001|ZEXTO_PARAMETER",
+      "brule:ec9f8ffa34467d73",
+      "brule:f99b438e4e44879e",
+      "brule:1fa598b821a8e000"
+    ],
+    "expected_knowledge_unit_types": [
+      "control_table",
+      "business_rule",
+      "code_table_interpretation"
+    ],
+    "expected_terms": ["ZEXTO_PARAMETER", "VAL01", "Optitool"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.25
+  },
+  {
+    "id": "q8",
+    "query": "Welche Methoden schreiben in ZEXT_TOURANLAGE?",
+    "expected_source_keys": [
+      "D01|CLASS|ZCL_EXT_TOURANLAGE_OT|METHOD|ACTIONS_AFTER_EXPORT_NEW"
+    ],
+    "expected_knowledge_unit_types": ["code_unit", "dynamic_table_access", "control_table"],
+    "expected_terms": ["ZEXT_TOURANLAGE", "UPDATE", "ACTIONS_AFTER_EXPORT"],
+    "forbidden_claims": [],
+    "minimum_recall": 0.5
+  },
+  {
+    "id": "q9",
+    "query": "Welche dynamischen Tabellenzugriffe sind noch nicht auflösbar?",
+    "expected_source_keys": [],
+    "expected_knowledge_unit_types": ["dynamic_table_access"],
+    "expected_terms": ["dynamisch", "unresolved", "ZOT_VGF3", "ZKUNDV", "ZEXT_TOURANLAGE"],
+    "forbidden_claims": [],
+    "minimum_recall": 0,
+    "require_type_hit": true
+  },
+  {
+    "id": "q10",
+    "query": "Welche Aussagen sind Facts und welche nur Inferences?",
+    "expected_source_keys": [],
+    "expected_knowledge_unit_types": [
+      "business_rule",
+      "code_table_interpretation",
+      "control_table",
+      "code_unit"
+    ],
+    "expected_terms": ["FACT", "INFERENCE"],
+    "forbidden_claims": [],
+    "minimum_recall": 0,
+    "require_fact_inference_markers": true
+  }
+]

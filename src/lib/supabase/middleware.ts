@@ -73,5 +73,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Coarse route hints only — authoritative checks live in server layouts/actions.
+  // /admin/* and /app/* remain auth-gated above; role enforcement is server-side.
+
   return supabaseResponse;
 }

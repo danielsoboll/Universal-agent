@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "customer_id": "CUSTOMER_ID",
+  "display_name": "Anzeigename",
+  "systems": [
+    {
+      "system_id": "SYS_ID",
+      "label": "Systembezeichnung"
+    }
+  ],
+  "data_root_project_key": "CUSTOMER_ID",
+  "enabled_source_types": ["sap_class", "sap_control_table"],
+  "pipeline_defaults": {
+    "prompt_versions": {
+      "unit_analysis": "unit-analysis-v4"
+    },
+    "require_explicit_step": [
+      "analyze.sap_code_units",
+      "analyze.control_tables",
+      "interpret.code_table"
+    ]
+  },
+  "paths": {},
+  "metadata": {}
+}

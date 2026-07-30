@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "customer_id": "demo",
+  "display_name": "Demo-Kunde (Fixtures)",
+  "systems": [
+    {
+      "system_id": "S1",
+      "label": "Fixture-System"
+    }
+  ],
+  "data_root_project_key": "demo",
+  "enabled_source_types": ["sap_class", "sap_control_table"],
+  "pipeline_defaults": {
+    "prompt_versions": {
+      "unit_analysis": "unit-analysis-v4"
+    },
+    "require_explicit_step": [
+      "analyze.sap_code_units",
+      "analyze.control_tables",
+      "interpret.code_table"
+    ]
+  },
+  "paths": {},
+  "metadata": {
+    "fixture": true
+  }
+}

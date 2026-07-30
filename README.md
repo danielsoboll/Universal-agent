@@ -23,10 +23,21 @@ npm run dev
 ```bash
 npm run test:security
 npm run openai:health
+npm run local-data:check
 npm run build
 ```
 
 OpenAI (serverseitig): `docs/OPENAI.md` — `OPENAI_API_KEY` nur Server, in Vercel für Production/Preview/Development setzen.
+
+## Lokale SAP-Daten
+
+Rohdaten liegen **außerhalb** des Repos. Pfad nur über `LOCAL_DATA_ROOT` in `.env.local` (siehe `.env.example`).
+
+- `raw/` — nur lesen, nie verändern
+- Schreiben nur unter `canonical/`, `analyses/`, `embeddings/`, `indexes/`, `logs/`
+- Keine Kundendaten ins Git kopieren, keine absoluten Pfade im Code
+
+Prüfung: `npm run local-data:check`
 
 ## Hinweis
 

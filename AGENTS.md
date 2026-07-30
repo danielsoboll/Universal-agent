@@ -31,6 +31,17 @@ Interner KI-Baukasten (**Universal Knowledge Analyzer**): Quellen importieren, s
 
 Env: `.env.local` (lokal, nicht committen). Vorlage: `.env.example`.
 
+## Lokale SAP-Daten (`LOCAL_DATA_ROOT`)
+
+- Pfad **nur** aus `.env.local` lesen — nie im Code hart codieren
+- Kundendaten / Rohdaten **nie** ins Git-Repo kopieren
+- Zugriff nur über `src/lib/localData` (Root-Validierung, kein Escape)
+- `raw/` read-only; Writes nur: `canonical`, `analyses`, `embeddings`, `indexes`, `logs`
+- Check: `npm run local-data:check`
+- Kundenprofile: `customers/<customer_id>.json` (Vorlage `_template.json`)
+- Orchestrierung: `npm run pipeline -- --customer P01 --list-steps`
+- Architektur: `docs/PRODUCTIZATION.md`, Migration P01: `docs/P01_MIGRATION.md`
+
 ## Konventionen
 
 - UI: Deutsch

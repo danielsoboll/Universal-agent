@@ -38,11 +38,26 @@ export default async function HomePage() {
     <>
       <AppHeader />
       <main className="mx-auto w-full max-w-5xl px-6 py-8">
+        <div className="mb-6 grid gap-3 md:grid-cols-2">
+          <Link href="/admin/dashboard" className="panel block p-5 hover:border-[var(--accent)]">
+            <p className="font-semibold">Admin-Bereich</p>
+            <p className="muted mt-1 text-sm">
+              Onboarding, Fahrplan, Uploads und Pipeline-Steuerung.
+            </p>
+          </Link>
+          <Link href="/app/search" className="panel block p-5 hover:border-[var(--accent)]">
+            <p className="font-semibold">Anwender-Bereich</p>
+            <p className="muted mt-1 text-sm">
+              Suche und Analyse nach Freigabe (Platzhalter).
+            </p>
+          </Link>
+        </div>
+
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Projekte</h1>
             <p className="muted mt-1 text-sm">
-              Nur Projekte mit aktiver Mitgliedschaft.
+              Bestehende Knowledge-Unit-Projekte (unverändert parallel).
             </p>
           </div>
           <Link href="/projects/new" className="btn btn-primary">

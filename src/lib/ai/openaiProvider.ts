@@ -106,19 +106,23 @@ export class OpenAIProvider implements AIProvider {
 
   async generateStructured<T>(input: GenerateStructuredInput<T>): Promise<T> {
     const model = input.model ?? AI_CONFIG.chatModel;
+    const timeoutMs = input.timeoutMs ?? AI_CONFIG.timeoutMs;
 
     try {
       const client = createOpenAIClient();
-      const completion = await client.chat.completions.parse({
-        model,
-        messages: [
-          ...(input.system
-            ? [{ role: "system" as const, content: input.system }]
-            : []),
-          { role: "user", content: input.user },
-        ],
-        response_format: zodResponseFormat(input.schema, input.schemaName),
-      });
+      const completion = await client.chat.completions.parse(
+        {
+          model,
+          messages: [
+            ...(input.system
+              ? [{ role: "system" as const, content: input.system }]
+              : []),
+            { role: "user", content: input.user },
+          ],
+          response_format: zodResponseFormat(input.schema, input.schemaName),
+        },
+        { timeout: timeoutMs },
+      );
 
       const parsed = completion.choices[0]?.message?.parsed;
       if (parsed == null) {

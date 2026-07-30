@@ -11,3 +11,4 @@ alwaysApply: true
 - Git remote: `https://github.com/danielsoboll/Universal-agent.git`
 - Supabase: `pkcucpsrwgactejovdmp` (`https://pkcucpsrwgactejovdmp.supabase.co`)
 - UI-Sprache: Deutsch. Secrets nie committen. Push nur auf explizite Anfrage.
+- SAP-Rohdaten außerhalb des Repos: `LOCAL_DATA_ROOT` nur aus `.env.local`; Zugriff über `src/lib/localData` (`raw/` read-only; Writes nur canonical/analyses/embeddings/indexes/logs).

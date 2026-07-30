@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Never commit local SAP / customer exports (must live outside the repo)
+/SAP_AI_Exports/
+**/customer-raw/
+
 # vercel
 .vercel
 

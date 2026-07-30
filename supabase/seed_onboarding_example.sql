@@ -1,0 +1,31 @@
+-- Optional demo customer after catalog seeds.
+-- Apply manually (service role). Does NOT touch local P01 artifacts.
+--
+-- 1) Insert platform_admins for your user_id
+-- 2) Run this script
+-- 3) Open /admin/setup?customer=<id>&step=2 and generate workflow
+--
+-- Example (replace USER_UUID):
+--
+-- insert into public.platform_admins(user_id) values ('USER_UUID') on conflict do nothing;
+--
+-- insert into public.customers (id, slug, name, status, description, landscape_label, created_by)
+-- values (
+--   'e1111111-1111-4111-8111-111111111101',
+--   'demo-sap',
+--   'Demo SAP Knowledge',
+--   'onboarding',
+--   'Beispielkunde für SAP Knowledge Reconstruction',
+--   'Demo-Landschaft',
+--   'USER_UUID'
+-- ) on conflict (slug) do nothing;
+--
+-- insert into public.customer_memberships (customer_id, user_id, role, status)
+-- values (
+--   'e1111111-1111-4111-8111-111111111101',
+--   'USER_UUID',
+--   'customer_admin',
+--   'active'
+-- ) on conflict (customer_id, user_id) do update set role = excluded.role, status = 'active';
+
+select 1 as onboarding_example_placeholder;

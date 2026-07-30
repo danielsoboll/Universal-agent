@@ -16,6 +16,8 @@ export type GenerateStructuredInput<T> = {
   system?: string;
   user: string;
   model?: string;
+  /** Optional per-call timeout (ms). Defaults to AI_CONFIG.timeoutMs. */
+  timeoutMs?: number;
 };
 
 export type CreateEmbeddingsInput = {
