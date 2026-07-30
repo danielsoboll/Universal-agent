@@ -8,6 +8,8 @@ import {
   saveSetupAdaptersAction,
   saveSetupGoalsAction,
 } from "@/actions/onboarding";
+import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
+import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
 
 export default async function AdminSetupPage({
   searchParams,
@@ -18,6 +20,13 @@ export default async function AdminSetupPage({
   const sp = await searchParams;
   const customerId = sp.customer;
   const step = Number(sp.step ?? (customerId ? "2" : "1"));
+  const guides = await loadUiGuideTexts([
+    "admin.setup.step1_create",
+    "admin.setup.step2_goals",
+    "admin.setup.step3_adapters",
+    "admin.setup.step4_config",
+    "admin.setup.step5_generate",
+  ]);
   const supabase = await createClient();
 
   const { data: customer } = customerId
@@ -105,9 +114,11 @@ export default async function AdminSetupPage({
             </label>
             <input className="input" id="landscape_label" name="landscape_label" />
           </div>
-          <button type="submit" className="btn btn-primary">
-            Anlegen und weiter
-          </button>
+          <ActionWithGuide guide={guides.get("admin.setup.step1_create")}>
+            <button type="submit" className="btn btn-primary">
+              Anlegen und weiter
+            </button>
+          </ActionWithGuide>
         </form>
       ) : null}
 
@@ -158,9 +169,11 @@ export default async function AdminSetupPage({
               </label>
             ))}
           </div>
-          <button type="submit" className="btn btn-primary">
-            Weiter zu Adaptern
-          </button>
+          <ActionWithGuide guide={guides.get("admin.setup.step2_goals")}>
+            <button type="submit" className="btn btn-primary">
+              Weiter zu Adaptern
+            </button>
+          </ActionWithGuide>
         </form>
       ) : null}
 
@@ -206,9 +219,11 @@ export default async function AdminSetupPage({
               </label>
             ))}
           </div>
-          <button type="submit" className="btn btn-primary">
-            Weiter zur Konfiguration
-          </button>
+          <ActionWithGuide guide={guides.get("admin.setup.step3_adapters")}>
+            <button type="submit" className="btn btn-primary">
+              Weiter zur Konfiguration
+            </button>
+          </ActionWithGuide>
         </form>
       ) : null}
 
@@ -315,9 +330,11 @@ export default async function AdminSetupPage({
               </fieldset>
             );
           })}
-          <button type="submit" className="btn btn-primary">
-            Weiter zur Fahrplan-Erzeugung
-          </button>
+          <ActionWithGuide guide={guides.get("admin.setup.step4_config")}>
+            <button type="submit" className="btn btn-primary">
+              Weiter zur Fahrplan-Erzeugung
+            </button>
+          </ActionWithGuide>
         </form>
       ) : null}
 
@@ -334,9 +351,11 @@ export default async function AdminSetupPage({
             OpenAI ist für die Erzeugung nicht erforderlich. Pipeline-Schritte
             werden nur verknüpft, nicht gestartet.
           </p>
-          <button type="submit" className="btn btn-primary">
-            Fahrplan jetzt erzeugen
-          </button>
+          <ActionWithGuide guide={guides.get("admin.setup.step5_generate")}>
+            <button type="submit" className="btn btn-primary">
+              Fahrplan jetzt erzeugen
+            </button>
+          </ActionWithGuide>
         </form>
       ) : null}
     </div>

@@ -29,7 +29,8 @@
     "test:core": "tsx tests/core/customerConfig.test.ts",
     "test:onboarding": "tsx tests/onboarding/generateCustomerWorkflow.test.ts",
     "test:security": "tsx scripts/security-tests.ts",
-    "test:onboarding-rls": "tsx scripts/onboarding-rls-tests.ts"
+    "test:onboarding-rls": "tsx scripts/onboarding-rls-tests.ts",
+    "admin:ensure-dsoboll": "tsx scripts/ensure-admin-dsoboll.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

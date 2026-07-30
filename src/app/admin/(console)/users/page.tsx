@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdminAccess } from "@/lib/onboarding/access";
 import { inviteCustomerUserAction } from "@/actions/onboarding";
+import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
+import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
 
 export default async function AdminUsersPage({
   searchParams,
@@ -9,6 +11,7 @@ export default async function AdminUsersPage({
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
+  const guides = await loadUiGuideTexts(["admin.users.invite"]);
   const customerId =
     sp.customer ||
     ctx.memberships.find((m) => m.role === "customer_admin")?.customer_id;
@@ -56,10 +59,12 @@ export default async function AdminUsersPage({
             <option value="customer_admin">Customer Admin</option>
           </select>
         </div>
-        <div className="flex items-end">
-          <button type="submit" className="btn btn-primary">
-            Mitgliedschaft speichern
-          </button>
+        <div className="md:col-span-2">
+          <ActionWithGuide guide={guides.get("admin.users.invite")}>
+            <button type="submit" className="btn btn-primary">
+              Mitgliedschaft speichern
+            </button>
+          </ActionWithGuide>
         </div>
       </form>
 

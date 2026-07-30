@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { signOut } from "@/actions/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/brand/BrandMark";
+import { getAccessContext } from "@/lib/onboarding/access";
 
 const ADMIN_LINKS = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -12,7 +15,7 @@ const ADMIN_LINKS = [
   { href: "/admin/users", label: "Benutzer" },
 ];
 
-export function AdminShell({
+export async function AdminShell({
   email,
   roleLabel,
   children,
@@ -21,20 +24,32 @@ export function AdminShell({
   roleLabel?: string;
   children: React.ReactNode;
 }) {
+  const profile = await getAccessContext();
+
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[var(--border)] bg-white/90 backdrop-blur">
+      <header className="app-header">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Link href="/admin/dashboard" className="text-lg font-semibold">
-              General Agent · Admin
-            </Link>
-            {roleLabel ? <span className="badge">{roleLabel}</span> : null}
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandMark
+              size={32}
+              withName
+              href="/admin/dashboard"
+              title={profile?.agentTitle}
+              logoUrl={profile?.customerLogoUrl}
+            />
+            {roleLabel ? <span className="badge shrink-0">{roleLabel}</span> : null}
+            {profile?.customerName ? (
+              <span className="muted hidden text-sm lg:inline">
+                {profile.customerName}
+              </span>
+            ) : null}
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="muted hidden sm:inline">{email}</span>
-            <Link href="/app/search" className="btn btn-secondary">
-              Zum Anwenderbereich
+          <div className="flex items-center gap-2 text-sm sm:gap-3">
+            <span className="muted hidden md:inline">{email}</span>
+            <ThemeToggle />
+            <Link href="/" className="btn btn-secondary">
+              Start
             </Link>
             <form action={signOut}>
               <button className="btn btn-secondary" type="submit">
@@ -48,11 +63,7 @@ export function AdminShell({
           aria-label="Admin-Navigation"
         >
           {ADMIN_LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[#eef2f6] hover:text-[var(--foreground)]"
-            >
+            <Link key={l.href} href={l.href} className="nav-pill">
               {l.label}
             </Link>
           ))}

@@ -1,22 +1,76 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+async function resolvePostLoginPath(userId: string): Promise<string> {
+  try {
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("app_user_profiles")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (profile?.role === "general_admin" || profile?.role === "admin") {
+      return "/";
+    }
+    if (profile?.role === "user") return "/";
+
+    const { data: platform } = await admin
+      .from("platform_admins")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (platform) return "/";
+
+    const { data: membership } = await admin
+      .from("customer_memberships")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+
+    if (membership?.role === "customer_admin") return "/";
+    if (membership) return "/";
+  } catch {
+    /* Schema fehlt */
+  }
+  return "/";
+}
 
 export async function signInWithPassword(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/") || "/";
+  const nextRaw = String(formData.get("next") ?? "").trim();
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  if (!email || !password) {
+    redirect(
+      `/login?error=${encodeURIComponent("Benutzername und Passwort sind erforderlich.")}`,
+    );
   }
 
-  redirect(next.startsWith("/") ? next : "/");
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error || !data.user) {
+    // Kein Signup — nur bestehende Auth-Nutzer
+    redirect(
+      `/login?error=${encodeURIComponent(
+        "Anmeldung fehlgeschlagen. Benutzername oder Passwort ungültig. Ein Konto kann hier nicht angelegt werden.",
+      )}`,
+    );
+  }
+
+  if (nextRaw.startsWith("/") && !nextRaw.startsWith("//")) {
+    redirect(nextRaw);
+  }
+
+  redirect(await resolvePostLoginPath(data.user.id));
 }
 
 export async function signOut() {

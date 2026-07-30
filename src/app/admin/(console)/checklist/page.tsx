@@ -10,6 +10,8 @@ import {
   computeProgress,
   phaseTitle,
 } from "@/lib/onboarding/phases";
+import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
+import { ActionGuide } from "@/components/onboarding/ActionGuide";
 
 export default async function AdminChecklistPage({
   searchParams,
@@ -18,6 +20,10 @@ export default async function AdminChecklistPage({
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
+  const guides = await loadUiGuideTexts([
+    "admin.checklist.complete",
+    "admin.checklist.pipeline",
+  ]);
   const supabase = await createClient();
 
   const customerId =
@@ -145,24 +151,30 @@ export default async function AdminChecklistPage({
                           </ul>
                         </details>
                       </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex w-full max-w-sm flex-col gap-2">
                         {canComplete ? (
-                          <form action={completeManualStepAction}>
-                            <input type="hidden" name="customer_id" value={customerId} />
-                            <input type="hidden" name="step_id" value={step.id} />
-                            <button type="submit" className="btn btn-primary">
-                              Als erledigt markieren
-                            </button>
-                          </form>
+                          <>
+                            <form action={completeManualStepAction}>
+                              <input type="hidden" name="customer_id" value={customerId} />
+                              <input type="hidden" name="step_id" value={step.id} />
+                              <button type="submit" className="btn btn-primary w-full">
+                                Als erledigt markieren
+                              </button>
+                            </form>
+                            <ActionGuide guide={guides.get("admin.checklist.complete")} />
+                          </>
                         ) : null}
                         {canPipeline ? (
-                          <form action={createPipelineRunStubAction}>
-                            <input type="hidden" name="customer_id" value={customerId} />
-                            <input type="hidden" name="step_id" value={step.id} />
-                            <button type="submit" className="btn btn-secondary">
-                              Pipeline-Run anlegen (ready)
-                            </button>
-                          </form>
+                          <>
+                            <form action={createPipelineRunStubAction}>
+                              <input type="hidden" name="customer_id" value={customerId} />
+                              <input type="hidden" name="step_id" value={step.id} />
+                              <button type="submit" className="btn btn-secondary w-full">
+                                Pipeline-Run anlegen (ready)
+                              </button>
+                            </form>
+                            <ActionGuide guide={guides.get("admin.checklist.pipeline")} />
+                          </>
                         ) : null}
                       </div>
                     </div>

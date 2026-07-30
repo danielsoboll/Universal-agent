@@ -1,14 +1,14 @@
 import { STEP_STATUS_LABELS } from "@/lib/onboarding/phases";
 
 const COLOR: Record<string, string> = {
-  not_started: "bg-slate-100 text-slate-700",
-  ready: "bg-emerald-100 text-emerald-800",
-  in_progress: "bg-sky-100 text-sky-800",
-  waiting_for_input: "bg-amber-100 text-amber-900",
-  completed: "bg-green-100 text-green-900",
-  skipped: "bg-slate-100 text-slate-500",
-  blocked: "bg-orange-100 text-orange-900",
-  failed: "bg-red-100 text-red-900",
+  not_started: "bg-[var(--surface-raised)] text-[var(--muted)]",
+  ready: "bg-[var(--accent-soft)] text-[var(--accent)]",
+  in_progress: "bg-[var(--accent-soft)] text-[var(--foreground)]",
+  waiting_for_input: "bg-[var(--accent-soft)] text-[var(--foreground)]",
+  completed: "bg-[var(--accent-soft)] text-[var(--accent)]",
+  skipped: "bg-[var(--surface-raised)] text-[var(--muted)]",
+  blocked: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  failed: "bg-[var(--danger-soft)] text-[var(--danger)]",
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdminAccess } from "@/lib/onboarding/access";
 import { computeProgress } from "@/lib/onboarding/phases";
+import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
+import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
 
 export default async function AdminDashboardPage({
   searchParams,
@@ -10,6 +12,10 @@ export default async function AdminDashboardPage({
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
+  const guides = await loadUiGuideTexts([
+    "admin.dashboard.setup",
+    "admin.dashboard.checklist",
+  ]);
   const supabase = await createClient();
 
   let customersQuery = supabase
@@ -24,7 +30,25 @@ export default async function AdminDashboardPage({
     customersQuery = customersQuery.in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
   }
 
-  const { data: customers } = await customersQuery;
+  const { data: customers, error: customersError } = await customersQuery;
+  if (customersError) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Admin-Dashboard</h1>
+        <div className="panel p-6 text-sm">
+          <p className="font-semibold">Kundendaten nicht ladbar</p>
+          <p className="muted mt-2">
+            {customersError.message}. Wenn die Onboarding-Migrationen noch fehlen,
+            bitte zuerst anwenden — danach den ersten Login erneut laden (Bootstrap
+            als Platform Admin).
+          </p>
+          <Link href="/admin/setup" className="btn btn-primary mt-4 inline-flex">
+            Zum Setup
+          </Link>
+        </div>
+      </div>
+    );
+  }
   const customerId =
     sp.customer ||
     customers?.[0]?.id ||
@@ -104,6 +128,8 @@ export default async function AdminDashboardPage({
             Überblick über Onboarding, Qualität und nächste Schritte.
           </p>
         </div>
+      </div>
+      <ActionWithGuide guide={guides.get("admin.dashboard.setup")}>
         {ctx.isPlatformAdmin ? (
           <Link href="/admin/setup" className="btn btn-primary">
             Neuen Kunden anlegen
@@ -116,7 +142,7 @@ export default async function AdminDashboardPage({
             Setup fortsetzen
           </Link>
         )}
-      </div>
+      </ActionWithGuide>
 
       {customers && customers.length > 1 ? (
         <div className="panel p-4">
@@ -165,14 +191,16 @@ export default async function AdminDashboardPage({
       <div className="panel p-5">
         <p className="font-semibold">Nächste empfohlene Aktion</p>
         {nextStep ? (
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-3 space-y-3">
             <p>{nextStep.title}</p>
-            <Link
-              href={`/admin/checklist?customer=${customerId}`}
-              className="btn btn-primary"
-            >
-              Zum Fahrplan
-            </Link>
+            <ActionWithGuide guide={guides.get("admin.dashboard.checklist")}>
+              <Link
+                href={`/admin/checklist?customer=${customerId}`}
+                className="btn btn-primary"
+              >
+                Zum Fahrplan
+              </Link>
+            </ActionWithGuide>
           </div>
         ) : (
           <p className="muted mt-2 text-sm">

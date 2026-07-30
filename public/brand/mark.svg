@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="General Agent">
+  <defs>
+    <linearGradient id="g" x1="18" y1="12" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2a4a73"/>
+      <stop offset="1" stop-color="#1e3a5f"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <!-- Compass / analyzer diamond -->
+  <path d="M64 22 L98 64 L64 106 L30 64 Z" fill="none" stroke="#dbeafe" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="14" fill="#60a5fa"/>
+  <circle cx="64" cy="64" r="5" fill="#0b1220"/>
+  <path d="M64 34 V48 M64 80 V94 M34 64 H48 M80 64 H94" stroke="#93c5fd" stroke-width="4" stroke-linecap="round"/>
+</svg>

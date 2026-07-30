@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { signOut } from "@/actions/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/brand/BrandMark";
+import { getAccessContext } from "@/lib/onboarding/access";
 
 const APP_LINKS = [
   { href: "/app/search", label: "Suche" },
@@ -7,7 +10,7 @@ const APP_LINKS = [
   { href: "/app/history", label: "Verlauf" },
 ];
 
-export function AppShell({
+export async function AppShell({
   email,
   released,
   children,
@@ -16,18 +19,28 @@ export function AppShell({
   released: boolean;
   children: React.ReactNode;
 }) {
+  const profile = await getAccessContext();
+
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[var(--border)] bg-white/90 backdrop-blur">
+      <header className="app-header">
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Link href="/app/search" className="text-lg font-semibold">
-              General Agent
-            </Link>
-            <span className="badge">Anwender</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandMark
+              size={32}
+              withName
+              href="/app/search"
+              title={profile?.agentTitle}
+              logoUrl={profile?.customerLogoUrl}
+            />
+            <span className="badge shrink-0">Anwender</span>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-2 text-sm sm:gap-3">
             <span className="muted hidden sm:inline">{email}</span>
+            <ThemeToggle />
+            <Link href="/" className="btn btn-secondary">
+              Start
+            </Link>
             <form action={signOut}>
               <button className="btn btn-secondary" type="submit">
                 Abmelden
@@ -40,11 +53,7 @@ export function AppShell({
           aria-label="Anwender-Navigation"
         >
           {APP_LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="rounded-lg px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[#eef2f6] hover:text-[var(--foreground)]"
-            >
+            <Link key={l.href} href={l.href} className="nav-pill">
               {l.label}
             </Link>
           ))}
@@ -52,11 +61,13 @@ export function AppShell({
       </header>
       <main className="mx-auto w-full max-w-5xl px-6 py-8">
         {!released ? (
-          <div className="panel mb-6 border-amber-300 bg-amber-50 p-4 text-sm">
+          <div
+            className="panel mb-6 p-4 text-sm"
+            style={{ background: "var(--accent-soft)" }}
+          >
             <p className="font-semibold">Noch nicht freigegeben</p>
             <p className="muted mt-1">
               Der Admin-Fahrplan hat die Anwenderfreigabe noch nicht abgeschlossen.
-              Suche und Analyse sind vorbereitet, aber noch nicht nutzbar.
             </p>
           </div>
         ) : null}
