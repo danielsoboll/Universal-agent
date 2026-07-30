@@ -10,11 +10,14 @@ import {
 } from "@/actions/onboarding";
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
 import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
+import { SetupStepNav } from "@/components/onboarding/SetupStepNav";
+import { FormSubmitButton } from "@/components/ui/FormSubmitButton";
+import { EmptyState, InlineError } from "@/components/ui/states";
 
 export default async function AdminSetupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customer?: string; step?: string }>;
+  searchParams: Promise<{ customer?: string; step?: string; error?: string }>;
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
@@ -29,36 +32,59 @@ export default async function AdminSetupPage({
   ]);
   const supabase = await createClient();
 
-  const { data: customer } = customerId
-    ? await supabase
-        .from("customers")
-        .select("*")
-        .eq("id", customerId)
-        .maybeSingle()
-    : { data: null };
+  const { data: customer, error: customerError } = customerId
+    ? await supabase.from("customers").select("*").eq("id", customerId).maybeSingle()
+    : { data: null, error: null };
+
+  if (customerError) {
+    console.error("[admin/setup] customer", customerError.message);
+  }
 
   if (customerId && customer) {
     await requireAdminAccess(customerId);
   }
 
-  const [{ data: goalTemplates }, { data: adapters }, { data: selectedGoals }, { data: selectedAdapters }] =
-    await Promise.all([
-      supabase.from("goal_templates").select("*").eq("enabled", true).order("sort_order"),
-      supabase.from("input_adapters").select("*").eq("enabled", true).order("sort_order"),
-      customerId
-        ? supabase
-            .from("project_goals")
-            .select("goal_type")
-            .eq("customer_id", customerId)
-            .eq("selected", true)
-        : Promise.resolve({ data: [] as { goal_type: string }[] }),
-      customerId
-        ? supabase
-            .from("customer_input_adapters")
-            .select("id, input_adapter_id, configuration, input_adapters(*)")
-            .eq("customer_id", customerId)
-        : Promise.resolve({ data: [] as never[] }),
-    ]);
+  if (customerId && !customer) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+          Setup-Assistent
+        </h1>
+        <EmptyState
+          title="Kunde nicht gefunden"
+          message="Der gewählte Kunde ist nicht verfügbar oder Sie haben keinen Zugriff."
+          actionHref="/admin/dashboard"
+          actionLabel="Zum Dashboard"
+        />
+      </div>
+    );
+  }
+
+  const [
+    { data: goalTemplates, error: goalsTplErr },
+    { data: adapters, error: adaptersErr },
+    { data: selectedGoals },
+    { data: selectedAdapters },
+  ] = await Promise.all([
+    supabase.from("goal_templates").select("*").eq("enabled", true).order("sort_order"),
+    supabase.from("input_adapters").select("*").eq("enabled", true).order("sort_order"),
+    customerId
+      ? supabase
+          .from("project_goals")
+          .select("goal_type")
+          .eq("customer_id", customerId)
+          .eq("selected", true)
+      : Promise.resolve({ data: [] as { goal_type: string }[] }),
+    customerId
+      ? supabase
+          .from("customer_input_adapters")
+          .select("id, input_adapter_id, configuration, input_adapters(*)")
+          .eq("customer_id", customerId)
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
+
+  if (goalsTplErr) console.error("[admin/setup] goals", goalsTplErr.message);
+  if (adaptersErr) console.error("[admin/setup] adapters", adaptersErr.message);
 
   const selectedGoalTypes = new Set((selectedGoals ?? []).map((g) => g.goal_type));
   const selectedAdapterIds = new Set(
@@ -66,79 +92,97 @@ export default async function AdminSetupPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Setup-Assistent</h1>
-        <p className="muted mt-1">
-          Fünf Schritte: Kunde → Ziele → Adapter → Konfiguration → Fahrplan.
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+          Setup-Assistent
+        </h1>
+        <p className="muted mt-1 text-sm">
+          Kunde → Ziele → Adapter → Konfiguration → Fahrplan
         </p>
       </div>
 
-      <ol className="flex flex-wrap gap-2 text-sm" aria-label="Setup-Schritte">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <li
-            key={n}
-            className={`rounded-lg px-3 py-1.5 ${
-              step === n ? "bg-[var(--accent)] text-white" : "bg-[#eef2f6]"
-            }`}
-          >
-            Schritt {n}
-          </li>
-        ))}
-      </ol>
+      <SetupStepNav step={step} customerId={customer?.id} />
+
+      {sp.error ? (
+        <InlineError title="Speichern fehlgeschlagen" message={sp.error} />
+      ) : null}
 
       {step === 1 && ctx.isPlatformAdmin ? (
-        <form action={createCustomerAction} className="panel space-y-4 p-6">
-          <h2 className="text-lg font-semibold">1. Kunde / Projekt</h2>
+        <form action={createCustomerAction} className="panel compact space-y-3 p-4 sm:p-5">
+          <h2 className="text-base font-semibold">Kunde / Projekt anlegen</h2>
           <div>
             <label className="label" htmlFor="name">
               Projektname
             </label>
-            <input className="input" id="name" name="name" required />
+            <p className="muted mb-1 text-xs">Anzeigename für Dashboard und Fahrplan.</p>
+            <input
+              className="input"
+              id="name"
+              name="name"
+              required
+              placeholder="z. B. Muster AG SAP"
+              defaultValue={typeof sp.error === "string" ? "" : undefined}
+            />
           </div>
           <div>
             <label className="label" htmlFor="slug">
-              Slug (optional)
+              Slug
             </label>
-            <input className="input" id="slug" name="slug" placeholder="mein-kunde" />
+            <p className="muted mb-1 text-xs">Optional — wird sonst aus dem Namen erzeugt.</p>
+            <input className="input" id="slug" name="slug" placeholder="muster-ag" />
           </div>
           <div>
             <label className="label" htmlFor="description">
               Kurzbeschreibung
             </label>
-            <textarea className="textarea" id="description" name="description" rows={3} />
+            <textarea
+              className="textarea"
+              id="description"
+              name="description"
+              rows={2}
+              placeholder="Kurz, wofür dieses Projekt steht"
+            />
           </div>
           <div>
             <label className="label" htmlFor="landscape_label">
-              System- / Landschaftsbezeichnung (optional)
+              System / Landschaft
             </label>
-            <input className="input" id="landscape_label" name="landscape_label" />
+            <p className="muted mb-1 text-xs">Optional.</p>
+            <input
+              className="input"
+              id="landscape_label"
+              name="landscape_label"
+              placeholder="z. B. P01"
+            />
           </div>
           <ActionWithGuide guide={guides.get("admin.setup.step1_create")}>
-            <button type="submit" className="btn btn-primary">
+            <FormSubmitButton pendingLabel="Wird angelegt …">
               Anlegen und weiter
-            </button>
+            </FormSubmitButton>
           </ActionWithGuide>
         </form>
       ) : null}
 
       {step === 1 && !ctx.isPlatformAdmin ? (
-        <div className="panel p-6">
-          <p>Wählen Sie ein bestehendes Projekt oder bitten Sie einen Platform Admin um Anlage.</p>
-          <Link href="/admin/dashboard" className="btn btn-secondary mt-4 inline-flex">
-            Zum Dashboard
-          </Link>
-        </div>
+        <EmptyState
+          title="Kein Anlege-Recht"
+          message="Wählen Sie ein bestehendes Projekt oder bitten Sie einen Platform Admin um Anlage."
+          actionHref="/admin/dashboard"
+          actionLabel="Zum Dashboard"
+        />
       ) : null}
 
       {customer && step === 2 ? (
         <form action={saveSetupGoalsAction} className="space-y-4">
           <input type="hidden" name="customer_id" value={customer.id} />
-          <h2 className="text-lg font-semibold">2. Zielsetzung</h2>
-          <p className="muted text-sm">Mehrfachauswahl — Inhalte kommen aus Vorlagen.</p>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <h2 className="text-base font-semibold">Zielsetzung</h2>
+            <p className="muted mt-1 text-sm">Mehrfachauswahl aus Vorlagen.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             {(goalTemplates ?? []).map((g) => (
-              <label key={g.id} className="panel block cursor-pointer p-4">
+              <label key={g.id} className="panel compact block cursor-pointer p-3 sm:p-4">
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -147,9 +191,9 @@ export default async function AdminSetupPage({
                     defaultChecked={selectedGoalTypes.has(g.goal_type)}
                     className="mt-1"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold">{g.title}</p>
-                    <p className="mt-1 text-sm muted">{g.description}</p>
+                    <p className="muted mt-1 text-sm">{g.description}</p>
                     <details className="mt-2 text-sm">
                       <summary className="cursor-pointer font-medium">Details</summary>
                       <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -169,21 +213,36 @@ export default async function AdminSetupPage({
               </label>
             ))}
           </div>
-          <ActionWithGuide guide={guides.get("admin.setup.step2_goals")}>
-            <button type="submit" className="btn btn-primary">
-              Weiter zu Adaptern
-            </button>
-          </ActionWithGuide>
+          {!goalTemplates?.length ? (
+            <EmptyState
+              title="Keine Zielvorlagen"
+              message="Zielvorlagen fehlen in der Datenbank. Bitte Seed/Migration prüfen."
+            />
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/setup?customer=${customer.id}&step=1`}
+              className="btn btn-secondary"
+            >
+              Zurück
+            </Link>
+            <ActionWithGuide guide={guides.get("admin.setup.step2_goals")}>
+              <FormSubmitButton pendingLabel="Speichern …">Weiter</FormSubmitButton>
+            </ActionWithGuide>
+          </div>
         </form>
       ) : null}
 
       {customer && step === 3 ? (
         <form action={saveSetupAdaptersAction} className="space-y-4">
           <input type="hidden" name="customer_id" value={customer.id} />
-          <h2 className="text-lg font-semibold">3. Input-Adapter</h2>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <h2 className="text-base font-semibold">Input-Adapter</h2>
+            <p className="muted mt-1 text-sm">Welche Quellen sollen angebunden werden?</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             {(adapters ?? []).map((a) => (
-              <label key={a.id} className="panel block cursor-pointer p-4">
+              <label key={a.id} className="panel compact block cursor-pointer p-3 sm:p-4">
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -193,7 +252,7 @@ export default async function AdminSetupPage({
                     disabled={a.availability_status === "disabled"}
                     className="mt-1"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{a.name}</p>
                       <span className="badge">
@@ -204,7 +263,7 @@ export default async function AdminSetupPage({
                             : "deaktiviert"}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm muted">{a.description}</p>
+                    <p className="muted mt-1 text-sm">{a.description}</p>
                     <details className="mt-2 text-sm">
                       <summary className="cursor-pointer font-medium">Infos</summary>
                       <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -219,21 +278,29 @@ export default async function AdminSetupPage({
               </label>
             ))}
           </div>
-          <ActionWithGuide guide={guides.get("admin.setup.step3_adapters")}>
-            <button type="submit" className="btn btn-primary">
-              Weiter zur Konfiguration
-            </button>
-          </ActionWithGuide>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/setup?customer=${customer.id}&step=2`}
+              className="btn btn-secondary"
+            >
+              Zurück
+            </Link>
+            <ActionWithGuide guide={guides.get("admin.setup.step3_adapters")}>
+              <FormSubmitButton pendingLabel="Speichern …">Weiter</FormSubmitButton>
+            </ActionWithGuide>
+          </div>
         </form>
       ) : null}
 
       {customer && step === 4 ? (
-        <form action={saveAdapterConfigurationAction} className="space-y-6">
+        <form action={saveAdapterConfigurationAction} className="space-y-4">
           <input type="hidden" name="customer_id" value={customer.id} />
-          <h2 className="text-lg font-semibold">4. Konfiguration</h2>
-          <p className="muted text-sm">
-            Felder werden aus dem configuration_schema der Adapter gerendert.
-          </p>
+          <div>
+            <h2 className="text-base font-semibold">Konfiguration</h2>
+            <p className="muted mt-1 text-sm">
+              Felder aus dem Schema der gewählten Adapter.
+            </p>
+          </div>
           {(selectedAdapters ?? []).map((row) => {
             const raw = row.input_adapters as unknown;
             const ia = (Array.isArray(raw) ? raw[0] : raw) as {
@@ -250,10 +317,10 @@ export default async function AdminSetupPage({
             const props = ia.configuration_schema?.properties ?? {};
             const conf = (row.configuration ?? {}) as Record<string, unknown>;
             return (
-              <fieldset key={row.id} className="panel space-y-3 p-5">
+              <fieldset key={row.id} className="panel compact space-y-3 p-4">
                 <legend className="px-1 font-semibold">{ia.name}</legend>
                 {Object.keys(props).length === 0 ? (
-                  <p className="text-sm muted">Keine zusätzlichen Felder.</p>
+                  <p className="muted text-sm">Keine zusätzlichen Felder.</p>
                 ) : (
                   Object.entries(props).map(([key, schema]) => {
                     const name = `cfg__${row.id}__${key}`;
@@ -330,32 +397,53 @@ export default async function AdminSetupPage({
               </fieldset>
             );
           })}
-          <ActionWithGuide guide={guides.get("admin.setup.step4_config")}>
-            <button type="submit" className="btn btn-primary">
-              Weiter zur Fahrplan-Erzeugung
-            </button>
-          </ActionWithGuide>
+          {!selectedAdapters?.length ? (
+            <EmptyState
+              title="Keine Adapter gewählt"
+              message="Bitte im vorherigen Schritt mindestens einen Adapter auswählen."
+              actionHref={`/admin/setup?customer=${customer.id}&step=3`}
+              actionLabel="Zurück zu Adaptern"
+            />
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/setup?customer=${customer.id}&step=3`}
+              className="btn btn-secondary"
+            >
+              Zurück
+            </Link>
+            <ActionWithGuide guide={guides.get("admin.setup.step4_config")}>
+              <FormSubmitButton pendingLabel="Speichern …">Weiter</FormSubmitButton>
+            </ActionWithGuide>
+          </div>
         </form>
       ) : null}
 
       {customer && step === 5 ? (
-        <form action={generateWorkflowAction} className="panel space-y-4 p-6">
+        <form action={generateWorkflowAction} className="panel compact space-y-4 p-4 sm:p-5">
           <input type="hidden" name="customer_id" value={customer.id} />
-          <h2 className="text-lg font-semibold">5. Fahrplan erzeugen</h2>
+          <h2 className="text-base font-semibold">Fahrplan erzeugen</h2>
           <p className="text-sm">
-            Aus Zielsetzung und Adaptern wird deterministisch ein versionierter
-            Kundenfahrplan erzeugt. Bestehende aktive Fahrpläne werden archiviert
-            (Idempotenz / Neu-Generierung).
+            Aus Zielsetzung und Adaptern wird ein versionierter Kundenfahrplan
+            erzeugt. Bestehende aktive Fahrpläne werden archiviert.
           </p>
-          <p className="text-sm muted">
+          <p className="muted text-sm">
             OpenAI ist für die Erzeugung nicht erforderlich. Pipeline-Schritte
             werden nur verknüpft, nicht gestartet.
           </p>
-          <ActionWithGuide guide={guides.get("admin.setup.step5_generate")}>
-            <button type="submit" className="btn btn-primary">
-              Fahrplan jetzt erzeugen
-            </button>
-          </ActionWithGuide>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/setup?customer=${customer.id}&step=4`}
+              className="btn btn-secondary"
+            >
+              Zurück
+            </Link>
+            <ActionWithGuide guide={guides.get("admin.setup.step5_generate")}>
+              <FormSubmitButton pendingLabel="Wird erzeugt …">
+                Anlegen und weiter
+              </FormSubmitButton>
+            </ActionWithGuide>
+          </div>
         </form>
       ) : null}
     </div>

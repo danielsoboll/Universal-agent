@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminAccess } from "@/lib/onboarding/access";
+import {
+  primaryCustomerId,
+  requireAdminAccess,
+} from "@/lib/onboarding/access";
+import { EmptyState } from "@/components/ui/states";
 
 export default async function AdminQualityPage({
   searchParams,
@@ -8,32 +12,38 @@ export default async function AdminQualityPage({
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
-  const customerId =
-    sp.customer ||
-    ctx.memberships.find((m) => m.role === "customer_admin")?.customer_id;
+  const customerId = sp.customer || primaryCustomerId(ctx) || undefined;
   if (!customerId) {
-    return <div className="panel p-6">Kein Kunde ausgewählt.</div>;
+    return (
+      <EmptyState
+        title="Kein Kunde ausgewählt"
+        message="Bitte zuerst einen Kunden im Setup anlegen."
+        actionHref="/admin/setup"
+        actionLabel="Zum Setup"
+      />
+    );
   }
   await requireAdminAccess(customerId);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("quality_gates")
     .select("*")
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
 
+  if (error) console.error("[admin/quality]", error.message);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Qualität</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Qualität</h1>
         <p className="muted mt-1 text-sm">
-          Quality Gates und Freigaben. Auswertung lokaler Reports bleibt angebunden an
-          bestehende CLI-Artefakte — ohne Neuanalyse.
+          Quality Gates und Freigaben — ohne Neuanalyse.
         </p>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {(data ?? []).map((g) => (
-          <article key={g.id} className="panel p-4">
+          <article key={g.id} className="panel compact p-3">
             <p className="font-semibold">{g.title}</p>
             <p className="muted mt-1 text-sm">
               {g.gate_key} · {g.status}
@@ -41,7 +51,10 @@ export default async function AdminQualityPage({
           </article>
         ))}
         {!data?.length ? (
-          <div className="panel p-6 muted">Noch keine Quality Gates erfasst.</div>
+          <EmptyState
+            title="Keine Quality Gates"
+            message="Gates erscheinen, sobald die Pipeline sie erfasst."
+          />
         ) : null}
       </div>
     </div>

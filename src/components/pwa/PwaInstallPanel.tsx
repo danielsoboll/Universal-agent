@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 import { APP_NAME, getAppIconPath } from "@/lib/branding";
 import {
@@ -187,13 +186,14 @@ export function PwaInstallPanel({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-3 text-center">
-        <Image
+        {/* native img: Query-String-Icons brechen next/image in Production */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={getAppIconPath(192)}
           alt=""
           width={72}
           height={72}
           className="h-[4.5rem] w-[4.5rem] rounded-2xl object-cover shadow-lg ring-4 ring-[color-mix(in_srgb,var(--accent)_25%,transparent)]"
-          priority
         />
         <p className="max-w-xs text-sm font-semibold leading-snug">
           So erscheint {APP_NAME} auf dem Home-Bildschirm.

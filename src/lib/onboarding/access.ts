@@ -55,6 +55,7 @@ function mapRoleFromLegacy(opts: {
 
 export async function getAccessContext(): Promise<AccessContext | null> {
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -70,26 +71,51 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     .maybeSingle();
 
   if (platformRes.error) {
+    console.error("[access] platform_admins", platformRes.error.message);
     schemaReady = false;
   } else {
     isPlatformAdmin = Boolean(platformRes.data);
   }
 
-  const membershipsRes = await supabase
-    .from("customer_memberships")
-    .select("customer_id, role, status, customers(name, slug, logo_url)")
-    .eq("user_id", user.id)
-    .eq("status", "active");
-
-  if (membershipsRes.error) {
-    schemaReady = false;
-  }
-
-  const memberships = (membershipsRes.data ?? []).map((m) => {
-    const c = m.customers as
+  type MembershipRow = {
+    customer_id: string;
+    role: string;
+    status: string;
+    customers:
       | { name: string; slug: string; logo_url?: string | null }
       | { name: string; slug: string; logo_url?: string | null }[]
       | null;
+  };
+
+  let membershipRows: MembershipRow[] = [];
+
+  {
+    const withLogo = await supabase
+      .from("customer_memberships")
+      .select("customer_id, role, status, customers(name, slug, logo_url)")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+
+    if (withLogo.error) {
+      console.error("[access] memberships+logo", withLogo.error.message);
+      const withoutLogo = await supabase
+        .from("customer_memberships")
+        .select("customer_id, role, status, customers(name, slug)")
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      if (withoutLogo.error) {
+        console.error("[access] memberships", withoutLogo.error.message);
+        schemaReady = false;
+      } else {
+        membershipRows = (withoutLogo.data ?? []) as unknown as MembershipRow[];
+      }
+    } else {
+      membershipRows = (withLogo.data ?? []) as unknown as MembershipRow[];
+    }
+  }
+
+  const memberships = membershipRows.map((m) => {
+    const c = m.customers;
     const customer = Array.isArray(c) ? c[0] : c;
     return {
       customer_id: m.customer_id as string,
@@ -101,18 +127,48 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     };
   });
 
-  const profileRes = await supabase
-    .from("app_user_profiles")
-    .select(
-      "role, customer_id, display_name, module_sap, module_homepage, module_database, active_module, customers(name, slug, logo_url)",
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
+  type ProfileRow = {
+    role: string;
+    customer_id: string | null;
+    display_name: string | null;
+    module_sap: boolean | null;
+    module_homepage: boolean | null;
+    module_database: boolean | null;
+    active_module: string | null;
+    customers:
+      | { name: string; slug: string; logo_url?: string | null }
+      | { name: string; slug: string; logo_url?: string | null }[]
+      | null;
+  };
 
-  if (profileRes.error && profileRes.error.code !== "PGRST116") {
-    // table missing
-    if (/relation|does not exist|schema cache/i.test(profileRes.error.message)) {
-      schemaReady = false;
+  let profileData: ProfileRow | null = null;
+
+  {
+    const profileRes = await supabase
+      .from("app_user_profiles")
+      .select(
+        "role, customer_id, display_name, module_sap, module_homepage, module_database, active_module, customers(name, slug, logo_url)",
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileRes.error && profileRes.error.code !== "PGRST116") {
+      console.error("[access] profile+logo", profileRes.error.message);
+      if (/relation|does not exist|schema cache|column/i.test(profileRes.error.message)) {
+        schemaReady = false;
+        const fallback = await supabase
+          .from("app_user_profiles")
+          .select(
+            "role, customer_id, display_name, module_sap, module_homepage, module_database, active_module, customers(name, slug)",
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (!fallback.error && fallback.data) {
+          profileData = fallback.data as unknown as ProfileRow;
+        }
+      }
+    } else if (profileRes.data) {
+      profileData = profileRes.data as unknown as ProfileRow;
     }
   }
 
@@ -127,8 +183,8 @@ export async function getAccessContext(): Promise<AccessContext | null> {
   let moduleDatabase = false;
   let activeModule: AppModuleKey = "general";
 
-  if (profileRes.data) {
-    const p = profileRes.data;
+  if (profileData) {
+    const p = profileData;
     role = p.role as AppProfileRole;
     customerId = p.customer_id;
     displayName = p.display_name ?? displayName;
@@ -136,17 +192,13 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     moduleHomepage = Boolean(p.module_homepage);
     moduleDatabase = Boolean(p.module_database);
     activeModule = (p.active_module as AppModuleKey) ?? "general";
-    const c = p.customers as
-      | { name: string; slug: string; logo_url?: string | null }
-      | { name: string; slug: string; logo_url?: string | null }[]
-      | null;
+    const c = p.customers;
     const customer = Array.isArray(c) ? c[0] : c;
     customerName = customer?.name ?? null;
     customerSlug = customer?.slug ?? null;
     customerLogoUrl = customer?.logo_url ?? null;
     if (role === "general_admin") isPlatformAdmin = true;
   } else {
-    // Legacy fallback until profile row exists
     const primary = memberships[0];
     role = mapRoleFromLegacy({
       isPlatformAdmin,
@@ -161,6 +213,15 @@ export async function getAccessContext(): Promise<AccessContext | null> {
       moduleHomepage = true;
       moduleDatabase = true;
     }
+  }
+
+  // Guard invalid active_module vs checkboxes
+  if (
+    (activeModule === "sap" && !moduleSap) ||
+    (activeModule === "homepage" && !moduleHomepage) ||
+    (activeModule === "database" && !moduleDatabase)
+  ) {
+    activeModule = "general";
   }
 
   const titles = await loadModuleTitles(activeModule);
@@ -184,7 +245,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     schemaReady,
     isPlatformAdmin: isPlatformAdmin || role === "general_admin",
     isGeneralAdmin: role === "general_admin",
-    memberships: memberships.map(({ customer_logo_url: _, ...rest }) => rest),
+    memberships: memberships.map(({ customer_logo_url: _logo, ...rest }) => rest),
   };
 }
 

@@ -12,33 +12,42 @@ export default async function AppAreaLayout({
 }) {
   const ctx = await requireAppAccess();
   const customerId = primaryCustomerId(ctx);
-  let released = ctx.isPlatformAdmin;
+  let released = ctx.isPlatformAdmin || ctx.isGeneralAdmin;
 
   if (customerId && !released) {
-    const supabase = await createClient();
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("status")
-      .eq("id", customerId)
-      .maybeSingle();
-    released = customer?.status === "active";
-
-    // Also treat release step completed as release signal
-    if (!released) {
-      const { data: releaseStep } = await supabase
-        .from("customer_workflow_steps")
-        .select("completed")
-        .eq("customer_id", customerId)
-        .eq("completed", true)
-        .ilike("step_key", "%release%")
-        .limit(1)
+    try {
+      const supabase = await createClient();
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("status")
+        .eq("id", customerId)
         .maybeSingle();
-      released = Boolean(releaseStep);
+      released = customer?.status === "active";
+
+      if (!released) {
+        const { data: releaseStep } = await supabase
+          .from("customer_workflow_steps")
+          .select("completed")
+          .eq("customer_id", customerId)
+          .eq("completed", true)
+          .ilike("step_key", "%release%")
+          .limit(1)
+          .maybeSingle();
+        released = Boolean(releaseStep);
+      }
+    } catch (error) {
+      console.error("[app-layout] release check failed", error);
+      released = false;
     }
   }
 
   return (
-    <AppShell email={ctx.email} released={released}>
+    <AppShell
+      email={ctx.email}
+      released={released}
+      agentTitle={ctx.agentTitle}
+      logoUrl={ctx.customerLogoUrl}
+    >
       {children}
     </AppShell>
   );

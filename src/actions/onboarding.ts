@@ -23,17 +23,25 @@ function slugify(name: string): string {
     .slice(0, 48) || "kunde";
 }
 
+function setupErrorRedirect(message: string, customerId?: string, step?: number) {
+  const q = new URLSearchParams();
+  if (customerId) q.set("customer", customerId);
+  if (step) q.set("step", String(step));
+  q.set("error", message);
+  redirect(`/admin/setup?${q.toString()}`);
+}
+
 export async function createCustomerAction(formData: FormData) {
   const ctx = await requireAdminAccess();
   if (!ctx.isPlatformAdmin) {
-    throw new Error("Nur Platform Admins dürfen Kunden anlegen.");
+    setupErrorRedirect("Nur Platform Admins dürfen Kunden anlegen.");
   }
 
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const landscape = String(formData.get("landscape_label") ?? "").trim();
   let slug = String(formData.get("slug") ?? "").trim() || slugify(name);
-  if (!name) throw new Error("Name ist erforderlich.");
+  if (!name) setupErrorRedirect("Projektname ist erforderlich.");
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -49,12 +57,17 @@ export async function createCustomerAction(formData: FormData) {
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error || !data) {
+    console.error("[onboarding] createCustomer", error?.message);
+    setupErrorRedirect(
+      "Kunde konnte nicht angelegt werden. Bitte Name/Slug prüfen und erneut versuchen.",
+    );
+  }
 
   // Platform admin is not auto-member; optional self-membership as admin for convenience
   await supabase.from("customer_memberships").upsert(
     {
-      customer_id: data.id,
+      customer_id: data!.id,
       user_id: ctx.userId,
       role: "customer_admin",
       status: "active",
@@ -63,7 +76,7 @@ export async function createCustomerAction(formData: FormData) {
   );
 
   revalidatePath("/admin");
-  redirect(`/admin/setup?customer=${data.id}`);
+  redirect(`/admin/setup?customer=${data!.id}`);
 }
 
 export async function saveSetupGoalsAction(formData: FormData) {

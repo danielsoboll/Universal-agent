@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminAccess } from "@/lib/onboarding/access";
+import {
+  primaryCustomerId,
+  requireAdminAccess,
+} from "@/lib/onboarding/access";
 import { inviteCustomerUserAction } from "@/actions/onboarding";
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
 import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
+import { FormSubmitButton } from "@/components/ui/FormSubmitButton";
+import { EmptyState } from "@/components/ui/states";
 
 export default async function AdminUsersPage({
   searchParams,
@@ -12,31 +17,41 @@ export default async function AdminUsersPage({
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
   const guides = await loadUiGuideTexts(["admin.users.invite"]);
-  const customerId =
-    sp.customer ||
-    ctx.memberships.find((m) => m.role === "customer_admin")?.customer_id;
+  const customerId = sp.customer || primaryCustomerId(ctx) || undefined;
   if (!customerId) {
-    return <div className="panel p-6">Kein Kunde ausgewählt.</div>;
+    return (
+      <EmptyState
+        title="Kein Kunde ausgewählt"
+        message="Bitte zuerst einen Kunden im Setup anlegen."
+        actionHref="/admin/setup"
+        actionLabel="Zum Setup"
+      />
+    );
   }
   await requireAdminAccess(customerId);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("customer_memberships")
     .select("id, user_id, role, status, created_at")
     .eq("customer_id", customerId)
     .order("created_at");
 
+  if (error) console.error("[admin/users]", error.message);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Benutzer</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Benutzer</h1>
         <p className="muted mt-1 text-sm">
-          Customer User dürfen nur den Anwenderbereich nutzen. Einladungen per E-Mail
-          folgen; V1 verknüpft bestehende Auth-User-IDs.
+          Customer User nutzen nur den Anwenderbereich. V1 verknüpft bestehende
+          Auth-User-IDs.
         </p>
       </div>
 
-      <form action={inviteCustomerUserAction} className="panel grid gap-3 p-5 md:grid-cols-2">
+      <form
+        action={inviteCustomerUserAction}
+        className="panel compact grid gap-3 p-4 md:grid-cols-2"
+      >
         <input type="hidden" name="customer_id" value={customerId} />
         <div>
           <label className="label" htmlFor="email">
@@ -61,22 +76,28 @@ export default async function AdminUsersPage({
         </div>
         <div className="md:col-span-2">
           <ActionWithGuide guide={guides.get("admin.users.invite")}>
-            <button type="submit" className="btn btn-primary">
+            <FormSubmitButton pendingLabel="Speichern …">
               Mitgliedschaft speichern
-            </button>
+            </FormSubmitButton>
           </ActionWithGuide>
         </div>
       </form>
 
       <div className="space-y-2">
         {(data ?? []).map((m) => (
-          <article key={m.id} className="panel p-4 text-sm">
-            <p className="font-mono text-xs">{m.user_id}</p>
+          <article key={m.id} className="panel compact p-3 text-sm">
+            <p className="break-all font-mono text-xs">{m.user_id}</p>
             <p className="mt-1">
               {m.role} · {m.status}
             </p>
           </article>
         ))}
+        {!data?.length ? (
+          <EmptyState
+            title="Keine Mitgliedschaften"
+            message="Legen Sie oben die erste Mitgliedschaft an."
+          />
+        ) : null}
       </div>
     </div>
   );

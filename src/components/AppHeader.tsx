@@ -18,22 +18,27 @@ export async function AppHeader({
   } = await supabase.auth.getUser();
 
   return (
-    <header className="app-header">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="app-header pt-safe">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <BrandMark
-            size={32}
+            size={28}
             withName
+            compactName
             title={agentTitle}
             logoUrl={logoUrl}
           />
-          {roleLabel ? <span className="badge shrink-0">{roleLabel}</span> : null}
+          {roleLabel ? (
+            <span className="badge shrink-0 text-[0.65rem]">{roleLabel}</span>
+          ) : null}
         </div>
-        <div className="flex items-center gap-2 text-sm sm:gap-3">
-          <span className="muted hidden sm:inline">{user?.email}</span>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <span className="muted hidden max-w-[10rem] truncate text-xs lg:inline">
+            {user?.email}
+          </span>
           <ThemeToggle />
           <form action={signOut}>
-            <button className="btn btn-secondary" type="submit">
+            <button className="btn btn-secondary px-2.5 text-sm" type="submit">
               Abmelden
             </button>
           </form>

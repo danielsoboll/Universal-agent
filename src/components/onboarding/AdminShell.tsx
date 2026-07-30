@@ -2,74 +2,65 @@ import Link from "next/link";
 import { signOut } from "@/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
-import { getAccessContext } from "@/lib/onboarding/access";
+import { AdminNav } from "@/components/onboarding/AdminNav";
 
-const ADMIN_LINKS = [
-  { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/setup", label: "Setup" },
-  { href: "/admin/checklist", label: "Fahrplan" },
-  { href: "/admin/sources", label: "Quellen" },
-  { href: "/admin/uploads", label: "Uploads" },
-  { href: "/admin/pipeline", label: "Pipeline" },
-  { href: "/admin/quality", label: "Qualität" },
-  { href: "/admin/users", label: "Benutzer" },
-];
-
-export async function AdminShell({
+export function AdminShell({
   email,
   roleLabel,
+  agentTitle,
+  logoUrl,
+  customerName,
   children,
 }: {
   email?: string | null;
   roleLabel?: string;
+  agentTitle?: string | null;
+  logoUrl?: string | null;
+  customerName?: string | null;
   children: React.ReactNode;
 }) {
-  const profile = await getAccessContext();
-
   return (
-    <div className="min-h-screen">
-      <header className="app-header">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="min-h-screen pb-safe">
+      <header className="app-header pt-safe">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <BrandMark
-              size={32}
+              size={28}
               withName
+              compactName
               href="/admin/dashboard"
-              title={profile?.agentTitle}
-              logoUrl={profile?.customerLogoUrl}
+              title={agentTitle}
+              logoUrl={logoUrl}
             />
-            {roleLabel ? <span className="badge shrink-0">{roleLabel}</span> : null}
-            {profile?.customerName ? (
-              <span className="muted hidden text-sm lg:inline">
-                {profile.customerName}
+            {roleLabel ? (
+              <span className="badge shrink-0 text-[0.65rem]">{roleLabel}</span>
+            ) : null}
+            {customerName ? (
+              <span className="muted hidden truncate text-sm xl:inline">
+                {customerName}
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 text-sm sm:gap-3">
-            <span className="muted hidden md:inline">{email}</span>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <span className="muted hidden max-w-[10rem] truncate text-xs lg:inline">
+              {email}
+            </span>
             <ThemeToggle />
-            <Link href="/" className="btn btn-secondary">
+            <Link href="/" className="btn btn-secondary hidden sm:inline-flex">
               Start
             </Link>
             <form action={signOut}>
-              <button className="btn btn-secondary" type="submit">
+              <button className="btn btn-secondary px-2.5 text-sm" type="submit">
                 Abmelden
               </button>
             </form>
           </div>
         </div>
-        <nav
-          className="mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-4 pb-3"
-          aria-label="Admin-Navigation"
-        >
-          {ADMIN_LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="nav-pill">
-              {l.label}
-            </Link>
-          ))}
-        </nav>
+        <AdminNav />
       </header>
-      <main className="mx-auto w-full max-w-6xl px-6 py-8">{children}</main>
+      <main className="page-shell mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
+        {children}
+      </main>
     </div>
   );
 }

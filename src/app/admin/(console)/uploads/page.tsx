@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminAccess } from "@/lib/onboarding/access";
+import {
+  primaryCustomerId,
+  requireAdminAccess,
+} from "@/lib/onboarding/access";
+import { EmptyState } from "@/components/ui/states";
 
 export default async function AdminUploadsPage({
   searchParams,
@@ -8,41 +12,51 @@ export default async function AdminUploadsPage({
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
-  const customerId =
-    sp.customer ||
-    ctx.memberships.find((m) => m.role === "customer_admin")?.customer_id;
+  const customerId = sp.customer || primaryCustomerId(ctx) || undefined;
   if (!customerId) {
-    return <div className="panel p-6">Kein Kunde ausgewählt.</div>;
+    return (
+      <EmptyState
+        title="Kein Kunde ausgewählt"
+        message="Bitte zuerst einen Kunden im Setup anlegen."
+        actionHref="/admin/setup"
+        actionLabel="Zum Setup"
+      />
+    );
   }
   await requireAdminAccess(customerId);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("source_uploads")
     .select("*")
     .eq("customer_id", customerId)
     .order("uploaded_at", { ascending: false })
     .limit(50);
 
+  if (error) console.error("[admin/uploads]", error.message);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Uploads</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Uploads</h1>
         <p className="muted mt-1 text-sm">
-          Speicherpfade sind mandantengetrennt (<code>{customerId}/…</code>).
-          Upload-UI mit Storage folgt; Metadaten bereits modelliert.
+          Speicherpfade sind mandantengetrennt. Upload-UI folgt; Metadaten sind
+          modelliert.
         </p>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {(data ?? []).map((u) => (
-          <article key={u.id} className="panel p-4 text-sm">
-            <p className="font-semibold">{u.original_filename}</p>
-            <p className="muted mt-1">
+          <article key={u.id} className="panel compact p-3 text-sm">
+            <p className="break-words font-semibold">{u.original_filename}</p>
+            <p className="muted mt-1 break-all">
               {u.adapter_key} · {u.status} · {u.storage_path}
             </p>
           </article>
         ))}
         {!data?.length ? (
-          <div className="panel p-6 muted">Noch keine Uploads vorhanden.</div>
+          <EmptyState
+            title="Keine Uploads"
+            message="Sobald Dateien hochgeladen werden, erscheinen sie hier."
+          />
         ) : null}
       </div>
     </div>

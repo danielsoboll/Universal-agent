@@ -1,6 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
-import { BRAND_MARK_PATH, getAppIconPath } from "@/lib/branding";
+import { BRAND_MARK_PATH } from "@/lib/branding";
 import { DEFAULT_AGENT_TITLE } from "@/lib/onboarding/appProfileTypes";
 
 export function BrandMark({
@@ -9,51 +8,52 @@ export function BrandMark({
   href = "/",
   title,
   logoUrl,
+  compactName = false,
 }: {
   size?: number;
   withName?: boolean;
   href?: string | null;
   title?: string | null;
   logoUrl?: string | null;
+  /** On narrow headers: shorten long agent titles */
+  compactName?: boolean;
 }) {
-  const name = title?.trim() || DEFAULT_AGENT_TITLE;
+  const fullName = title?.trim() || DEFAULT_AGENT_TITLE;
+  const name =
+    compactName && fullName.length > 18
+      ? fullName.replace(/\s+Analyse Agent$/i, "").replace(/\s+Agent$/i, "") ||
+        fullName
+      : fullName;
   const src = logoUrl?.trim() || BRAND_MARK_PATH;
-  const isRemote = Boolean(logoUrl?.startsWith("http"));
 
   const mark = (
-    <span className="inline-flex items-center gap-2.5">
-      <Image
-        src={isRemote ? logoUrl! : src}
+    <span className="inline-flex min-w-0 items-center gap-2">
+      {/* native img: vermeidet Next/Image-SVG-/Query-Probleme in Production */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
         alt=""
         width={size}
         height={size}
-        className="rounded-[22%] bg-[var(--surface)] object-cover shadow-sm"
-        unoptimized
-        priority
+        className="shrink-0 rounded-[22%] bg-[var(--surface)] object-cover shadow-sm"
+        style={{ width: size, height: size }}
       />
       {withName ? (
-        <span className="text-lg font-semibold tracking-tight">{name}</span>
+        <span className="truncate text-base font-semibold tracking-tight sm:text-lg">
+          {name}
+        </span>
       ) : null}
     </span>
   );
 
   if (!href) return mark;
   return (
-    <Link href={href} className="inline-flex items-center" aria-label={name}>
+    <Link
+      href={href}
+      className="inline-flex min-w-0 max-w-full items-center"
+      aria-label={fullName}
+    >
       {mark}
     </Link>
-  );
-}
-
-export function BrandIconPreview({ size = 48 }: { size?: number }) {
-  return (
-    <Image
-      src={getAppIconPath(192)}
-      alt={DEFAULT_AGENT_TITLE}
-      width={size}
-      height={size}
-      className="rounded-xl object-cover shadow-md"
-      priority
-    />
   );
 }

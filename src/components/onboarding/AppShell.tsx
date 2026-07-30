@@ -2,7 +2,6 @@ import Link from "next/link";
 import { signOut } from "@/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
-import { getAccessContext } from "@/lib/onboarding/access";
 
 const APP_LINKS = [
   { href: "/app/search", label: "Suche" },
@@ -10,64 +9,69 @@ const APP_LINKS = [
   { href: "/app/history", label: "Verlauf" },
 ];
 
-export async function AppShell({
+export function AppShell({
   email,
   released,
+  agentTitle,
+  logoUrl,
   children,
 }: {
   email?: string | null;
   released: boolean;
+  agentTitle?: string | null;
+  logoUrl?: string | null;
   children: React.ReactNode;
 }) {
-  const profile = await getAccessContext();
-
   return (
-    <div className="min-h-screen">
-      <header className="app-header">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="min-h-screen pb-safe">
+      <header className="app-header pt-safe">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <BrandMark
-              size={32}
+              size={28}
               withName
+              compactName
               href="/app/search"
-              title={profile?.agentTitle}
-              logoUrl={profile?.customerLogoUrl}
+              title={agentTitle}
+              logoUrl={logoUrl}
             />
-            <span className="badge shrink-0">Anwender</span>
+            <span className="badge shrink-0 text-[0.65rem]">Anwender</span>
           </div>
-          <div className="flex items-center gap-2 text-sm sm:gap-3">
-            <span className="muted hidden sm:inline">{email}</span>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <span className="muted hidden max-w-[10rem] truncate text-xs sm:inline">
+              {email}
+            </span>
             <ThemeToggle />
-            <Link href="/" className="btn btn-secondary">
+            <Link href="/" className="btn btn-secondary px-2.5 text-sm">
               Start
             </Link>
             <form action={signOut}>
-              <button className="btn btn-secondary" type="submit">
+              <button className="btn btn-secondary px-2.5 text-sm" type="submit">
                 Abmelden
               </button>
             </form>
           </div>
         </div>
         <nav
-          className="mx-auto flex w-full max-w-5xl gap-1 px-4 pb-3"
+          className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 pb-3"
           aria-label="Anwender-Navigation"
         >
           {APP_LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="nav-pill">
+            <Link key={l.href} href={l.href} className="nav-pill shrink-0">
               {l.label}
             </Link>
           ))}
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-5xl px-6 py-8">
+      <main className="page-shell mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-8">
         {!released ? (
           <div
-            className="panel mb-6 p-4 text-sm"
+            className="panel compact mb-4 p-3 text-sm"
             style={{ background: "var(--accent-soft)" }}
           >
             <p className="font-semibold">Noch nicht freigegeben</p>
             <p className="muted mt-1">
-              Der Admin-Fahrplan hat die Anwenderfreigabe noch nicht abgeschlossen.
+              Die Anwenderfreigabe im Admin-Fahrplan steht noch aus.
             </p>
           </div>
         ) : null}

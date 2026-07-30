@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { BrandMark } from "@/components/brand/BrandMark";
-import { PwaInstallPanel } from "@/components/pwa/PwaInstallPanel";
+import { HomePwaHelp } from "@/components/home/HomePwaHelp";
 import { ActionGuide } from "@/components/onboarding/ActionGuide";
 import { ModuleSwitcher } from "@/components/onboarding/ModuleSwitcher";
+import { InlineError } from "@/components/ui/states";
 import {
   canAccessAdmin,
   getAccessContext,
@@ -11,62 +11,75 @@ import {
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
 import { MODULE_LABELS } from "@/lib/onboarding/appProfileTypes";
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const access = await getAccessContext();
+  const sp = await searchParams;
   const guides = await loadUiGuideTexts(["home.admin", "home.app"]);
   const isAdmin = access ? canAccessAdmin(access) : false;
   const isUserOnly = access?.role === "user";
 
   return (
-    <>
+    <div className="min-h-screen pb-safe">
       <AppHeader
         roleLabel={access?.roleLabel}
         agentTitle={access?.agentTitle}
         logoUrl={access?.customerLogoUrl}
       />
-      <main className="mx-auto w-full max-w-5xl space-y-8 px-6 py-8">
-        <section className="panel flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center">
-          <BrandMark
-            size={64}
-            href={null}
-            title={access?.agentTitle}
-            logoUrl={access?.customerLogoUrl}
-          />
+      <main className="page-shell mx-auto w-full max-w-5xl space-y-4 px-4 py-5 sm:space-y-5 sm:px-6 sm:py-8">
+        {sp.error ? (
+          <InlineError title="Aktion fehlgeschlagen" message={sp.error} />
+        ) : null}
+
+        <section className="panel compact flex items-start gap-3 p-4 sm:p-5">
           <div className="min-w-0 flex-1">
-            <p className="hero-kicker">{access?.agentTagline ?? "Universal Knowledge Analyzer"}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              {access?.agentTitle ?? "General Agent"}
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              {access?.displayName ?? access?.email ?? "Willkommen"}
             </h1>
-            {access ? (
-              <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="muted">Profil</dt>
-                  <dd className="font-medium">{access.roleLabel}</dd>
-                </div>
-                <div>
-                  <dt className="muted">Konto</dt>
-                  <dd className="font-medium">{access.displayName ?? access.email}</dd>
-                </div>
-                {access.customerName ? (
-                  <div>
-                    <dt className="muted">Kunde</dt>
-                    <dd className="font-medium">{access.customerName}</dd>
-                  </div>
-                ) : null}
-                <div>
-                  <dt className="muted">Aktives Modul</dt>
-                  <dd className="font-medium">
-                    {MODULE_LABELS[access.activeModule]}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="muted mt-2 text-sm">
-                Melden Sie sich mit bestehendem Konto an. Das Profil kommt aus Supabase.
-              </p>
-            )}
+            <p className="muted mt-1 text-sm">
+              {access?.roleLabel ?? "Gast"}
+              {access?.customerName ? ` · ${access.customerName}` : ""}
+              {access
+                ? ` · ${MODULE_LABELS[access.activeModule]}`
+                : ""}
+            </p>
           </div>
         </section>
+
+        {isAdmin ? (
+          <section className="panel compact space-y-3 p-4 sm:p-5">
+            <div>
+              <h2 className="text-lg font-semibold">Nächster Schritt</h2>
+              <p className="muted mt-1 text-sm">
+                {access?.isGeneralAdmin
+                  ? "Kunden, Fahrpläne und Freigaben steuern."
+                  : `Onboarding und Pipeline für ${access?.customerName ?? "Ihr Projekt"}.`}
+              </p>
+            </div>
+            <Link href="/admin/dashboard" className="btn btn-primary inline-flex">
+              Zum Admin-Dashboard
+            </Link>
+            <ActionGuide guide={guides.get("home.admin")} />
+          </section>
+        ) : null}
+
+        {isUserOnly ? (
+          <section className="panel compact space-y-3 p-4 sm:p-5">
+            <div>
+              <h2 className="text-lg font-semibold">Nächster Schritt</h2>
+              <p className="muted mt-1 text-sm">
+                Suche und Quellen für {access?.customerName ?? "Ihr Projekt"}.
+              </p>
+            </div>
+            <Link href="/app/search" className="btn btn-primary inline-flex">
+              Zur Suche
+            </Link>
+            <ActionGuide guide={guides.get("home.app")} />
+          </section>
+        ) : null}
 
         {access && (access.role === "general_admin" || access.role === "admin") ? (
           <ModuleSwitcher
@@ -77,60 +90,21 @@ export default async function HomePage() {
           />
         ) : null}
 
-        <section className="panel space-y-4 p-6">
-          <div>
-            <p className="hero-kicker">Home-Bildschirm</p>
-            <h2 className="mt-1 text-xl font-semibold">Zum Home-Bildschirm hinzufügen</h2>
-            <p className="muted mt-1 text-sm">
-              Schneller Start ohne Browser-Leiste — Anleitung je nach Gerät.
-            </p>
-          </div>
-          <PwaInstallPanel />
-        </section>
-
-        {isAdmin ? (
-          <section className="panel space-y-4 p-6">
-            <p className="hero-kicker">Ihr Bereich</p>
-            <h2 className="text-xl font-semibold">
-              {access?.isGeneralAdmin ? "General Admin" : "Admin"}
-            </h2>
-            <p className="muted text-sm">
-              {access?.isGeneralAdmin
-                ? "Plattformweite Steuerung: Kunden, Adapter, Fahrpläne und Freigaben."
-                : `Kundenprojekt ${access?.customerName ?? ""} — Onboarding und Pipeline.`}
-            </p>
-            <Link href="/admin/dashboard" className="btn btn-primary inline-flex">
-              Zum Admin-Dashboard
-            </Link>
-            <ActionGuide guide={guides.get("home.admin")} />
-          </section>
-        ) : null}
-
-        {isUserOnly ? (
-          <section className="panel space-y-4 p-6">
-            <p className="hero-kicker">Ihr Bereich</p>
-            <h2 className="text-xl font-semibold">Anwender</h2>
-            <p className="muted text-sm">
-              Suche und Quellen für {access?.customerName ?? "Ihr Projekt"}. Keine
-              Admin-Rechte.
-            </p>
-            <Link href="/app/search" className="btn btn-primary inline-flex">
-              Zur Suche
-            </Link>
-            <ActionGuide guide={guides.get("home.app")} />
-          </section>
-        ) : null}
+        <HomePwaHelp />
 
         {!access?.schemaReady ? (
-          <div className="panel p-4 text-sm" style={{ background: "var(--accent-soft)" }}>
+          <div
+            className="panel compact p-3 text-sm"
+            style={{ background: "var(--accent-soft)" }}
+          >
             <p className="font-semibold">Profil-Schema noch nicht aktiv</p>
             <p className="muted mt-1">
-              Migration <code>20260731000600_app_user_profiles.sql</code> in Supabase
-              anwenden, danach Profil für Ihren User prüfen.
+              Bitte die Profil-Migration in Supabase anwenden und die Seite neu
+              laden.
             </p>
           </div>
         ) : null}
       </main>
-    </>
+    </div>
   );
 }

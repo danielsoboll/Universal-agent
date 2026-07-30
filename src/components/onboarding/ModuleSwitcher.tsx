@@ -25,13 +25,11 @@ export function ModuleSwitcher({
   if (modules.length <= 1) return null;
 
   return (
-    <form action={switchActiveModuleAction} className="panel space-y-3 p-5">
+    <form action={switchActiveModuleAction} className="panel compact space-y-3 p-4">
       <div>
-        <p className="hero-kicker">Produktmodus</p>
-        <h2 className="mt-1 text-lg font-semibold">Modul wählen</h2>
-        <p className="muted mt-1 text-sm">
-          Häkchen kommen aus Ihrem Supabase-Profil. Die Auswahl setzt Titel und
-          Fokus der App (z.&nbsp;B. SAP Analyse Agent).
+        <h2 className="text-base font-semibold">Modul</h2>
+        <p className="muted mt-0.5 text-xs">
+          Setzt Titel und Fokus der Oberfläche.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -42,20 +40,16 @@ export function ModuleSwitcher({
             name="module"
             value={key}
             className={
-              key === activeModule ? "btn btn-primary" : "btn btn-secondary"
+              key === activeModule
+                ? "btn btn-primary px-3 text-sm"
+                : "btn btn-secondary px-3 text-sm"
             }
             aria-pressed={key === activeModule}
           >
             {MODULE_LABELS[key]}
-            {key === activeModule ? " ✓" : ""}
           </button>
         ))}
       </div>
-      <ul className="muted space-y-1 text-xs">
-        <li>SAP: {moduleSap ? "aktiv" : "nicht freigeschaltet"}</li>
-        <li>Homepage: {moduleHomepage ? "aktiv" : "nicht freigeschaltet"}</li>
-        <li>Datenbank: {moduleDatabase ? "aktiv" : "nicht freigeschaltet"}</li>
-      </ul>
     </form>
   );
 }

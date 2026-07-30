@@ -1,5 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminAccess } from "@/lib/onboarding/access";
+import {
+  primaryCustomerId,
+  requireAdminAccess,
+} from "@/lib/onboarding/access";
 import {
   completeManualStepAction,
   createPipelineRunStubAction,
@@ -12,6 +15,7 @@ import {
 } from "@/lib/onboarding/phases";
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
 import { ActionGuide } from "@/components/onboarding/ActionGuide";
+import { EmptyState } from "@/components/ui/states";
 
 export default async function AdminChecklistPage({
   searchParams,
@@ -26,15 +30,16 @@ export default async function AdminChecklistPage({
   ]);
   const supabase = await createClient();
 
-  const customerId =
-    sp.customer ||
-    ctx.memberships.find((m) => m.role === "customer_admin")?.customer_id;
+  const customerId = sp.customer || primaryCustomerId(ctx) || undefined;
 
   if (!customerId) {
     return (
-      <div className="panel p-6">
-        <p>Kein Kunde ausgewählt. Bitte zuerst das Setup durchlaufen.</p>
-      </div>
+      <EmptyState
+        title="Kein Kunde ausgewählt"
+        message="Bitte zuerst das Setup durchlaufen."
+        actionHref="/admin/setup"
+        actionLabel="Zum Setup"
+      />
     );
   }
 
@@ -76,9 +81,12 @@ export default async function AdminChecklistPage({
       </div>
 
       {!workflow ? (
-        <div className="panel p-6">
-          <p>Bitte im Setup einen Fahrplan erzeugen.</p>
-        </div>
+        <EmptyState
+          title="Noch kein Fahrplan"
+          message="Bitte im Setup einen Fahrplan erzeugen."
+          actionHref={`/admin/setup?customer=${customerId}&step=5`}
+          actionLabel="Zum Setup"
+        />
       ) : null}
 
       {phases.map((phase) => {

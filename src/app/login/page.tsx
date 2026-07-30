@@ -1,6 +1,6 @@
-import { signInWithPassword } from "@/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { LoginForm } from "@/components/auth/LoginForm";
 import { APP_NAME, APP_TAGLINE } from "@/lib/branding";
 
 export default async function LoginPage({
@@ -11,67 +11,22 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <main className="relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <div className="absolute right-6 top-6">
+    <main className="relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-10 sm:px-6 sm:py-12">
+      <div className="absolute right-4 top-4 pt-safe sm:right-6 sm:top-6">
         <ThemeToggle />
       </div>
-      <div className="panel p-8">
+      <div className="panel compact p-5 sm:p-8">
         <div className="flex justify-center">
-          <BrandMark size={56} href={null} />
+          <BrandMark size={48} href={null} />
         </div>
-        <h1 className="mt-4 text-center text-3xl font-semibold tracking-tight">
+        <h1 className="mt-4 text-center text-2xl font-semibold tracking-tight sm:text-3xl">
           {APP_NAME}
         </h1>
         <p className="muted mt-1 text-center text-sm">{APP_TAGLINE}</p>
-        <p className="muted mt-4 text-center text-sm">
-          Anmeldung nur mit bestehendem Konto. Hier kann kein Benutzer angelegt
-          werden.
+        <p className="muted mt-3 text-center text-sm">
+          Anmeldung nur mit bestehendem Konto.
         </p>
-
-        {params.error ? (
-          <p
-            className="mt-4 rounded-xl px-3 py-2 text-sm text-[var(--danger)]"
-            style={{ background: "var(--danger-soft)" }}
-          >
-            {params.error}
-          </p>
-        ) : null}
-
-        <form action={signInWithPassword} className="mt-6 space-y-4">
-          {params.next ? (
-            <input type="hidden" name="next" value={params.next} />
-          ) : null}
-          <div>
-            <label className="label" htmlFor="email">
-              Benutzername (E-Mail)
-            </label>
-            <input
-              className="input"
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="username"
-              inputMode="email"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="password">
-              Passwort
-            </label>
-            <input
-              className="input"
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <button className="btn btn-primary w-full" type="submit">
-            Anmelden
-          </button>
-        </form>
+        <LoginForm next={params.next} initialError={params.error} />
       </div>
     </main>
   );
