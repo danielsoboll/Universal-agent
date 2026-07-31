@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 const ADMIN_LINKS = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -15,8 +15,17 @@ const ADMIN_LINKS = [
   { href: "/admin/users", label: "Benutzer" },
 ];
 
-export function AdminNav() {
+function withCustomer(href: string, customer: string | null): string {
+  if (!customer) return href;
+  const url = new URL(href, "http://local");
+  url.searchParams.set("customer", customer);
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function AdminNavInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const customer = searchParams.get("customer");
   const [open, setOpen] = useState(false);
   const active =
     ADMIN_LINKS.find(
@@ -25,7 +34,6 @@ export function AdminNav() {
 
   return (
     <>
-      {/* Mobile: Menü-Button + Panel */}
       <div className="border-b border-[var(--border)] px-4 pb-3 md:hidden">
         <button
           type="button"
@@ -44,12 +52,13 @@ export function AdminNav() {
             aria-label="Admin-Navigation"
           >
             {ADMIN_LINKS.map((l) => {
+              const href = withCustomer(l.href, customer);
               const isActive =
                 pathname === l.href || pathname.startsWith(`${l.href}/`);
               return (
                 <Link
                   key={l.href}
-                  href={l.href}
+                  href={href}
                   onClick={() => setOpen(false)}
                   className={`rounded-lg px-3 py-2.5 text-sm font-medium ${
                     isActive
@@ -65,18 +74,18 @@ export function AdminNav() {
         ) : null}
       </div>
 
-      {/* Desktop / Tablet: horizontal scroll tabs */}
       <nav
         className="admin-nav-scroll mx-auto hidden w-full max-w-6xl gap-1 overflow-x-auto px-4 pb-3 md:flex"
         aria-label="Admin-Navigation"
       >
         {ADMIN_LINKS.map((l) => {
+          const href = withCustomer(l.href, customer);
           const isActive =
             pathname === l.href || pathname.startsWith(`${l.href}/`);
           return (
             <Link
               key={l.href}
-              href={l.href}
+              href={href}
               className={`nav-pill shrink-0 ${isActive ? "nav-pill-active" : ""}`}
             >
               {l.label}
@@ -85,5 +94,13 @@ export function AdminNav() {
         })}
       </nav>
     </>
+  );
+}
+
+export function AdminNav() {
+  return (
+    <Suspense fallback={<div className="h-10 border-b border-[var(--border)]" />}>
+      <AdminNavInner />
+    </Suspense>
   );
 }

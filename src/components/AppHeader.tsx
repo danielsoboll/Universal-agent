@@ -1,7 +1,6 @@
-import { signOut } from "@/actions/auth";
-import { createClient } from "@/lib/supabase/server";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { createClient } from "@/lib/supabase/server";
 
 export async function AppHeader({
   roleLabel,
@@ -37,7 +36,7 @@ export async function AppHeader({
             {user?.email}
           </span>
           <ThemeToggle />
-          <form action={signOut}>
+          <form action="/auth/signout" method="post">
             <button className="btn btn-secondary px-2.5 text-sm" type="submit">
               Abmelden
             </button>

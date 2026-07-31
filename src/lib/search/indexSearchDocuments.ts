@@ -26,15 +26,19 @@ function formatZodIssues(error: ZodError): string[] {
 
 /**
  * Merge drafts into an existing SearchDocument set (idempotent by content_hash).
+ * With `replaceCorpus: true`, only documents from the current draft set are kept
+ * (orphans from previous corpora are dropped). Existing rows still enable skip-by-hash.
  */
 export function indexSearchDocuments(params: {
   drafts: SearchDocumentDraft[];
   existingJsonl?: string;
   now?: string;
+  replaceCorpus?: boolean;
 }): IndexSearchDocumentsResult {
   const existing = parseSearchDocumentsJsonl(params.existingJsonl ?? "");
   const byId = new Map(existing);
   const validation_errors: IndexSearchDocumentsResult["validation_errors"] = [];
+  const keepIds = new Set<string>();
 
   let created = 0;
   let updated = 0;
@@ -65,6 +69,8 @@ export function indexSearchDocuments(params: {
         continue;
       }
 
+      keepIds.add(checked.data.search_document_id);
+
       if (unchanged) {
         skipped_unchanged += 1;
         byId.set(checked.data.search_document_id, checked.data);
@@ -83,9 +89,11 @@ export function indexSearchDocuments(params: {
     }
   }
 
-  const documents = [...byId.values()].sort((a, b) =>
-    a.source_key.localeCompare(b.source_key),
-  );
+  const documents = (
+    params.replaceCorpus
+      ? [...byId.values()].filter((d) => keepIds.has(d.search_document_id))
+      : [...byId.values()]
+  ).sort((a, b) => a.source_key.localeCompare(b.source_key));
 
   return {
     documents,

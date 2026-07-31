@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { signOut } from "@/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
 
@@ -45,7 +44,7 @@ export function AppShell({
             <Link href="/" className="btn btn-secondary px-2.5 text-sm">
               Start
             </Link>
-            <form action={signOut}>
+            <form action="/auth/signout" method="post">
               <button className="btn btn-secondary px-2.5 text-sm" type="submit">
                 Abmelden
               </button>

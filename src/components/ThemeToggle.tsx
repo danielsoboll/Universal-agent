@@ -31,21 +31,20 @@ export function ThemeToggle() {
     window.dispatchEvent(new Event("general-agent-theme-change"));
   }
 
+  // Bis mount immer denselben SSR-Tree rendern (kein Theme aus DOM vor Hydration).
+  const label =
+    !mounted || !isDark ? "Dunkelmodus aktivieren" : "Hellmodus aktivieren";
+
   return (
     <button
       type="button"
       onClick={toggle}
       className="theme-toggle"
-      aria-label={
-        mounted && isDark ? "Hellmodus aktivieren" : "Dunkelmodus aktivieren"
-      }
-      aria-pressed={mounted ? isDark : undefined}
+      aria-label={label}
+      aria-pressed={mounted ? isDark : false}
+      suppressHydrationWarning
     >
-      {mounted && isDark ? (
-        <SunIcon />
-      ) : (
-        <MoonIcon />
-      )}
+      {!mounted || !isDark ? <MoonIcon /> : <SunIcon />}
     </button>
   );
 }

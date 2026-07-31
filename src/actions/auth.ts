@@ -2,40 +2,25 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canAccessAdmin,
+  canAccessApp,
+  getAccessContext,
+} from "@/lib/onboarding/access";
 
-async function resolvePostLoginPath(userId: string): Promise<string> {
+function safeNextPath(raw: string): string | null {
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return null;
+}
+
+async function resolvePostLoginPath(): Promise<string> {
   try {
-    const admin = createAdminClient();
-    const { data: profile } = await admin
-      .from("app_user_profiles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (profile?.role === "general_admin" || profile?.role === "admin") {
-      return "/";
-    }
-    if (profile?.role === "user") return "/";
-
-    const { data: platform } = await admin
-      .from("platform_admins")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (platform) return "/";
-
-    const { data: membership } = await admin
-      .from("customer_memberships")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
-
-    if (membership?.role === "customer_admin") return "/";
-    if (membership) return "/";
+    const ctx = await getAccessContext();
+    if (!ctx) return "/";
+    if (canAccessAdmin(ctx)) return "/admin/dashboard";
+    if (canAccessApp(ctx)) return "/app/search";
   } catch {
-    /* Schema fehlt */
+    /* Schema/Profil noch nicht verfügbar */
   }
   return "/";
 }
@@ -58,7 +43,6 @@ export async function signInWithPassword(formData: FormData) {
   });
 
   if (error || !data.user) {
-    // Kein Signup — nur bestehende Auth-Nutzer
     redirect(
       `/login?error=${encodeURIComponent(
         "Anmeldung fehlgeschlagen. Benutzername oder Passwort ungültig. Ein Konto kann hier nicht angelegt werden.",
@@ -66,15 +50,21 @@ export async function signInWithPassword(formData: FormData) {
     );
   }
 
-  if (nextRaw.startsWith("/") && !nextRaw.startsWith("//")) {
-    redirect(nextRaw);
+  const next = safeNextPath(nextRaw);
+  if (next && next !== "/login") {
+    redirect(next);
   }
 
-  redirect(await resolvePostLoginPath(data.user.id));
+  redirect(await resolvePostLoginPath());
 }
 
+/** Fallback — bevorzugter Logout: POST /auth/signout */
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.error("[auth] signOut", error);
+  }
   redirect("/login");
 }

@@ -164,6 +164,8 @@ async function main() {
     ? parseCodeUnits(readFileSync(paths.codeUnits, "utf8"))
     : new Map();
 
+  const allRows = readJsonl(paths.rows) as import("@/lib/search/adapters/canonicalTableRow").CanonicalTableRowInput[];
+
   // Keep using adapter path for code units (same drafts as hybrid corpus)
   void draftFromCodeUnitAnalysis;
 
@@ -173,9 +175,16 @@ async function main() {
     codeUnits: units,
     tableAnalyses: readJsonl(paths.tableAnalyses),
     interpretations: readJsonl(paths.interps),
-    tableRows: readJsonl(paths.rows),
+    tableRows: allRows,
     dynamicAccesses: readJsonl(paths.dynamic),
   });
+
+  const rowDraftCount = drafts.filter(
+    (d) => d.knowledge_unit_type === "control_table_row",
+  ).length;
+  console.log(
+    `ControlTableRows: ${rowDraftCount}/${allRows.length} (nicht-redundant)`,
+  );
 
   ensureWritableDir(projectKey, "indexes", "search");
   ensureWritableDir(projectKey, "embeddings", "search");
@@ -194,6 +203,7 @@ async function main() {
     drafts,
     existingJsonl: existingDocs,
     now,
+    replaceCorpus: true,
   });
   const documents = fresh.documents;
 
@@ -221,6 +231,7 @@ async function main() {
     existingJsonl: existingEmb,
     batchSize: 64,
     now,
+    replaceCorpus: true,
     onBatch: (records) => {
       writeGeneratedText(
         projectKey,

@@ -250,14 +250,17 @@ export async function getAccessContext(): Promise<AccessContext | null> {
 }
 
 export function canAccessAdmin(ctx: AccessContext, customerId?: string): boolean {
-  if (!ctx.schemaReady && (ctx.isPlatformAdmin || ctx.role === "general_admin")) {
-    return true;
+  // Bei fehlendem Schema nur bekannte Platform-Admins durchlassen — nie alle Nutzer.
+  if (!ctx.schemaReady) {
+    return ctx.isPlatformAdmin || ctx.role === "general_admin";
   }
-  if (!ctx.schemaReady) return true;
   if (ctx.role === "general_admin" || ctx.isPlatformAdmin) return true;
   if (ctx.role === "admin") {
     if (!customerId) return true;
-    return ctx.customerId === customerId || ctx.memberships.some((m) => m.customer_id === customerId);
+    return (
+      ctx.customerId === customerId ||
+      ctx.memberships.some((m) => m.customer_id === customerId)
+    );
   }
   return false;
 }

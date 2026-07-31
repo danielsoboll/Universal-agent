@@ -1,5 +1,5 @@
 /**
- * Evaluate hybrid search against fixed question catalog.
+ * Evaluate hybrid search — evaluation only; never feeds ranking.
  *
  *   npm run evaluate:search -- --customer P01 --system D01
  */
@@ -17,18 +17,18 @@ import {
   resolveCustomerContext,
 } from "../src/lib/search/cliCustomerArgs";
 import { parseEmbeddingsJsonl } from "../src/lib/search/embedSearchDocuments";
-import { hybridSearch } from "../src/lib/search/hybridSearch";
+import { hybridSearch, type HybridSearchHit } from "../src/lib/search/hybridSearch";
+
+type RelevanceHints = {
+  source_key_substrings?: string[];
+  title_substrings?: string[];
+  types?: string[];
+};
 
 type EvalQuestion = {
   id: string;
   query: string;
-  expected_source_keys: string[];
-  expected_knowledge_unit_types: string[];
-  expected_terms: string[];
-  forbidden_claims: string[];
-  minimum_recall: number;
-  require_type_hit?: boolean;
-  require_fact_inference_markers?: boolean;
+  relevance_hints?: RelevanceHints;
   notes?: string;
 };
 
@@ -61,13 +61,36 @@ function loadIndex(projectKey: string): LocalSearchIndex {
   };
 }
 
-function recall(expected: string[], got: string[]): number {
-  if (expected.length === 0) return 1;
-  const set = new Set(got);
-  const hit = expected.filter((e) =>
-    [...set].some((g) => g === e || g.includes(e) || e.includes(g)),
-  ).length;
-  return hit / expected.length;
+/** Soft relevance for reporting only — not used by hybridSearch. */
+function isRelevantHit(hit: HybridSearchHit, hints?: RelevanceHints): boolean {
+  if (!hints) return false;
+  const blob = `${hit.source_key}\n${hit.title}\n${hit.snippet}`.toLowerCase();
+
+  // Prefer explicit type gate when only dynamic_table_access is requested
+  const types = hints.types ?? [];
+  if (types.length === 1 && types[0] === "dynamic_table_access") {
+    return (
+      hit.knowledge_unit_type === "dynamic_table_access" ||
+      hit.source_key.startsWith("dynamic:")
+    );
+  }
+
+  for (const s of hints.source_key_substrings ?? []) {
+    if (s.length >= 4 && hit.source_key.toLowerCase().includes(s.toLowerCase())) {
+      return true;
+    }
+  }
+  for (const s of hints.title_substrings ?? []) {
+    if (s.length >= 4 && blob.includes(s.toLowerCase())) return true;
+  }
+  return false;
+}
+
+function firstRelevantRank(hits: HybridSearchHit[], hints?: RelevanceHints): number | null {
+  for (const h of hits) {
+    if (isRelevantHit(h, hints)) return h.rank;
+  }
+  return null;
 }
 
 async function main() {
@@ -133,57 +156,53 @@ async function main() {
     tokens += search.query_embedding_tokens;
     cost += search.query_embedding_cost;
 
-    const topKeys = search.hits.map((h) => h.source_key);
-    const topTypes = search.hits.map((h) => h.knowledge_unit_type);
-    const r = recall(q.expected_source_keys, topKeys);
-    const typeHit =
-      !q.require_type_hit ||
-      q.expected_knowledge_unit_types.some((t) => topTypes.includes(t));
-    const blob = search.hits
-      .map((h) => `${h.title}\n${h.snippet}\n${h.evidence_refs.join("\n")}`)
-      .join("\n")
-      .toUpperCase();
-    const termHits = q.expected_terms.filter((t) =>
-      blob.includes(t.toUpperCase()),
-    );
-    const factInfOk =
-      !q.require_fact_inference_markers ||
-      (blob.includes("FACT") && blob.includes("INFERENCE"));
+    const relevantRank = firstRelevantRank(search.hits, q.relevance_hints);
+    const inTop3 = relevantRank != null && relevantRank <= 3;
+    const inTop5 = relevantRank != null && relevantRank <= 5;
+    const inTop10 = relevantRank != null && relevantRank <= 10;
+    if (!inTop5) weak.push(q.id);
 
-    const pass =
-      r >= q.minimum_recall && typeHit && factInfOk && termHits.length > 0
-        ? true
-        : q.expected_source_keys.length === 0 && typeHit && factInfOk
-          ? termHits.length > 0 || q.minimum_recall === 0
-          : r >= q.minimum_recall && typeHit;
-
-    if (!pass || q.id === "q1") weak.push(q.id);
+    const top10 = search.hits.map((h) => ({
+      rank: h.rank,
+      title: h.title,
+      knowledge_unit_type: h.knowledge_unit_type,
+      source_key: h.source_key,
+      combined_score: Number(h.combined_score.toFixed(4)),
+      exact_score: h.exact_score,
+      fulltext_score: Number(h.fulltext_score.toFixed(3)),
+      vector_score: Number(h.vector_score.toFixed(3)),
+      confidence_bonus: Number(h.confidence_bonus.toFixed(3)),
+      confidence: h.confidence,
+      matched_terms: h.matched_terms,
+      evidence_refs: h.evidence_refs.slice(0, 5),
+      snippet: h.snippet.slice(0, 160),
+      soft_relevant: isRelevantHit(h, q.relevance_hints),
+    }));
 
     results.push({
       id: q.id,
       query: q.query,
-      recall: Number(r.toFixed(3)),
-      minimum_recall: q.minimum_recall,
-      pass,
-      type_hit: typeHit,
-      term_hits: termHits,
-      top5: search.hits.slice(0, 5).map((h) => ({
-        rank: h.rank,
-        title: h.title,
-        knowledge_unit_type: h.knowledge_unit_type,
-        source_key: h.source_key,
-        combined_score: Number(h.combined_score.toFixed(4)),
-        exact_score: h.exact_score,
-        fulltext_score: Number(h.fulltext_score.toFixed(3)),
-        vector_score: Number(h.vector_score.toFixed(3)),
-        relation_score: h.relation_score,
-      })),
+      relevant_rank: relevantRank,
+      in_top3: inTop3,
+      in_top5: inTop5,
+      in_top10: inTop10,
+      top10,
       notes: q.notes ?? null,
     });
 
+    console.log(`\n=== ${q.id}: ${q.query}`);
     console.log(
-      `${q.id} recall=${r.toFixed(2)} pass=${pass} | ${q.query.slice(0, 60)}`,
+      `relevant@rank=${relevantRank ?? "—"} | top3=${inTop3} top5=${inTop5} top10=${inTop10}`,
     );
+    for (const h of top10) {
+      console.log(
+        `  #${h.rank} [${h.combined_score}] ${h.knowledge_unit_type} | ${h.title.slice(0, 70)}${h.soft_relevant ? " ★" : ""}`,
+      );
+      console.log(
+        `      exact=${h.exact_score} ft=${h.fulltext_score} vec=${h.vector_score} conf_b=${h.confidence_bonus}`,
+      );
+      console.log(`      source=${h.source_key}`);
+    }
   }
 
   const report = {
@@ -191,8 +210,10 @@ async function main() {
     customer_id: ctx.config.customer_id,
     system_id: ctx.systemId,
     questions: results.length,
-    passed: results.filter((r) => r.pass).length,
-    weak_or_failed: weak,
+    weak_questions: weak,
+    in_top3: results.filter((r) => r.in_top3).length,
+    in_top5: results.filter((r) => r.in_top5).length,
+    in_top10: results.filter((r) => r.in_top10).length,
     query_embedding_tokens: tokens,
     query_embedding_cost_usd: Number(cost.toFixed(6)),
     results,
@@ -206,8 +227,8 @@ async function main() {
   );
 
   console.log("\n=== EVALUATE SEARCH ===");
-  console.log(`passed ${report.passed}/${report.questions}`);
-  console.log(`weak/failed: ${weak.join(", ") || "—"}`);
+  console.log(`top3/top5/top10: ${report.in_top3}/${report.in_top5}/${report.in_top10} of ${report.questions}`);
+  console.log(`weak: ${weak.join(", ") || "—"}`);
   console.log(`query embed tokens/cost: ${tokens} / $${report.query_embedding_cost_usd}`);
 }
 

@@ -7,12 +7,13 @@ import {
 import { computeProgress } from "@/lib/onboarding/phases";
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
 import { ActionWithGuide } from "@/components/onboarding/ActionGuide";
+import { DeleteCustomerForm } from "@/components/onboarding/DeleteCustomerForm";
 import { EmptyState, InlineError } from "@/components/ui/states";
 
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customer?: string }>;
+  searchParams: Promise<{ customer?: string; error?: string; deleted?: string }>;
 }) {
   const ctx = await requireAdminAccess();
   const sp = await searchParams;
@@ -140,6 +141,8 @@ export default async function AdminDashboardPage({
       null;
   }
 
+  const selectedCustomer = customers?.find((c) => c.id === customerId) ?? null;
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -164,6 +167,18 @@ export default async function AdminDashboardPage({
           )}
         </ActionWithGuide>
       </div>
+
+      {sp.error ? (
+        <InlineError title="Aktion fehlgeschlagen" message={sp.error} />
+      ) : null}
+      {sp.deleted ? (
+        <div
+          className="panel compact p-3 text-sm"
+          style={{ background: "var(--accent-soft)" }}
+        >
+          Projekt wurde gelöscht.
+        </div>
+      ) : null}
 
       {!customerId ? (
         <EmptyState
@@ -319,6 +334,16 @@ export default async function AdminDashboardPage({
               )}
             </section>
           </div>
+
+          {ctx.isPlatformAdmin && selectedCustomer ? (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Gefahrenzone</h2>
+              <DeleteCustomerForm
+                customerId={selectedCustomer.id}
+                customerName={selectedCustomer.name}
+              />
+            </section>
+          ) : null}
         </>
       ) : null}
     </div>

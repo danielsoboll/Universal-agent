@@ -1,7 +1,7 @@
 /**
- * Hybrid search CLI (retrieval only — no answer generation).
+ * Deterministic fulltext/metadata search over table knowledge corpus.
  *
- *   npm run search -- --customer P01 --system D01 --query "..."
+ *   npm run search:tables -- --customer P01 --system D01 --query "..."
  */
 import { existsSync, readFileSync } from "fs";
 import { LocalDataError } from "../src/lib/localData/errors";
@@ -14,8 +14,7 @@ import {
   parseCustomerCliArgs,
   resolveCustomerContext,
 } from "../src/lib/search/cliCustomerArgs";
-import { parseEmbeddingsJsonl } from "../src/lib/search/embedSearchDocuments";
-import { hybridSearch } from "../src/lib/search/hybridSearch";
+import { searchTablesFulltext } from "../src/lib/tables/searchTablesFulltext";
 
 function fail(message: string): never {
   console.error(message);
@@ -25,24 +24,13 @@ function fail(message: string): never {
 function loadIndex(projectKey: string): LocalSearchIndex {
   const read = (rel: string) =>
     readFileSync(resolveWritablePath(projectKey, "indexes", rel), "utf8");
-  const vectorPath = resolveWritablePath(
-    projectKey,
-    "indexes",
-    "search/vector_index.jsonl",
-  );
-  const vector_index = existsSync(vectorPath)
-    ? readFileSync(vectorPath, "utf8")
-        .split(/\r?\n/)
-        .filter((l) => l.trim())
-        .map((l) => JSON.parse(l))
-    : [];
   return {
-    exact_index: JSON.parse(read("search/exact_index.json")),
-    fulltext_index: JSON.parse(read("search/fulltext_index.json")),
-    metadata_index: JSON.parse(read("search/metadata_index.json")),
-    relation_index: JSON.parse(read("search/relation_index.json")),
-    vector_index,
-    manifest: JSON.parse(read("search/index_manifest.json")),
+    exact_index: JSON.parse(read("tables/exact_index.json")),
+    fulltext_index: JSON.parse(read("tables/fulltext_index.json")),
+    metadata_index: JSON.parse(read("tables/metadata_index.json")),
+    relation_index: [],
+    vector_index: [],
+    manifest: JSON.parse(read("tables/index_manifest.json")),
   };
 }
 
@@ -67,33 +55,23 @@ async function main() {
   const docsPath = resolveWritablePath(
     ctx.projectKey,
     "indexes",
-    "search/search_documents.jsonl",
-  );
-  const embPath = resolveWritablePath(
-    ctx.projectKey,
-    "embeddings",
-    "search/search_embeddings.jsonl",
+    "tables/search_documents.jsonl",
   );
   if (!existsSync(docsPath)) {
     fail(
-      `SearchDocuments fehlen. Zuerst: npm run index:search -- --customer ${ctx.config.customer_id} --system ${ctx.systemId}`,
+      `Tabellen-SearchDocuments fehlen. Zuerst: npm run index:tables -- --customer ${ctx.config.customer_id} --system ${ctx.systemId}`,
     );
-  }
-  if (!existsSync(embPath)) {
-    fail("Embeddings fehlen — zuerst index:search ausführen");
   }
 
   const documents = [
     ...parseSearchDocumentsJsonl(readFileSync(docsPath, "utf8")).values(),
   ];
-  const embeddingsById = parseEmbeddingsJsonl(readFileSync(embPath, "utf8"));
   const index = loadIndex(ctx.projectKey);
-  const result = await hybridSearch({
+  const result = searchTablesFulltext({
     query: args.query!,
     documents,
     index,
-    embeddingsById,
-    options: { limit: args.limit ?? 10 },
+    limit: args.limit ?? 10,
   });
 
   console.log(`Query: ${result.query}`);
@@ -103,15 +81,12 @@ async function main() {
       `#${hit.rank} [${hit.combined_score.toFixed(3)}] ${hit.knowledge_unit_type} | ${hit.title}`,
     );
     console.log(
-      `  exact=${hit.exact_score.toFixed(2)} ft=${hit.fulltext_score.toFixed(2)} vec=${hit.vector_score.toFixed(3)} conf_bonus=${hit.confidence_bonus.toFixed(3)} conf=${hit.confidence}`,
+      `  exact=${hit.exact_score.toFixed(2)} ft=${hit.fulltext_score.toFixed(2)} meta=${hit.metadata_score.toFixed(2)}`,
     );
     console.log(`  source_key=${hit.source_key}`);
-    console.log(`  matched=${hit.matched_terms.join(", ") || "—"}`);
     console.log(`  snippet=${hit.snippet.slice(0, 180).replace(/\n/g, " ")}`);
     if (hit.evidence_refs.length) {
-      console.log(
-        `  evidence=${hit.evidence_refs.slice(0, 3).join(" | ").slice(0, 200)}`,
-      );
+      console.log(`  evidence=${hit.evidence_refs.slice(0, 3).join(" | ")}`);
     }
   }
 }

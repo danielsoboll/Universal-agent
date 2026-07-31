@@ -6,6 +6,7 @@ import { ModuleSwitcher } from "@/components/onboarding/ModuleSwitcher";
 import { InlineError } from "@/components/ui/states";
 import {
   canAccessAdmin,
+  canAccessApp,
   getAccessContext,
 } from "@/lib/onboarding/access";
 import { loadUiGuideTexts } from "@/lib/onboarding/uiGuideTexts";
@@ -20,6 +21,7 @@ export default async function HomePage({
   const sp = await searchParams;
   const guides = await loadUiGuideTexts(["home.admin", "home.app"]);
   const isAdmin = access ? canAccessAdmin(access) : false;
+  const hasAppAccess = access ? canAccessApp(access) : false;
   const isUserOnly = access?.role === "user";
 
   return (
@@ -59,14 +61,21 @@ export default async function HomePage({
                   : `Onboarding und Pipeline für ${access?.customerName ?? "Ihr Projekt"}.`}
               </p>
             </div>
-            <Link href="/admin/dashboard" className="btn btn-primary inline-flex">
-              Zum Admin-Dashboard
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/admin/dashboard" className="btn btn-primary inline-flex">
+                Zum Admin-Dashboard
+              </Link>
+              {hasAppAccess ? (
+                <Link href="/app/search" className="btn btn-secondary inline-flex">
+                  Zur Suche
+                </Link>
+              ) : null}
+            </div>
             <ActionGuide guide={guides.get("home.admin")} />
           </section>
         ) : null}
 
-        {isUserOnly ? (
+        {!isAdmin && isUserOnly && hasAppAccess ? (
           <section className="panel compact space-y-3 p-4 sm:p-5">
             <div>
               <h2 className="text-lg font-semibold">Nächster Schritt</h2>
@@ -78,6 +87,26 @@ export default async function HomePage({
               Zur Suche
             </Link>
             <ActionGuide guide={guides.get("home.app")} />
+          </section>
+        ) : null}
+
+        {!isAdmin && isUserOnly && !hasAppAccess ? (
+          <section className="panel compact space-y-2 p-4 sm:p-5">
+            <h2 className="text-lg font-semibold">Kein Projekt zugeordnet</h2>
+            <p className="muted text-sm">
+              Ihr Konto ist angemeldet, aber noch keinem Kundenprojekt
+              zugewiesen. Bitte einen Admin um Freischaltung bitten.
+            </p>
+          </section>
+        ) : null}
+
+        {access && !isAdmin && !isUserOnly ? (
+          <section className="panel compact space-y-2 p-4 sm:p-5">
+            <h2 className="text-lg font-semibold">Eingeschränkter Zugang</h2>
+            <p className="muted text-sm">
+              Für dieses Konto ist derzeit kein Admin- oder Anwenderzugang
+              freigeschaltet.
+            </p>
           </section>
         ) : null}
 

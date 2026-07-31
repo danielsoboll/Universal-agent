@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminAccess, requireUser } from "@/lib/onboarding/access";
+import {
+  canAccessAdmin,
+  canAccessApp,
+  requireAdminAccess,
+  requireUser,
+} from "@/lib/onboarding/access";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   generateCustomerWorkflow,
   recomputeStepStatuses,
@@ -504,12 +510,90 @@ export async function inviteCustomerUserAction(formData: FormData) {
 
 export async function resolveHomeDestination() {
   const ctx = await requireUser();
-  if (ctx.isPlatformAdmin || canAdmin(ctx)) {
+  if (canAccessAdmin(ctx)) {
     redirect("/admin/dashboard");
   }
-  redirect("/app/search");
+  if (canAccessApp(ctx)) {
+    redirect("/app/search");
+  }
+  redirect("/");
 }
 
-function canAdmin(ctx: Awaited<ReturnType<typeof requireUser>>) {
-  return ctx.memberships.some((m) => m.role === "customer_admin");
+function dashboardErrorRedirect(message: string, customerId?: string) {
+  const q = new URLSearchParams();
+  if (customerId) q.set("customer", customerId);
+  q.set("error", message);
+  redirect(`/admin/dashboard?${q.toString()}`);
+}
+
+/** Platform-Admin: Kunde/Projekt inkl. abhängiger Onboarding-Daten löschen. */
+export async function deleteCustomerAction(formData: FormData) {
+  const ctx = await requireAdminAccess();
+  if (!ctx.isPlatformAdmin) {
+    dashboardErrorRedirect("Nur Platform Admins dürfen Projekte löschen.");
+  }
+
+  const customerId = String(formData.get("customer_id") ?? "").trim();
+  const confirmName = String(formData.get("confirm_name") ?? "").trim();
+  if (!customerId) {
+    dashboardErrorRedirect("Kein Projekt ausgewählt.");
+  }
+
+  const supabase = await createClient();
+  const { data: customer, error: loadError } = await supabase
+    .from("customers")
+    .select("id, name, slug")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (loadError || !customer) {
+    dashboardErrorRedirect("Projekt nicht gefunden oder kein Zugriff.", customerId);
+  }
+
+  if (confirmName !== customer!.name) {
+    dashboardErrorRedirect(
+      "Löschen abgebrochen: der Bestätigungsname stimmt nicht überein.",
+      customerId,
+    );
+  }
+
+  // Storage best-effort vor dem DB-Cascade bereinigen
+  try {
+    const admin = createAdminClient();
+    const { data: uploads } = await admin
+      .from("source_uploads")
+      .select("storage_path")
+      .eq("customer_id", customerId);
+
+    const paths = (uploads ?? [])
+      .map((u) => u.storage_path as string)
+      .filter(Boolean);
+    if (paths.length) {
+      await admin.storage.from("customer-uploads").remove(paths);
+    }
+
+    const { data: listed } = await admin.storage
+      .from("customer-uploads")
+      .list(customerId, { limit: 1000 });
+    if (listed?.length) {
+      await admin.storage
+        .from("customer-uploads")
+        .remove(listed.map((f) => `${customerId}/${f.name}`));
+    }
+  } catch (error) {
+    console.error("[onboarding] deleteCustomer storage cleanup", error);
+  }
+
+  const { error } = await supabase.from("customers").delete().eq("id", customerId);
+  if (error) {
+    console.error("[onboarding] deleteCustomer", error.message);
+    dashboardErrorRedirect(
+      "Projekt konnte nicht gelöscht werden. Bitte erneut versuchen.",
+      customerId,
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/");
+  redirect("/admin/dashboard?deleted=1");
 }

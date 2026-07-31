@@ -150,12 +150,14 @@ async function embedBatch(params: {
 
 /**
  * Incremental embeddings keyed by content_hash + model + embedding_version.
+ * With `replaceCorpus: true`, only embeddings for the given documents are kept.
  */
 export async function embedSearchDocuments(params: {
   documents: SearchDocument[];
   existingJsonl?: string;
   batchSize?: number;
   now?: string;
+  replaceCorpus?: boolean;
   /** Optional flush after each batch (e.g. persist mid-run). */
   onBatch?: (records: SearchEmbeddingRecord[]) => void;
 }): Promise<EmbedSearchDocumentsResult> {
@@ -164,6 +166,7 @@ export async function embedSearchDocuments(params: {
   const byId = new Map(existing);
   const batchSize = params.batchSize ?? 64;
   const now = params.now ?? new Date().toISOString();
+  const keepIds = new Set(params.documents.map((d) => d.search_document_id));
 
   let created = 0;
   let skipped_unchanged = 0;
@@ -230,13 +233,18 @@ export async function embedSearchDocuments(params: {
       created += 1;
     }
     if (params.onBatch) {
-      params.onBatch([...byId.values()]);
+      const snapshot = params.replaceCorpus
+        ? [...byId.values()].filter((r) => keepIds.has(r.search_document_id))
+        : [...byId.values()];
+      params.onBatch(snapshot);
     }
   }
 
-  const records = [...byId.values()].sort((a, b) =>
-    a.search_document_id.localeCompare(b.search_document_id),
-  );
+  const records = (
+    params.replaceCorpus
+      ? [...byId.values()].filter((r) => keepIds.has(r.search_document_id))
+      : [...byId.values()]
+  ).sort((a, b) => a.search_document_id.localeCompare(b.search_document_id));
 
   return {
     records,

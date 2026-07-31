@@ -33,6 +33,35 @@ export type HybridSearchCorpusInput = {
   dynamicAccesses: DynamicTableAccessInput[];
 };
 
+/**
+ * Keep ControlTableRows that are already grounded in analyses/interpretations.
+ * All other canonical rows are redundant noise for a retrieval MVP.
+ * Purely structural — no domain/customer special cases.
+ */
+export function selectNonRedundantTableRows(params: {
+  tableRows: CanonicalTableRowInput[];
+  tableAnalyses: ControlTableAnalysisInput[];
+  interpretations: CodeTableInterpretationInput[];
+}): CanonicalTableRowInput[] {
+  const referencedKeys = new Set(
+    params.interpretations
+      .map((i) => i.table_row_source_key)
+      .filter((k): k is string => Boolean(k)),
+  );
+  const analyzedTables = new Set(
+    [
+      ...params.tableAnalyses.map((a) => a.table_name).filter(Boolean),
+      ...params.interpretations.map((i) => i.table_name).filter(Boolean),
+    ].map(String),
+  );
+
+  return params.tableRows.filter((row) => {
+    if (referencedKeys.has(row.source_key)) return true;
+    if (analyzedTables.has(row.table_name)) return true;
+    return false;
+  });
+}
+
 export function buildHybridSearchDrafts(
   input: HybridSearchCorpusInput,
 ): SearchDocumentDraft[] {
@@ -83,7 +112,12 @@ export function buildHybridSearchDrafts(
     if (draft) drafts.push(draft);
   }
 
-  for (const row of input.tableRows) {
+  const rows = selectNonRedundantTableRows({
+    tableRows: input.tableRows,
+    tableAnalyses: input.tableAnalyses,
+    interpretations: input.interpretations,
+  });
+  for (const row of rows) {
     drafts.push(
       draftFromCanonicalTableRow({
         row,
