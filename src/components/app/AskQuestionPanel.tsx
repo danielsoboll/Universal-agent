@@ -56,9 +56,9 @@ export function AskQuestionPanel({
           aria-busy="true"
           aria-label="Antwort wird vorbereitet"
         >
-          <div className="h-4 w-2/3 animate-pulse rounded bg-[var(--surface-raised)]" />
+          <div className="h-4 w-2/3 max-w-[16rem] animate-pulse rounded bg-[var(--surface-raised)]" />
           <div className="h-4 w-full animate-pulse rounded bg-[var(--surface-raised)]" />
-          <div className="h-4 w-5/6 animate-pulse rounded bg-[var(--surface-raised)]" />
+          <div className="h-4 w-5/6 max-w-[20rem] animate-pulse rounded bg-[var(--surface-raised)]" />
         </div>
       ) : null}
 
