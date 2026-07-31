@@ -66,8 +66,8 @@ export default async function HomePage({
                 Zum Admin-Dashboard
               </Link>
               {hasAppAccess ? (
-                <Link href="/app/search" className="btn btn-secondary inline-flex">
-                  Zur Suche
+                <Link href="/app/ask" className="btn btn-secondary inline-flex">
+                  Zur Fragen-Seite
                 </Link>
               ) : null}
             </div>
@@ -83,8 +83,8 @@ export default async function HomePage({
                 Suche und Quellen für {access?.customerName ?? "Ihr Projekt"}.
               </p>
             </div>
-            <Link href="/app/search" className="btn btn-primary inline-flex">
-              Zur Suche
+            <Link href="/app/ask" className="btn btn-primary inline-flex">
+              Zur Fragen-Seite
             </Link>
             <ActionGuide guide={guides.get("home.app")} />
           </section>

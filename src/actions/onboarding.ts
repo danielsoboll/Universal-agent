@@ -19,14 +19,21 @@ import {
 } from "@/lib/onboarding/generateCustomerWorkflow";
 import { getPipelineStep } from "@/lib/core/pipelineRegistry";
 
+/** Matches DB constraint customers_slug_format */
+const CUSTOMER_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,62}$/;
+
 function slugify(name: string): string {
-  return name
+  let slug = name
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-    .slice(0, 48) || "kunde";
+    .slice(0, 48);
+  if (!slug) slug = "kunde";
+  // Constraint requires at least 2 chars: [a-z0-9][a-z0-9_-]{1,62}
+  if (slug.length < 2) slug = `${slug}x`;
+  return slug;
 }
 
 function setupErrorRedirect(message: string, customerId?: string, step?: number) {
@@ -35,6 +42,43 @@ function setupErrorRedirect(message: string, customerId?: string, step?: number)
   if (step) q.set("step", String(step));
   q.set("error", message);
   redirect(`/admin/setup?${q.toString()}`);
+}
+
+type PostgrestLikeError = {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+};
+
+function formatCustomerInsertError(error: PostgrestLikeError): string {
+  const code = error.code ?? "";
+  const details = error.details ? ` — ${error.details}` : "";
+  const hint = error.hint ? ` Hinweis: ${error.hint}` : "";
+  if (code === "42501") {
+    return (
+      "RLS blockiert customers INSERT (42501): is_platform_admin() ist false für diese Session. " +
+      "App-Recht general_admin reicht nicht — Eintrag in platform_admins fehlt oder JWT/Session ungültig." +
+      details
+    );
+  }
+  if (code === "23505") {
+    return `Slug bereits vergeben (23505)${details}. Bitte anderen Slug wählen.`;
+  }
+  if (code === "23514") {
+    return (
+      `Slug verletzt Constraint customers_slug_format (23514): ` +
+      `erlaubt ^[a-z0-9][a-z0-9_-]{1,62}$ (mind. 2 Zeichen).${details}`
+    );
+  }
+  if (code === "PGRST116") {
+    return (
+      "Insert ohne sichtbare Rückgabe (PGRST116): Zeile ggf. geschrieben, aber SELECT-Policy " +
+      "liefert sie nicht. platform_admins / Membership prüfen." +
+      details
+    );
+  }
+  return `Supabase-Fehler${code ? ` ${code}` : ""}: ${error.message ?? "unbekannt"}${details}${hint}`;
 }
 
 export async function createCustomerAction(formData: FormData) {
@@ -46,42 +90,127 @@ export async function createCustomerAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const landscape = String(formData.get("landscape_label") ?? "").trim();
-  let slug = String(formData.get("slug") ?? "").trim() || slugify(name);
+  let slug = String(formData.get("slug") ?? "").trim().toLowerCase() || slugify(name);
   if (!name) setupErrorRedirect("Projektname ist erforderlich.");
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("customers")
-    .insert({
-      name,
-      slug,
-      description: description || null,
-      landscape_label: landscape || null,
-      status: "onboarding",
-      created_by: ctx.userId,
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    console.error("[onboarding] createCustomer", error?.message);
+  if (!CUSTOMER_SLUG_RE.test(slug)) {
     setupErrorRedirect(
-      "Kunde konnte nicht angelegt werden. Bitte Name/Slug prüfen und erneut versuchen.",
+      `Slug „${slug}“ ist ungültig. Erlaubt: ^[a-z0-9][a-z0-9_-]{1,62}$ (mind. 2 Zeichen).`,
     );
   }
 
-  // Platform admin is not auto-member; optional self-membership as admin for convenience
-  await supabase.from("customer_memberships").upsert(
-    {
-      customer_id: data!.id,
-      user_id: ctx.userId,
-      role: "customer_admin",
-      status: "active",
-    },
-    { onConflict: "customer_id,user_id" },
+  const supabase = await createClient();
+
+  // Sync app-level general_admin with RLS helper (platform_admins row).
+  const { data: rpcIsAdmin, error: rpcError } = await supabase.rpc(
+    "is_platform_admin",
   );
+  if (rpcError) {
+    console.error("[onboarding] is_platform_admin rpc", rpcError);
+  }
+  if (!rpcIsAdmin) {
+    try {
+      const admin = createAdminClient();
+      const { error: upsertAdminErr } = await admin.from("platform_admins").upsert(
+        { user_id: ctx.userId, created_by: ctx.userId },
+        { onConflict: "user_id" },
+      );
+      if (upsertAdminErr) {
+        setupErrorRedirect(
+          `is_platform_admin()=false und Nachzug in platform_admins fehlgeschlagen: ${upsertAdminErr.message}`,
+        );
+      }
+    } catch (e) {
+      setupErrorRedirect(
+        `is_platform_admin()=false; Service-Role für platform_admins nicht verfügbar: ${
+          e instanceof Error ? e.message : "unbekannt"
+        }`,
+      );
+    }
+  }
+
+  const payload = {
+    name,
+    slug,
+    description: description || null,
+    landscape_label: landscape || null,
+    status: "onboarding" as const,
+    created_by: ctx.userId,
+  };
+
+  let { data, error } = await supabase
+    .from("customers")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  // Fallback: authenticated insert still RLS-blocked → service role after app authz.
+  if (error?.code === "42501" || error?.code === "PGRST116" || (!data && error)) {
+    console.error("[onboarding] createCustomer user-client", error);
+    try {
+      const admin = createAdminClient();
+      const retry = await admin
+        .from("customers")
+        .insert(payload)
+        .select("id")
+        .single();
+      data = retry.data;
+      error = retry.error;
+      if (!error && data) {
+        console.warn(
+          "[onboarding] createCustomer: Insert via Service-Role nach RLS/Returning-Problem",
+        );
+      }
+    } catch (e) {
+      setupErrorRedirect(
+        `${formatCustomerInsertError(error ?? { message: "Insert fehlgeschlagen" })} ` +
+          `Service-Role-Fallback: ${e instanceof Error ? e.message : "unbekannt"}`,
+      );
+    }
+  }
+
+  if (error || !data) {
+    console.error("[onboarding] createCustomer", error);
+    setupErrorRedirect(
+      formatCustomerInsertError(
+        error ?? { message: "Keine Kundenzeile zurückgegeben." },
+      ),
+    );
+  }
+
+  const membership = {
+    customer_id: data!.id,
+    user_id: ctx.userId,
+    role: "customer_admin" as const,
+    status: "active" as const,
+  };
+  let { error: memErr } = await supabase
+    .from("customer_memberships")
+    .upsert(membership, { onConflict: "customer_id,user_id" });
+  if (memErr) {
+    console.error("[onboarding] createCustomer membership", memErr);
+    const firstMemErr = memErr;
+    try {
+      const admin = createAdminClient();
+      const retryMem = await admin
+        .from("customer_memberships")
+        .upsert(membership, { onConflict: "customer_id,user_id" });
+      memErr = retryMem.error;
+    } catch (e) {
+      setupErrorRedirect(
+        `Kunde ${data!.id} angelegt, Membership fehlgeschlagen: ${firstMemErr.message}; ` +
+          `Fallback: ${e instanceof Error ? e.message : "unbekannt"}`,
+      );
+    }
+  }
+  if (memErr) {
+    setupErrorRedirect(
+      `Kunde ${data!.id} angelegt, Membership fehlgeschlagen (${memErr.code ?? "?"}): ${memErr.message}`,
+    );
+  }
 
   revalidatePath("/admin");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/setup");
   redirect(`/admin/setup?customer=${data!.id}`);
 }
 
@@ -514,7 +643,7 @@ export async function resolveHomeDestination() {
     redirect("/admin/dashboard");
   }
   if (canAccessApp(ctx)) {
-    redirect("/app/search");
+    redirect("/app/ask");
   }
   redirect("/");
 }

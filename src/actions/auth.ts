@@ -18,7 +18,7 @@ async function resolvePostLoginPath(): Promise<string> {
     const ctx = await getAccessContext();
     if (!ctx) return "/";
     if (canAccessAdmin(ctx)) return "/admin/dashboard";
-    if (canAccessApp(ctx)) return "/app/search";
+    if (canAccessApp(ctx)) return "/app/ask";
   } catch {
     /* Schema/Profil noch nicht verfügbar */
   }

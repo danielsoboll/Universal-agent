@@ -39,7 +39,11 @@ export function BrandMark({
         style={{ width: size, height: size }}
       />
       {withName ? (
-        <span className="truncate text-base font-semibold tracking-tight sm:text-lg">
+        <span
+          className={`text-base font-semibold tracking-tight sm:text-lg ${
+            compactName ? "truncate" : "break-words leading-tight"
+          }`}
+        >
           {name}
         </span>
       ) : null}

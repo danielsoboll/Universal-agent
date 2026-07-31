@@ -3,6 +3,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
 
 const APP_LINKS = [
+  { href: "/app/ask", label: "Fragen" },
   { href: "/app/search", label: "Suche" },
   { href: "/app/sources", label: "Quellen" },
   { href: "/app/history", label: "Verlauf" },
@@ -24,35 +25,35 @@ export function AppShell({
   return (
     <div className="min-h-screen pb-safe">
       <header className="app-header pt-safe">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-4">
+          <div className="min-w-0 flex-1">
             <BrandMark
               size={28}
               withName
-              compactName
-              href="/app/search"
+              compactName={false}
+              href="/app/ask"
               title={agentTitle}
               logoUrl={logoUrl}
             />
-            <span className="badge shrink-0 text-[0.65rem]">Anwender</span>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <span className="muted hidden max-w-[10rem] truncate text-xs sm:inline">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <span className="badge hidden text-[0.6rem] sm:inline">Anwender</span>
+            <span className="muted hidden max-w-[9rem] truncate text-xs lg:inline">
               {email}
             </span>
             <ThemeToggle />
-            <Link href="/" className="btn btn-secondary px-2.5 text-sm">
-              Start
-            </Link>
             <form action="/auth/signout" method="post">
-              <button className="btn btn-secondary px-2.5 text-sm" type="submit">
+              <button
+                className="btn btn-secondary px-2 text-xs sm:px-2.5 sm:text-sm"
+                type="submit"
+              >
                 Abmelden
               </button>
             </form>
           </div>
         </div>
         <nav
-          className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 pb-3"
+          className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-3 pb-2.5 sm:px-6"
           aria-label="Anwender-Navigation"
         >
           {APP_LINKS.map((l) => (
@@ -62,7 +63,7 @@ export function AppShell({
           ))}
         </nav>
       </header>
-      <main className="page-shell mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-8">
+      <main className="page-shell mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
         {!released ? (
           <div
             className="panel compact mb-4 p-3 text-sm"
