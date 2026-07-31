@@ -1,9 +1,12 @@
-import { primaryCustomerId, requireAppAccess } from "@/lib/onboarding/access";
+import {
+  primaryProjectId,
+  requireLocalAppAccess,
+} from "@/lib/localAuth/session";
 import { AskQuestionPanel } from "@/components/app/AskQuestionPanel";
 
 export default async function AppAskPage() {
-  const ctx = await requireAppAccess();
-  const customerId = primaryCustomerId(ctx);
+  const ctx = await requireLocalAppAccess();
+  const projectId = primaryProjectId(ctx.user);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -12,12 +15,11 @@ export default async function AppAskPage() {
           Fragen
         </h1>
         <p className="muted mt-1 text-sm">
-          {ctx.customerName
-            ? `Fragen zu ${ctx.customerName}`
-            : "Fragen zu Ihrem System"}
+          Freie Frage an den lokalen Wissensbestand — ohne fest verdrahtete
+          Demo-Antworten.
         </p>
       </div>
-      <AskQuestionPanel customerId={customerId} />
+      <AskQuestionPanel projectId={projectId} />
     </div>
   );
 }

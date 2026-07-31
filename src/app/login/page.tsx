@@ -1,7 +1,7 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
-import { LoginForm } from "@/components/auth/LoginForm";
 import { APP_NAME, APP_TAGLINE } from "@/lib/branding";
+import { LoginForm } from "@/components/auth/LoginForm";
 
 export default async function LoginPage({
   searchParams,
@@ -24,7 +24,7 @@ export default async function LoginPage({
         </h1>
         <p className="muted mt-1 text-center text-sm">{APP_TAGLINE}</p>
         <p className="muted mt-3 text-center text-sm">
-          Anmeldung nur mit bestehendem Konto.
+          Lokale Anmeldung mit vorbereitetem Konto.
         </p>
         <LoginForm next={params.next} initialError={params.error} />
       </div>

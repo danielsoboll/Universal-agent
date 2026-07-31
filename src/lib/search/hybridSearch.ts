@@ -39,6 +39,8 @@ export type HybridSearchHit = {
 export type HybridSearchOptions = {
   limit?: number;
   knowledge_unit_types?: string[];
+  /** When false, skip query embedding / vector scoring (lexical only). */
+  enableVector?: boolean;
 };
 
 export type HybridSearchResult = {
@@ -150,20 +152,34 @@ export async function hybridSearch(params: {
     }
   }
 
-  // 3) query embedding + cosine similarity
-  const qEmb = await embedQueryText(query);
-  for (const row of params.index.vector_index) {
-    const emb = params.embeddingsById.get(row.search_document_id);
-    if (!emb) continue;
-    let vector: number[];
+  // 3) query embedding + cosine similarity (optional)
+  let query_embedding_tokens = 0;
+  let query_embedding_cost = 0;
+  const enableVector = options.enableVector !== false;
+  if (enableVector && params.embeddingsById.size > 0) {
     try {
-      vector = embeddingVector(emb);
-    } catch {
-      continue;
+      const qEmb = await embedQueryText(query);
+      query_embedding_tokens = qEmb.input_tokens;
+      query_embedding_cost = qEmb.estimated_cost;
+      for (const row of params.index.vector_index) {
+        const emb = params.embeddingsById.get(row.search_document_id);
+        if (!emb) continue;
+        let vector: number[];
+        try {
+          vector = embeddingVector(emb);
+        } catch {
+          continue;
+        }
+        const sim = cosineSimilarity(qEmb.vector, vector);
+        if (sim < VECTOR_MIN) continue;
+        bump(row.search_document_id, { vector: sim });
+      }
+    } catch (error) {
+      console.warn(
+        "[hybridSearch] Vector search übersprungen:",
+        error instanceof Error ? error.message : error,
+      );
     }
-    const sim = cosineSimilarity(qEmb.vector, vector);
-    if (sim < VECTOR_MIN) continue;
-    bump(row.search_document_id, { vector: sim });
   }
 
   // 4) simple metadata weighting = confidence_bonus only
@@ -214,7 +230,7 @@ export async function hybridSearch(params: {
     query,
     normalized_query,
     hits: limited,
-    query_embedding_tokens: qEmb.input_tokens,
-    query_embedding_cost: qEmb.estimated_cost,
+    query_embedding_tokens,
+    query_embedding_cost,
   };
 }

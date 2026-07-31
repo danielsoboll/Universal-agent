@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { signInWithPassword } from "@/actions/auth";
+import { localSignIn } from "@/actions/localAuth";
 import { InlineError } from "@/components/ui/states";
 
 function LoginSubmit() {
@@ -26,7 +26,7 @@ export function LoginForm({
   initialError?: string;
 }) {
   return (
-    <form action={signInWithPassword} className="mt-6 space-y-4 pb-safe">
+    <form action={localSignIn} className="mt-6 space-y-4 pb-safe">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       {initialError ? (
         <InlineError title="Anmeldung nicht möglich" message={initialError} />

@@ -32,11 +32,17 @@
     "test:onboarding": "tsx tests/onboarding/generateCustomerWorkflow.test.ts",
     "test:security": "tsx scripts/security-tests.ts",
     "test:onboarding-rls": "tsx scripts/onboarding-rls-tests.ts",
-    "admin:ensure-dsoboll": "tsx scripts/ensure-admin-dsoboll.ts"
+    "admin:ensure-dsoboll": "tsx scripts/ensure-admin-dsoboll.ts",
+    "seed:demo-project": "tsx scripts/seed-demo-project.ts",
+    "seed:demo-user": "tsx scripts/seed-demo-user.ts",
+    "verify:knowledge-index": "tsx scripts/verify-knowledge-index.ts",
+    "ask": "tsx scripts/ask.ts",
+    "e2e:local-auth": "tsx scripts/e2e-local-auth.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
+    "bcryptjs": "^3.0.3",
     "next": "16.2.12",
     "openai": "^7.1.0",
     "react": "19.2.4",
@@ -46,6 +52,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
