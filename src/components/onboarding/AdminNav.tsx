@@ -6,13 +6,13 @@ import { Suspense, useState } from "react";
 
 const ADMIN_LINKS = [
   { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/admin/extraction", label: "Datenimport" },
   { href: "/admin/setup", label: "Setup" },
-  { href: "/admin/checklist", label: "Fahrplan" },
   { href: "/admin/sources", label: "Quellen" },
   { href: "/admin/uploads", label: "Uploads" },
   { href: "/admin/pipeline", label: "Pipeline" },
   { href: "/admin/quality", label: "Qualität" },
-  { href: "/admin/users", label: "Benutzer" },
+  { href: "/admin/users", label: "Anwender" },
 ];
 
 function withCustomer(href: string, customer: string | null): string {
@@ -34,10 +34,10 @@ function AdminNavInner() {
 
   return (
     <>
-      <div className="border-b border-[var(--border)] px-4 pb-3 md:hidden">
+      <div className="border-b border-[var(--border)] px-3 pb-1 md:hidden">
         <button
           type="button"
-          className="btn btn-secondary w-full justify-between"
+          className="btn btn-secondary btn-quiet w-full justify-between min-h-11 py-1 text-sm font-medium"
           aria-expanded={open}
           aria-controls="admin-mobile-nav"
           onClick={() => setOpen((v) => !v)}
@@ -48,7 +48,7 @@ function AdminNavInner() {
         {open ? (
           <nav
             id="admin-mobile-nav"
-            className="mt-2 grid gap-1 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-2"
+            className="mt-0.5 grid gap-0 rounded-md border border-[var(--border)] bg-[var(--panel)] p-0.5"
             aria-label="Admin-Navigation"
           >
             {ADMIN_LINKS.map((l) => {
@@ -60,7 +60,7 @@ function AdminNavInner() {
                   key={l.href}
                   href={href}
                   onClick={() => setOpen(false)}
-                  className={`rounded-lg px-3 py-2.5 text-sm font-medium ${
+                  className={`flex min-h-11 items-center rounded px-2.5 py-1.5 text-sm font-medium ${
                     isActive
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "text-[var(--muted)]"
@@ -75,7 +75,7 @@ function AdminNavInner() {
       </div>
 
       <nav
-        className="admin-nav-scroll mx-auto hidden w-full max-w-6xl gap-1 overflow-x-auto px-4 pb-3 md:flex"
+        className="admin-nav-scroll mx-auto hidden w-full max-w-6xl gap-0.5 overflow-x-auto px-4 pb-1.5 md:flex"
         aria-label="Admin-Navigation"
       >
         {ADMIN_LINKS.map((l) => {
@@ -86,7 +86,7 @@ function AdminNavInner() {
             <Link
               key={l.href}
               href={href}
-              className={`nav-pill shrink-0 ${isActive ? "nav-pill-active" : ""}`}
+              className={`nav-pill shrink-0 px-3 py-1.5 text-sm ${isActive ? "nav-pill-active" : ""}`}
             >
               {l.label}
             </Link>
@@ -99,7 +99,7 @@ function AdminNavInner() {
 
 export function AdminNav() {
   return (
-    <Suspense fallback={<div className="h-10 border-b border-[var(--border)]" />}>
+    <Suspense fallback={<div className="h-8 border-b border-[var(--border)]" />}>
       <AdminNavInner />
     </Suspense>
   );

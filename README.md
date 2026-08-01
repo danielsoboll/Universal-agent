@@ -7,8 +7,10 @@ Interner Universal Knowledge Analyzer (eigenständiges Projekt).
 ```bash
 npm install
 cp .env.example .env.local   # Werte aus Supabase Dashboard / CLI
-npm run dev
+npm run dev                  # http://localhost:3003
 ```
+
+Lokale Ports (Festlegung): LifeXP `3000`, LifeXP-Family `3001`, Behördenpost `3002`, General Agent `3003`.
 
 ## Supabase
 

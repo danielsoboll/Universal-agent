@@ -1,17 +1,56 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { LOCAL_SESSION_COOKIE } from "@/lib/localAuth/sessionToken";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
+function publicOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const host =
+    forwardedHost ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
+  const proto =
+    forwardedProto === "http" || forwardedProto === "https"
+      ? forwardedProto
+      : request.nextUrl.protocol.replace(":", "") || "http";
+  return `${proto}://${host}`;
+}
+
+/**
+ * Reliable logout via Route Handler so Set-Cookie from signOut
+ * is attached to the redirect response (Server Actions can drop them).
+ */
 export async function POST(request: NextRequest) {
-  const response = NextResponse.redirect(new URL("/login", request.url), {
+  let response = NextResponse.redirect(new URL("/login", publicOrigin(request)), {
     status: 303,
   });
-  response.cookies.set(LOCAL_SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
+
+  try {
+    const { url, anonKey } = getSupabasePublicEnv();
+    const supabase = createServerClient(url, anonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    });
+
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.error("[auth/signout]", error);
+  }
+
   return response;
 }
 

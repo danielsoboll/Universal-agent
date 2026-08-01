@@ -1,6 +1,10 @@
 import type { UiGuideText } from "@/lib/onboarding/uiGuideTexts";
+import { GuideInfoButton } from "@/components/ui/GuideInfoButton";
 
-/** Compact “Was ist zu tun?” hint from Supabase, shown beside actions. */
+/**
+ * @deprecated Inline-Hinweis — bitte SectionTitleWithInfo / GuideInfoButton nutzen.
+ * Bleibt nur als Fallback für Seiten ohne Umbau.
+ */
 export function ActionGuide({
   guide,
   className = "",
@@ -10,16 +14,13 @@ export function ActionGuide({
 }) {
   if (!guide) return null;
   return (
-    <aside
-      className={`rounded-xl border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-2 text-sm ${className}`}
-      aria-label={guide.title}
-    >
-      <p className="font-semibold text-[var(--accent)]">{guide.title}</p>
-      <p className="muted mt-1 leading-relaxed">{guide.body}</p>
-    </aside>
+    <div className={`flex justify-end ${className}`}>
+      <GuideInfoButton title={guide.title} body={guide.body} />
+    </div>
   );
 }
 
+/** Aktion + Info-Button (ohne langen Textblock daneben). */
 export function ActionWithGuide({
   guide,
   children,
@@ -30,9 +31,11 @@ export function ActionWithGuide({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-2 sm:flex-row sm:items-start ${className}`}>
-      <div className="shrink-0">{children}</div>
-      <ActionGuide guide={guide} className="min-w-0 flex-1" />
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      {children}
+      {guide ? (
+        <GuideInfoButton title={guide.title} body={guide.body} />
+      ) : null}
     </div>
   );
 }

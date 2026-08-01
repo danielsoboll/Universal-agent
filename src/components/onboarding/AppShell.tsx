@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { SapProjectBrand } from "@/components/brand/SapProjectBrand";
+import { InternalStickyChrome } from "@/components/layout/InternalStickyChrome";
+import { AppBackNav } from "@/components/onboarding/AppBackNav";
+import type { AppModuleKey } from "@/lib/onboarding/appProfileTypes";
 
 const APP_LINKS = [
+  { href: "/app", label: "Übersicht" },
   { href: "/app/ask", label: "Fragen" },
   { href: "/app/search", label: "Suche" },
   { href: "/app/sources", label: "Quellen" },
@@ -14,46 +19,48 @@ export function AppShell({
   released,
   agentTitle,
   logoUrl,
+  productModule = "general",
   children,
 }: {
   email?: string | null;
   released: boolean;
   agentTitle?: string | null;
   logoUrl?: string | null;
+  productModule?: AppModuleKey;
   children: React.ReactNode;
 }) {
+  const isSap = productModule === "sap";
+
   return (
-    <div className="min-h-screen pb-safe">
-      <header className="app-header pt-safe">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-4">
-          <div className="min-w-0 flex-1">
+    <InternalStickyChrome
+      beforeChrome={isSap ? <SapProjectBrand /> : null}
+      header={
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-3 py-1.5 sm:gap-3 sm:px-6 sm:py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {isSap ? <SapProjectBrand compactSlot /> : null}
             <BrandMark
-              size={28}
+              size={22}
               withName
-              compactName={false}
-              href="/app/ask"
+              href="/app"
               title={agentTitle}
               logoUrl={logoUrl}
             />
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-            <span className="badge hidden text-[0.6rem] sm:inline">Anwender</span>
-            <span className="muted hidden max-w-[9rem] truncate text-xs lg:inline">
-              {email}
-            </span>
             <ThemeToggle />
-            <form action="/auth/signout" method="post">
-              <button
-                className="btn btn-secondary px-2 text-xs sm:px-2.5 sm:text-sm"
-                type="submit"
-              >
-                Abmelden
-              </button>
-            </form>
           </div>
         </div>
+      }
+      backNav={
+        <div className="mx-auto w-full max-w-5xl px-3 sm:px-6">
+          <AppBackNav />
+        </div>
+      }
+      mainClassName="page-shell mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <nav
-          className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-3 pb-2.5 sm:px-6"
+          className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
           aria-label="Anwender-Navigation"
         >
           {APP_LINKS.map((l) => (
@@ -62,21 +69,34 @@ export function AppShell({
             </Link>
           ))}
         </nav>
-      </header>
-      <main className="page-shell mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
-        {!released ? (
-          <div
-            className="panel compact mb-4 p-3 text-sm"
-            style={{ background: "var(--accent-soft)" }}
-          >
-            <p className="font-semibold">Noch nicht freigegeben</p>
-            <p className="muted mt-1">
-              Die Anwenderfreigabe im Admin-Fahrplan steht noch aus.
-            </p>
-          </div>
-        ) : null}
-        {children}
-      </main>
-    </div>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <span className="badge hidden text-[0.6rem] sm:inline">Anwender</span>
+          <span className="muted hidden max-w-[9rem] truncate text-xs lg:inline">
+            {email}
+          </span>
+          <form action="/auth/signout" method="post">
+            <button
+              className="btn btn-secondary px-2 text-xs sm:px-2.5 sm:text-sm"
+              type="submit"
+            >
+              Abmelden
+            </button>
+          </form>
+        </div>
+      </div>
+      {!released ? (
+        <div
+          className="panel compact mb-4 p-3 text-sm"
+          style={{ background: "var(--accent-soft)" }}
+        >
+          <p className="font-semibold">Noch nicht freigegeben</p>
+          <p className="muted mt-1">
+            Die Anwenderfreigabe steht noch aus (Projektstatus). Status und
+            Fragen bleiben einsehbar.
+          </p>
+        </div>
+      ) : null}
+      {children}
+    </InternalStickyChrome>
   );
 }

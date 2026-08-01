@@ -34,6 +34,7 @@ export const fileProjectRepository: ProjectRepository = {
     const now = new Date().toISOString();
     const rows = readAll();
     const idx = rows.findIndex((p) => p.id === input.id);
+    const prev = idx >= 0 ? rows[idx] : null;
     const next: LocalProject = {
       id: input.id || newId("proj"),
       name: input.name,
@@ -43,6 +44,10 @@ export const fileProjectRepository: ProjectRepository = {
       local_data_root: input.local_data_root,
       active_index_path: input.active_index_path,
       enabled_knowledge_unit_types: input.enabled_knowledge_unit_types ?? [],
+      domain_profile_id:
+        input.domain_profile_id ?? prev?.domain_profile_id,
+      enabled_adapter_ids:
+        input.enabled_adapter_ids ?? prev?.enabled_adapter_ids ?? [],
       created_at: input.created_at ?? now,
       updated_at: now,
     };

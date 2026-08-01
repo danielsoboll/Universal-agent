@@ -5,7 +5,6 @@ import { APP_NAME, getAppIconPath } from "@/lib/branding";
 import {
   canShowNativeInstallPrompt,
   getPwaInstallPlatform,
-  isIosDevice,
   isStandaloneDisplayMode,
   PWA_INSTALL_PROMPT_READY_EVENT,
   requestPwaInstall,
@@ -125,13 +124,22 @@ export function PwaInstallPanel({
   const [installing, setInstalling] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [iosDone, setIosDone] = useState(false);
-  const platform = getPwaInstallPlatform();
+  // Stable SSR + first client paint ("other" / not standalone). Real UA after mount.
+  const [platform, setPlatform] = useState<
+    ReturnType<typeof getPwaInstallPlatform>
+  >("other");
+  const [standalone, setStandalone] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setPlatform(getPwaInstallPlatform());
+    setStandalone(isStandaloneDisplayMode());
+    setMounted(true);
     const refresh = () => setCanInstall(canShowNativeInstallPrompt());
     refresh();
     window.addEventListener(PWA_INSTALL_PROMPT_READY_EVENT, refresh);
-    return () => window.removeEventListener(PWA_INSTALL_PROMPT_READY_EVENT, refresh);
+    return () =>
+      window.removeEventListener(PWA_INSTALL_PROMPT_READY_EVENT, refresh);
   }, []);
 
   async function handleInstall() {
@@ -162,13 +170,15 @@ export function PwaInstallPanel({
     }
   }
 
-  if (isStandaloneDisplayMode()) {
+  if (standalone) {
     return (
       <p className="text-sm font-semibold text-[var(--accent)]">
         {APP_NAME} läuft bereits als App auf dem Home-Bildschirm.
       </p>
     );
   }
+
+  const isIos = platform === "iphone" || platform === "ipad";
 
   const stepBlock =
     platform === "iphone" ? (
@@ -200,7 +210,7 @@ export function PwaInstallPanel({
         </p>
       </div>
 
-      {canInstall && !isIosDevice() ? (
+      {mounted && canInstall && !isIos ? (
         <button
           type="button"
           disabled={installing}
@@ -211,7 +221,7 @@ export function PwaInstallPanel({
         </button>
       ) : null}
 
-      {platform === "iphone" || platform === "ipad" ? (
+      {mounted && isIos ? (
         <button
           type="button"
           disabled={iosDone}
@@ -229,7 +239,7 @@ export function PwaInstallPanel({
       {stepBlock ? (
         <div className="space-y-2">
           <p className="hero-kicker">
-            {isIosDevice() ? "So geht’s in Safari" : "Oder manuell"}
+            {isIos ? "So geht’s in Safari" : "Oder manuell"}
           </p>
           {stepBlock}
         </div>

@@ -17,7 +17,7 @@ export default async function AdminQualityPage({
     return (
       <EmptyState
         title="Kein Kunde ausgewählt"
-        message="Bitte zuerst einen Kunden im Setup anlegen."
+        message="Bitte zuerst einen Kunden im Setup anlegen"
         actionHref="/admin/setup"
         actionLabel="Zum Setup"
       />
@@ -36,10 +36,7 @@ export default async function AdminQualityPage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold sm:text-2xl">Qualität</h1>
-        <p className="muted mt-1 text-sm">
-          Quality Gates und Freigaben — ohne Neuanalyse.
-        </p>
+        <h1 className="admin-page-title">Qualität</h1>
       </div>
       <div className="space-y-2">
         {(data ?? []).map((g) => (
@@ -53,7 +50,7 @@ export default async function AdminQualityPage({
         {!data?.length ? (
           <EmptyState
             title="Keine Quality Gates"
-            message="Gates erscheinen, sobald die Pipeline sie erfasst."
+            message="Gates erscheinen, sobald die Pipeline sie erfasst"
           />
         ) : null}
       </div>

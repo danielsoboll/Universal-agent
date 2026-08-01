@@ -1,3 +1,5 @@
+import type { ProjectProcessConfig } from "@/lib/workflow/types";
+import type { DomainProfileId } from "@/lib/domain/types";
 
 export type LocalRole = "admin" | "user";
 
@@ -12,6 +14,17 @@ export type LocalProject = {
   /** Relative under project folder, e.g. indexes/search */
   active_index_path: string;
   enabled_knowledge_unit_types: string[];
+  /**
+   * Domain Profile driving query-plan vocabulary, prompts, answer labels and
+   * default search behavior (see `src/lib/domain`). Optional for backward
+   * compatibility — missing values resolve via `resolveProjectCapabilities`
+   * to `generic_documents` (never silently to SAP).
+   */
+  domain_profile_id?: DomainProfileId;
+  /** Input adapters enabled for this project (pipeline step ids, e.g. "canonicalize.sap_classes"). */
+  enabled_adapter_ids?: string[];
+  /** Operative Export-/Pfadwerte für die Admin-Checkliste */
+  process_config?: ProjectProcessConfig;
   created_at: string;
   updated_at: string;
 };

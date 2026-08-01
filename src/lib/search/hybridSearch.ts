@@ -5,6 +5,8 @@ import {
 } from "@/lib/search/embedSearchDocuments";
 import {
   cosineSimilarity,
+  expandSearchTokenVariants,
+  foldSearchDiacritics,
   tokenizeSearchText,
   type LocalSearchIndex,
 } from "@/lib/search/buildLocalSearchIndex";
@@ -15,9 +17,122 @@ import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
 const W_EXACT = 4;
 const W_FULLTEXT = 1.2;
 const W_VECTOR = 3;
+const W_METADATA = 1.0;
 const W_CONFIDENCE = 0.5;
 /** Minimum cosine similarity to count as a vector hit. */
 const VECTOR_MIN = 0.15;
+
+/**
+ * Query-side function words (DE/EN). Applied only to lexical query terms so
+ * common words do not dominate IDF scoring; documents keep full text.
+ */
+const QUERY_STOPWORDS = new Set([
+  "der",
+  "die",
+  "das",
+  "den",
+  "dem",
+  "des",
+  "ein",
+  "eine",
+  "einer",
+  "eines",
+  "einem",
+  "einen",
+  "und",
+  "oder",
+  "mit",
+  "von",
+  "fur",
+  "fuer",
+  "auf",
+  "aus",
+  "bei",
+  "nach",
+  "uber",
+  "ueber",
+  "unter",
+  "ist",
+  "sind",
+  "war",
+  "wird",
+  "werden",
+  "hat",
+  "haben",
+  "kann",
+  "koennen",
+  "nicht",
+  "auch",
+  "sich",
+  "wie",
+  "was",
+  "wer",
+  "wo",
+  "wann",
+  "welche",
+  "welcher",
+  "welches",
+  "welchen",
+  "ob",
+  "es",
+  "gibt",
+  "zum",
+  "zur",
+  "im",
+  "in",
+  "am",
+  "an",
+  "als",
+  "um",
+  "so",
+  "noch",
+  "nur",
+  "man",
+  "macht",
+  "wurde",
+  "wurden",
+  "dass",
+  "daß",
+  "da",
+  "dort",
+  "hier",
+  "dann",
+  "wenn",
+  "aber",
+  "doch",
+  "schon",
+  "sehr",
+  "mehr",
+  "alle",
+  "allem",
+  "allen",
+  "aller",
+  "alles",
+  "kein",
+  "keine",
+  "keinen",
+  "dieser",
+  "diese",
+  "dieses",
+  "diesen",
+  "the",
+  "a",
+  "an",
+  "of",
+  "to",
+  "for",
+  "is",
+  "are",
+  "be",
+  "this",
+  "that",
+  "with",
+  "from",
+  "by",
+  "on",
+  "or",
+  "and",
+]);
 
 export type HybridSearchHit = {
   rank: number;
@@ -29,6 +144,7 @@ export type HybridSearchHit = {
   exact_score: number;
   fulltext_score: number;
   vector_score: number;
+  metadata_score: number;
   confidence_bonus: number;
   confidence: number | null;
   matched_terms: string[];
@@ -41,6 +157,12 @@ export type HybridSearchOptions = {
   knowledge_unit_types?: string[];
   /** When false, skip query embedding / vector scoring (lexical only). */
   enableVector?: boolean;
+  /** When false, skip 1-hop relation expansion. Default true. */
+  enableRelationExpansion?: boolean;
+  /** Exact match on SearchDocument.metadata keys (string/number/boolean). */
+  metadata_filters?: Record<string, unknown>;
+  /** Domain search profile type boosts (additive on combined score). */
+  knowledgeUnitTypeBoosts?: Record<string, number>;
 };
 
 export type HybridSearchResult = {
@@ -83,9 +205,38 @@ function snippetFromDoc(doc: SearchDocument, terms: string[]): string {
   return hay.slice(start, start + 240);
 }
 
+function isQueryStopword(term: string): boolean {
+  const t = foldSearchDiacritics(term.toLowerCase());
+  return QUERY_STOPWORDS.has(t) || QUERY_STOPWORDS.has(term.toLowerCase());
+}
+
 /**
- * Minimal hybrid retrieval: exact + normalized fulltext + vector + confidence.
- * No relation expansion, no query-intent type boosting, no eval special cases.
+ * Lexical query terms after compound expansion, without DE/EN function words.
+ */
+export function lexicalQueryTerms(query: string): string[] {
+  return [...new Set(tokenizeSearchText(query).filter((t) => !isQueryStopword(t)))];
+}
+
+/**
+ * Exact lookup keys: surface tokens + compound/diacritic variants (uppercased).
+ */
+export function exactQueryTerms(query: string): string[] {
+  const out = new Set<string>();
+  for (const raw of query.split(/[\s,;|]+/)) {
+    const surface = normalizeSearchToken(raw);
+    if (surface.length < 2) continue;
+    for (const v of expandSearchTokenVariants(surface)) {
+      if (isQueryStopword(v)) continue;
+      out.add(v.toUpperCase());
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Minimal hybrid retrieval: exact + normalized fulltext + vector + metadata + confidence.
+ * No query-intent type boosting, no eval / customer special cases.
+ * Optional single 1-hop relation expansion via relation_index (generic).
  */
 export async function hybridSearch(params: {
   query: string;
@@ -102,20 +253,14 @@ export async function hybridSearch(params: {
   const documentsById = new Map(
     params.documents.map((d) => [d.search_document_id, d]),
   );
-  const terms = tokenizeSearchText(query);
-  const exactTerms = [
-    ...new Set(
-      query
-        .split(/[\s,;|]+/)
-        .map((t) => normalizeSearchToken(t).toUpperCase())
-        .filter((t) => t.length >= 2),
-    ),
-  ];
+  const terms = lexicalQueryTerms(query);
+  const exactTerms = exactQueryTerms(query);
 
   type Acc = {
     exact: number;
     fulltext: number;
     vector: number;
+    meta: number;
     matched: Set<string>;
   };
   const scores = new Map<string, Acc>();
@@ -125,11 +270,13 @@ export async function hybridSearch(params: {
       exact: 0,
       fulltext: 0,
       vector: 0,
+      meta: 0,
       matched: new Set<string>(),
     };
     if (patch.exact) cur.exact += patch.exact;
     if (patch.fulltext) cur.fulltext += patch.fulltext;
     if (patch.vector) cur.vector = Math.max(cur.vector, patch.vector);
+    if (patch.meta) cur.meta += patch.meta;
     if (patch.term) cur.matched.add(patch.term);
     scores.set(id, cur);
   };
@@ -141,7 +288,7 @@ export async function hybridSearch(params: {
     }
   }
 
-  // 2) normalized fulltext (tf-idf-ish)
+  // 2) normalized fulltext (tf-idf-ish), stopwords already removed from terms
   const N = Math.max(1, params.documents.length);
   for (const term of terms) {
     const postings = params.index.fulltext_index[term] ?? [];
@@ -182,7 +329,56 @@ export async function hybridSearch(params: {
     }
   }
 
-  // 4) simple metadata weighting = confidence_bonus only
+  // 4) metadata: title / object / type token overlap (same idea as table fulltext)
+  for (const [id, meta] of Object.entries(params.index.metadata_index)) {
+    let metaScore = 0;
+    const hay =
+      `${meta.knowledge_unit_type} ${meta.object_name} ${meta.subobject_name} ${meta.title} ${meta.source_key}`.toLowerCase();
+    const hayTokens = new Set(tokenizeSearchText(hay));
+    for (const t of terms) {
+      if (hayTokens.has(t) || hay.includes(t)) metaScore += 0.5;
+    }
+    if (metaScore > 0) bump(id, { meta: metaScore });
+  }
+
+  // 5) generic 1-hop relation expansion — only from current top seeds (no chain)
+  if (options.enableRelationExpansion !== false) {
+    const REL_EXPAND_SEEDS = 5;
+    const unitNameToId = new Map<string, string>();
+    for (const doc of params.documents) {
+      const unit = doc.subobject_name?.trim();
+      if (unit && !unitNameToId.has(unit.toUpperCase())) {
+        unitNameToId.set(unit.toUpperCase(), doc.search_document_id);
+      }
+    }
+    const rankedSeeds = [...scores.entries()]
+      .map(([id, s]) => ({
+        id,
+        pre:
+          s.exact * W_EXACT +
+          s.fulltext * W_FULLTEXT +
+          s.vector * W_VECTOR +
+          s.meta * W_METADATA,
+      }))
+      .sort((a, b) => b.pre - a.pre)
+      .slice(0, REL_EXPAND_SEEDS);
+    for (const seed of rankedSeeds) {
+      for (const rel of params.index.relation_index) {
+        if (rel.from_id !== seed.id) continue;
+        const toId =
+          rel.to_id ||
+          (rel.to_name
+            ? unitNameToId.get(rel.to_name.toUpperCase())
+            : undefined);
+        if (!toId || toId === seed.id) continue;
+        bump(toId, {
+          fulltext: Math.min(2.5, Math.max(0.8, seed.pre * 0.08)),
+          term: `rel:${rel.relation_type}`,
+        });
+      }
+    }
+  }
+
   const hits: HybridSearchHit[] = [];
   for (const [id, s] of scores) {
     const doc = documentsById.get(id);
@@ -193,17 +389,38 @@ export async function hybridSearch(params: {
     ) {
       continue;
     }
+    if (options.metadata_filters && Object.keys(options.metadata_filters).length) {
+      let ok = true;
+      for (const [key, want] of Object.entries(options.metadata_filters)) {
+        if (want === undefined || want === null || want === "") continue;
+        const got = doc.metadata?.[key];
+        if (got === undefined) {
+          ok = false;
+          break;
+        }
+        if (String(got) !== String(want)) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+    }
 
     const conf = doc.confidence ?? 0.5;
     const exact_score = s.exact;
     const fulltext_score = s.fulltext;
     const vector_score = s.vector;
+    const metadata_score = s.meta;
     const confidence_bonus = conf * W_CONFIDENCE;
+    const typeBoost =
+      options.knowledgeUnitTypeBoosts?.[doc.knowledge_unit_type] ?? 0;
     const combined_score =
       exact_score * W_EXACT +
       fulltext_score * W_FULLTEXT +
       vector_score * W_VECTOR +
-      confidence_bonus;
+      metadata_score * W_METADATA +
+      confidence_bonus +
+      typeBoost;
 
     hits.push({
       rank: 0,
@@ -215,6 +432,7 @@ export async function hybridSearch(params: {
       exact_score,
       fulltext_score,
       vector_score,
+      metadata_score,
       confidence_bonus,
       confidence: doc.confidence,
       matched_terms: [...s.matched],

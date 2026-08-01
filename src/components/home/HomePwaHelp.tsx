@@ -23,9 +23,12 @@ export function HomePwaHelp() {
           Optional — Anleitung für iPhone, iPad und Android
         </span>
       </summary>
-      <div className="border-t border-[var(--border)] px-4 py-4">
-        <PwaInstallPanel />
-      </div>
+      {open ? (
+        <div className="border-t border-[var(--border)] px-4 py-4">
+          {/* Nur bei geöffnetem Details mounten — vermeidet UA-/Platform-Hydration. */}
+          <PwaInstallPanel />
+        </div>
+      ) : null}
     </details>
   );
 }

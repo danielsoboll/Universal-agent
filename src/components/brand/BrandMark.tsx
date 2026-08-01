@@ -15,19 +15,14 @@ export function BrandMark({
   href?: string | null;
   title?: string | null;
   logoUrl?: string | null;
-  /** On narrow headers: shorten long agent titles */
+  /** Slightly smaller type on dense headers — never ellipsis-truncate. */
   compactName?: boolean;
 }) {
   const fullName = title?.trim() || DEFAULT_AGENT_TITLE;
-  const name =
-    compactName && fullName.length > 18
-      ? fullName.replace(/\s+Analyse Agent$/i, "").replace(/\s+Agent$/i, "") ||
-        fullName
-      : fullName;
   const src = logoUrl?.trim() || BRAND_MARK_PATH;
 
   const mark = (
-    <span className="inline-flex min-w-0 items-center gap-2">
+    <span className="inline-flex min-w-0 items-center gap-1.5 sm:gap-2">
       {/* native img: vermeidet Next/Image-SVG-/Query-Probleme in Production */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -40,11 +35,13 @@ export function BrandMark({
       />
       {withName ? (
         <span
-          className={`text-base font-semibold tracking-tight sm:text-lg ${
-            compactName ? "truncate" : "break-words leading-tight"
+          className={`${
+            compactName
+              ? "min-w-0 break-words text-[0.8125rem] font-medium leading-snug tracking-tight sm:text-sm"
+              : "min-w-0 break-words text-base font-semibold leading-snug tracking-tight sm:text-lg"
           }`}
         >
-          {name}
+          {fullName}
         </span>
       ) : null}
     </span>
@@ -54,7 +51,7 @@ export function BrandMark({
   return (
     <Link
       href={href}
-      className="inline-flex min-w-0 max-w-full items-center"
+      className="inline-flex min-w-0 items-center"
       aria-label={fullName}
     >
       {mark}

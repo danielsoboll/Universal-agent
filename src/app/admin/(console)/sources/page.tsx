@@ -18,7 +18,7 @@ export default async function AdminSourcesPage({
     return (
       <EmptyState
         title="Kein Kunde ausgewählt"
-        message="Bitte zuerst einen Kunden im Setup anlegen."
+        message="Bitte zuerst einen Kunden im Setup anlegen"
         actionHref="/admin/setup"
         actionLabel="Zum Setup"
       />
@@ -38,7 +38,7 @@ export default async function AdminSourcesPage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold sm:text-2xl">Quellen & Adapter</h1>
+        <h1 className="admin-page-title">Quellen & Adapter</h1>
         <Link
           href={`/admin/setup?customer=${customerId}&step=3`}
           className="btn btn-secondary"
@@ -69,7 +69,7 @@ export default async function AdminSourcesPage({
       {!data?.length ? (
         <EmptyState
           title="Noch keine Adapter"
-          message="Wählen Sie Adapter im Setup aus."
+          message="Wählen Sie Adapter im Setup aus"
           actionHref={`/admin/setup?customer=${customerId}&step=3`}
           actionLabel="Zum Setup"
         />

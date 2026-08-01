@@ -38,6 +38,19 @@ async function main() {
     local_data_root: "",
     active_index_path: "indexes/search",
     enabled_knowledge_unit_types: [],
+    domain_profile_id: "sap",
+    process_config: {
+      sap_system_label: "Entwicklungssystem (${SYSTEM_ID})",
+      repository_export_report: "",
+      repository_export_variant: "",
+      table_definition_export_report: "",
+      table_content_export_report: "",
+      table_export_variant: "",
+      object_prefixes: "Z*, Y*",
+      repository_raw_path: "raw/classes",
+      table_definitions_raw_path: "raw/control-tables/definitions",
+      table_contents_raw_path: "raw/control-tables/contents",
+    },
   });
 
   const status = KnowledgeRetriever.inspect(project);

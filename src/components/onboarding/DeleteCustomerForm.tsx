@@ -21,13 +21,16 @@ function DeleteSubmit({ disabled }: { disabled: boolean }) {
 export function DeleteCustomerForm({
   customerId,
   customerName,
+  customerSlug,
 }: {
   customerId: string;
   customerName: string;
+  customerSlug?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
-  const matches = confirmName.trim() === customerName;
+  const expected = customerName.trim();
+  const matches = confirmName.trim() === expected;
 
   if (!open) {
     return (
@@ -50,12 +53,20 @@ export function DeleteCustomerForm({
       <input type="hidden" name="customer_id" value={customerId} />
       <p className="text-sm font-semibold">Projekt löschen</p>
       <p className="muted text-sm">
-        Löscht „{customerName}“ inklusive Ziele, Adapter, Fahrplan, Uploads und
-        Qualitätsgates. Nicht rückgängig machbar.
+        Löscht „{expected}“
+        {customerSlug ? (
+          <>
+            {" "}
+            <span className="font-mono text-xs">({customerSlug})</span>
+          </>
+        ) : null}{" "}
+        inklusive Ziele, Adapter, Fahrplan, Uploads, Qualitätsgates,
+        Mitgliedschaften und Storage. Anwender-Profile werden vom Projekt
+        getrennt. Nicht rückgängig machbar.
       </p>
       <div>
         <label className="label" htmlFor="confirm_name">
-          Zur Bestätigung Projektnamen eingeben
+          Zur Bestätigung exakt eingeben: {expected}
         </label>
         <input
           id="confirm_name"
@@ -64,7 +75,7 @@ export function DeleteCustomerForm({
           value={confirmName}
           onChange={(e) => setConfirmName(e.target.value)}
           autoComplete="off"
-          placeholder={customerName}
+          placeholder={expected}
           required
         />
       </div>

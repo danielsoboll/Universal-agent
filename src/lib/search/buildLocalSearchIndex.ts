@@ -46,11 +46,68 @@ export type LocalSearchIndex = {
 
 const TOKEN_RE = /[A-Za-zÀ-ÿ0-9_./:=-]+/g;
 
+/** Fold common Latin umlauts/diacritics to ASCII-ish forms for matching. */
+export function foldSearchDiacritics(token: string): string {
+  return token
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/á|à|â|ã/g, "a")
+    .replace(/é|è|ê|ë/g, "e")
+    .replace(/í|ì|î|ï/g, "i")
+    .replace(/ó|ò|ô|õ/g, "o")
+    .replace(/ú|ù|û/g, "u")
+    .replace(/ç/g, "c")
+    .replace(/ñ/g, "n");
+}
+
+/**
+ * Expand a single surface token into searchable variants:
+ * - original (lowercased, edge punctuation stripped)
+ * - diacritic-folded form (für → fuer)
+ * - hyphen/underscore parts (coca-cola → coca, cola; set_x → set, x)
+ * - glued compound without separators (coca_cola → cocacola)
+ *
+ * Generic compound normalization — not domain- or customer-specific.
+ */
+export function expandSearchTokenVariants(rawToken: string): string[] {
+  const cleaned = rawToken
+    .toLowerCase()
+    .replace(/^[^a-z0-9äöüáàâãéèêëíìîïóòôõúùûçñß]+|[^a-z0-9äöüáàâãéèêëíìîïóòôõúùûçñß]+$/gi, "");
+  if (cleaned.length < 2) return [];
+
+  const variants = new Set<string>();
+  const add = (t: string) => {
+    if (t.length >= 2) variants.add(t);
+  };
+
+  add(cleaned);
+  const folded = foldSearchDiacritics(cleaned);
+  add(folded);
+
+  if (/[-_]/.test(cleaned)) {
+    // Parts need length >= 4 so short fragments like "set" from SET_X do not flood matches.
+    for (const part of cleaned.split(/[-_]+/)) {
+      if (part.length < 4) continue;
+      add(part);
+      add(foldSearchDiacritics(part));
+    }
+    const glued = cleaned.replace(/[-_]+/g, "");
+    add(glued);
+    add(foldSearchDiacritics(glued));
+  }
+
+  return [...variants];
+}
+
 export function tokenizeSearchText(text: string): string[] {
   const raw = text.toLowerCase().match(TOKEN_RE) ?? [];
-  return raw
-    .map((t) => t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ""))
-    .filter((t) => t.length >= 2);
+  const out: string[] = [];
+  for (const t of raw) {
+    out.push(...expandSearchTokenVariants(t));
+  }
+  return out;
 }
 
 function addExact(map: Record<string, string[]>, key: string, id: string) {
@@ -77,6 +134,14 @@ export function buildLocalSearchIndex(params: {
   const idBySourceKey = new Map(
     params.documents.map((d) => [d.source_key, d.search_document_id]),
   );
+  /** Resolve callee units by subobject/unit name (e.g. SET_KONZERNFARBE). */
+  const idByUnitName = new Map<string, string>();
+  for (const doc of params.documents) {
+    const unit = doc.subobject_name?.trim();
+    if (unit && !idByUnitName.has(unit.toUpperCase())) {
+      idByUnitName.set(unit.toUpperCase(), doc.search_document_id);
+    }
+  }
 
   for (const doc of params.documents) {
     const id = doc.search_document_id;
@@ -115,13 +180,26 @@ export function buildLocalSearchIndex(params: {
 
     for (const rel of doc.relations) {
       const to_id = rel.to_name
-        ? idBySourceKey.get(rel.to_name)
+        ? idBySourceKey.get(rel.to_name) ??
+          idByUnitName.get(rel.to_name.toUpperCase())
         : undefined;
       relation_index.push({
         from_id: id,
         relation_type: rel.relation_type,
         to_name: rel.to_name ?? "",
         to_type: rel.to_type,
+        to_id,
+      });
+    }
+
+    // Generic CALLS edges from called_methods → callee units (1-hop expansion).
+    for (const method of doc.called_methods) {
+      const to_id = idByUnitName.get(method.toUpperCase());
+      relation_index.push({
+        from_id: id,
+        relation_type: "CALLS",
+        to_name: method,
+        to_type: "unit",
         to_id,
       });
     }

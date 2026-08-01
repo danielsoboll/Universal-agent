@@ -2,6 +2,8 @@ import { existsSync, readFileSync, statSync } from "fs";
 import path from "path";
 import { getLocalDataRoot } from "@/lib/localData/root";
 import type { LocalProject } from "@/lib/localAuth/types";
+import type { DomainSearchProfile } from "@/lib/domain/types";
+import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import { parseSearchDocumentsJsonl } from "@/lib/search/buildSearchDocuments";
 import type { LocalSearchIndex } from "@/lib/search/buildLocalSearchIndex";
 import {
@@ -89,6 +91,10 @@ export function inspectProjectKnowledge(project: LocalProject): {
   const index_dir = resolveIndexDir(project);
   const docs_path = path.join(index_dir, "search_documents.jsonl");
   if (!existsSync(data_root)) {
+    console.error(
+      "[KnowledgeRetriever.inspect] Datenverzeichnis fehlt:",
+      data_root,
+    );
     return {
       ok: false,
       data_root,
@@ -97,10 +103,14 @@ export function inspectProjectKnowledge(project: LocalProject): {
       document_count: 0,
       has_embeddings: false,
       vector_index_entries: 0,
-      message: `Datenverzeichnis fehlt: ${data_root}`,
+      message: "Projekt nicht konfiguriert",
     };
   }
   if (!existsSync(docs_path)) {
+    console.error(
+      "[KnowledgeRetriever.inspect] SearchDocuments fehlen:",
+      docs_path,
+    );
     return {
       ok: false,
       data_root,
@@ -109,7 +119,7 @@ export function inspectProjectKnowledge(project: LocalProject): {
       document_count: 0,
       has_embeddings: false,
       vector_index_entries: 0,
-      message: `SearchDocuments fehlen unter ${docs_path}`,
+      message: "Wissensindex fehlt",
     };
   }
   const documents = [
@@ -134,7 +144,7 @@ export function inspectProjectKnowledge(project: LocalProject): {
     message:
       documents.length > 0
         ? `${documents.length} SearchDocuments, Embeddings: ${has_embeddings ? "ja" : "nein"}`
-        : "Index ist leer",
+        : "Wissensindex leer",
   };
 }
 
@@ -154,6 +164,15 @@ function enrichHits(
       subobject_name: doc?.subobject_name ?? "",
       technical_summary: doc?.technical_summary ?? "",
       business_purpose: doc?.business_purpose ?? "",
+      tables_read: doc?.tables_read ?? [],
+      tables_written: doc?.tables_written ?? [],
+      called_methods: doc?.called_methods ?? [],
+      called_functions: doc?.called_functions ?? [],
+      hardcoded_values: doc?.hardcoded_values ?? [],
+      entities: doc?.entities ?? [],
+      relations: doc?.relations ?? [],
+      evidence: doc?.evidence ?? [],
+      doc_confidence: doc?.confidence ?? null,
     };
   });
 }
@@ -162,13 +181,22 @@ export async function knowledgeSearch(params: {
   project: LocalProject;
   query: string;
   limit?: number;
-  filters?: { knowledge_unit_types?: string[] };
+  filters?: {
+    knowledge_unit_types?: string[];
+    metadata_filters?: Record<string, unknown>;
+  };
+  enableRelationExpansion?: boolean;
+  /** When omitted, resolved from project.domain_profile_id. */
+  searchProfile?: DomainSearchProfile;
 }): Promise<KnowledgeSearchResult> {
   const warnings: string[] = [];
   const status = inspectProjectKnowledge(params.project);
   if (!status.ok) {
     throw new Error(status.message);
   }
+
+  const capabilities = resolveProjectCapabilities(params.project);
+  const searchProfile = params.searchProfile ?? capabilities.searchProfile;
 
   const documents = [
     ...parseSearchDocumentsJsonl(readFileSync(status.docs_path, "utf8")).values(),
@@ -204,6 +232,12 @@ export async function knowledgeSearch(params: {
     warnings.push("OPENAI_API_KEY fehlt — Vector Search deaktiviert.");
   }
 
+  const relationDefault = searchProfile.defaultRelationExpansion;
+  const enableRelationExpansion =
+    params.enableRelationExpansion !== undefined
+      ? params.enableRelationExpansion
+      : relationDefault;
+
   const result = await hybridSearch({
     query: params.query,
     documents,
@@ -213,6 +247,9 @@ export async function knowledgeSearch(params: {
       limit: params.limit ?? 8,
       knowledge_unit_types: types,
       enableVector,
+      enableRelationExpansion,
+      metadata_filters: params.filters?.metadata_filters,
+      knowledgeUnitTypeBoosts: searchProfile.knowledgeUnitTypeBoosts,
     },
   });
 

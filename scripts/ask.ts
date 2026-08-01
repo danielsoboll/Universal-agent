@@ -1,7 +1,7 @@
 /**
  * CLI ask — same answerQuestion service as the web UI.
  *
- *   npm run ask -- --project <id> --query "..."
+ *   npm run ask -- --project <id> --query "..." [--mode direct_rag|planned_rag]
  */
 import { resolve } from "path";
 import { loadEnvFile } from "../src/lib/core/loadEnv";
@@ -34,7 +34,12 @@ async function main() {
     process.exit(2);
   }
 
-  const result = await answerQuestion({ projectId, question: query });
+  const result = await answerQuestion({
+    projectId,
+    question: query,
+    searchMode:
+      argValue(argv, "--mode") === "planned_rag" ? "planned_rag" : "direct_rag",
+  });
   console.log(JSON.stringify(result, null, 2));
   if (result.status === "error") process.exit(1);
 }

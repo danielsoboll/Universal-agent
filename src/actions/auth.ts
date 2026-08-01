@@ -3,8 +3,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  canAccessAdmin,
   canAccessApp,
+  canAccessProjectConsole,
   getAccessContext,
 } from "@/lib/onboarding/access";
 
@@ -17,7 +17,8 @@ async function resolvePostLoginPath(): Promise<string> {
   try {
     const ctx = await getAccessContext();
     if (!ctx) return "/";
-    if (canAccessAdmin(ctx)) return "/admin/dashboard";
+    // Projekt-Admin, Projekt-Benutzer und General Admin → Dashboard
+    if (canAccessProjectConsole(ctx)) return "/admin/dashboard";
     if (canAccessApp(ctx)) return "/app/ask";
   } catch {
     /* Schema/Profil noch nicht verfügbar */

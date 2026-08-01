@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import {
@@ -10,6 +11,11 @@ import {
   fallbackTitles,
   roleLabelFor,
 } from "@/lib/onboarding/appProfileTypes";
+import {
+  PROJECT_ADMIN_REQUIRED_HINT,
+  roleCanMutateProjectSetup,
+  roleCanViewProjectConsole,
+} from "@/lib/onboarding/permissions";
 
 export type CustomerMembershipRole = "customer_admin" | "customer_user";
 
@@ -24,6 +30,8 @@ export type AccessContext = ResolvedAppProfile & {
     customer_slug: string | null;
   }>;
 };
+
+export { PROJECT_ADMIN_REQUIRED_HINT };
 
 async function loadModuleTitles(
   moduleKey: AppModuleKey,
@@ -53,7 +61,7 @@ function mapRoleFromLegacy(opts: {
   return "user";
 }
 
-export async function getAccessContext(): Promise<AccessContext | null> {
+export const getAccessContext = cache(async (): Promise<AccessContext | null> => {
   const supabase = await createClient();
 
   const {
@@ -82,35 +90,58 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     role: string;
     status: string;
     customers:
-      | { name: string; slug: string; logo_url?: string | null }
-      | { name: string; slug: string; logo_url?: string | null }[]
+      | {
+          name: string;
+          slug: string;
+          logo_url?: string | null;
+          product_module?: string | null;
+        }
+      | {
+          name: string;
+          slug: string;
+          logo_url?: string | null;
+          product_module?: string | null;
+        }[]
       | null;
   };
 
   let membershipRows: MembershipRow[] = [];
 
   {
-    const withLogo = await supabase
+    const withModule = await supabase
       .from("customer_memberships")
-      .select("customer_id, role, status, customers(name, slug, logo_url)")
+      .select(
+        "customer_id, role, status, customers(name, slug, logo_url, product_module)",
+      )
       .eq("user_id", user.id)
       .eq("status", "active");
 
-    if (withLogo.error) {
-      console.error("[access] memberships+logo", withLogo.error.message);
-      const withoutLogo = await supabase
+    if (withModule.error) {
+      console.error("[access] memberships+module", withModule.error.message);
+      if (/column|schema cache|product_module/i.test(withModule.error.message)) {
+        schemaReady = false;
+      }
+      const withoutModule = await supabase
         .from("customer_memberships")
-        .select("customer_id, role, status, customers(name, slug)")
+        .select("customer_id, role, status, customers(name, slug, logo_url)")
         .eq("user_id", user.id)
         .eq("status", "active");
-      if (withoutLogo.error) {
-        console.error("[access] memberships", withoutLogo.error.message);
+      if (withoutModule.error) {
+        console.error("[access] memberships", withoutModule.error.message);
         schemaReady = false;
+        const bare = await supabase
+          .from("customer_memberships")
+          .select("customer_id, role, status, customers(name, slug)")
+          .eq("user_id", user.id)
+          .eq("status", "active");
+        if (!bare.error) {
+          membershipRows = (bare.data ?? []) as unknown as MembershipRow[];
+        }
       } else {
-        membershipRows = (withoutLogo.data ?? []) as unknown as MembershipRow[];
+        membershipRows = (withoutModule.data ?? []) as unknown as MembershipRow[];
       }
     } else {
-      membershipRows = (withLogo.data ?? []) as unknown as MembershipRow[];
+      membershipRows = (withModule.data ?? []) as unknown as MembershipRow[];
     }
   }
 
@@ -124,6 +155,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
       customer_name: customer?.name ?? null,
       customer_slug: customer?.slug ?? null,
       customer_logo_url: customer?.logo_url ?? null,
+      product_module: (customer?.product_module as AppModuleKey | undefined) ?? "general",
     };
   });
 
@@ -136,8 +168,18 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     module_database: boolean | null;
     active_module: string | null;
     customers:
-      | { name: string; slug: string; logo_url?: string | null }
-      | { name: string; slug: string; logo_url?: string | null }[]
+      | {
+          name: string;
+          slug: string;
+          logo_url?: string | null;
+          product_module?: string | null;
+        }
+      | {
+          name: string;
+          slug: string;
+          logo_url?: string | null;
+          product_module?: string | null;
+        }[]
       | null;
   };
 
@@ -147,7 +189,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     const profileRes = await supabase
       .from("app_user_profiles")
       .select(
-        "role, customer_id, display_name, module_sap, module_homepage, module_database, active_module, customers(name, slug, logo_url)",
+        "role, customer_id, display_name, module_sap, module_homepage, module_database, active_module, customers(name, slug, logo_url, product_module)",
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -177,6 +219,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
   let customerName: string | null = null;
   let customerSlug: string | null = null;
   let customerLogoUrl: string | null = null;
+  let productModule: AppModuleKey = "general";
   let displayName: string | null = user.email ?? null;
   let moduleSap = false;
   let moduleHomepage = false;
@@ -197,6 +240,9 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     customerName = customer?.name ?? null;
     customerSlug = customer?.slug ?? null;
     customerLogoUrl = customer?.logo_url ?? null;
+    if (customer?.product_module) {
+      productModule = customer.product_module as AppModuleKey;
+    }
     if (role === "general_admin") isPlatformAdmin = true;
   } else {
     const primary = memberships[0];
@@ -208,11 +254,24 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     customerName = primary?.customer_name ?? null;
     customerSlug = primary?.customer_slug ?? null;
     customerLogoUrl = primary?.customer_logo_url ?? null;
+    productModule = primary?.product_module ?? "general";
     if (role === "general_admin") {
       moduleSap = true;
       moduleHomepage = true;
       moduleDatabase = true;
     }
+  }
+
+  // Projekt-Klassifizierung steuert Branding für Anwender (nicht freier Modul-Switcher).
+  if (productModule === "sap") {
+    moduleSap = true;
+    activeModule = "sap";
+  } else if (productModule === "homepage") {
+    moduleHomepage = true;
+    activeModule = "homepage";
+  } else if (productModule === "database") {
+    moduleDatabase = true;
+    activeModule = "database";
   }
 
   // Guard invalid active_module vs checkboxes
@@ -221,7 +280,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     (activeModule === "homepage" && !moduleHomepage) ||
     (activeModule === "database" && !moduleDatabase)
   ) {
-    activeModule = "general";
+    activeModule = productModule !== "general" ? productModule : "general";
   }
 
   const titles = await loadModuleTitles(activeModule);
@@ -235,6 +294,7 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     customerName,
     customerSlug,
     customerLogoUrl,
+    productModule,
     moduleSap,
     moduleHomepage,
     moduleDatabase,
@@ -245,33 +305,75 @@ export async function getAccessContext(): Promise<AccessContext | null> {
     schemaReady,
     isPlatformAdmin: isPlatformAdmin || role === "general_admin",
     isGeneralAdmin: role === "general_admin",
-    memberships: memberships.map(({ customer_logo_url: _logo, ...rest }) => rest),
+    memberships: memberships.map(
+      ({ customer_logo_url: _logo, product_module: _pm, ...rest }) => rest,
+    ),
   };
+});
+
+function belongsToCustomer(ctx: AccessContext, customerId: string): boolean {
+  return (
+    ctx.customerId === customerId ||
+    ctx.memberships.some((m) => m.customer_id === customerId)
+  );
 }
 
+/** Mutating admin access: General Admin + Projekt-Admin only. */
 export function canAccessAdmin(ctx: AccessContext, customerId?: string): boolean {
   // Bei fehlendem Schema nur bekannte Platform-Admins durchlassen — nie alle Nutzer.
   if (!ctx.schemaReady) {
     return ctx.isPlatformAdmin || ctx.role === "general_admin";
   }
   if (ctx.role === "general_admin" || ctx.isPlatformAdmin) return true;
-  if (ctx.role === "admin") {
+  if (ctx.role === "admin" && roleCanMutateProjectSetup(ctx.role)) {
     if (!customerId) return true;
-    return (
-      ctx.customerId === customerId ||
-      ctx.memberships.some((m) => m.customer_id === customerId)
-    );
+    return belongsToCustomer(ctx, customerId);
   }
   return false;
 }
 
+/**
+ * Read access to project console (Dashboard + 6 Hauptschritte details).
+ * Includes Projekt-Benutzer (view-only).
+ */
+export function canAccessProjectConsole(
+  ctx: AccessContext,
+  customerId?: string,
+): boolean {
+  if (!ctx.schemaReady) {
+    return ctx.isPlatformAdmin || ctx.role === "general_admin";
+  }
+  if (ctx.role === "general_admin" || ctx.isPlatformAdmin) return true;
+  if (!roleCanViewProjectConsole(ctx.role)) return false;
+  if (!customerId) {
+    return Boolean(ctx.customerId) || ctx.memberships.length > 0;
+  }
+  return belongsToCustomer(ctx, customerId);
+}
+
+/** Alias: run setup / import / fahrplan actions. */
+export function canMutateProjectSetup(
+  ctx: AccessContext,
+  customerId?: string,
+): boolean {
+  return canAccessAdmin(ctx, customerId);
+}
+
+export function isProjectUser(ctx: AccessContext): boolean {
+  return (
+    ctx.role === "user" &&
+    !ctx.isGeneralAdmin &&
+    !ctx.isPlatformAdmin
+  );
+}
+
 export function canAccessApp(ctx: AccessContext, customerId?: string): boolean {
   if (ctx.role === "general_admin" || ctx.isPlatformAdmin) return true;
-  if (!customerId) return Boolean(ctx.customerId) || ctx.memberships.length > 0 || !ctx.schemaReady;
-  return (
-    ctx.customerId === customerId ||
-    ctx.memberships.some((m) => m.customer_id === customerId)
-  );
+  // Strikte Projekt-Isolation: ohne Mitgliedschaft kein Anwenderzugang.
+  if (!customerId) {
+    return Boolean(ctx.customerId) || ctx.memberships.length > 0;
+  }
+  return belongsToCustomer(ctx, customerId);
 }
 
 export async function requireUser(): Promise<AccessContext> {
@@ -288,6 +390,31 @@ export async function requireAdminAccess(customerId?: string): Promise<AccessCon
   return ctx;
 }
 
+/** Dashboard / step detail views — Projekt-Admin und Projekt-Benutzer. */
+export async function requireProjectConsoleAccess(
+  customerId?: string,
+): Promise<AccessContext> {
+  const ctx = await requireUser();
+  if (!canAccessProjectConsole(ctx, customerId)) {
+    redirect("/admin/zugriff");
+  }
+  return ctx;
+}
+
+/**
+ * Server-action guard for mutations. Throws with the UX hint string
+ * so clients can surface „Projekt-Admin muss diesen Schritt erledigen“.
+ */
+export async function requireProjectMutationAccess(
+  customerId?: string,
+): Promise<AccessContext> {
+  const ctx = await requireUser();
+  if (!canMutateProjectSetup(ctx, customerId)) {
+    throw new Error(PROJECT_ADMIN_REQUIRED_HINT);
+  }
+  return ctx;
+}
+
 export async function requireAppAccess(customerId?: string): Promise<AccessContext> {
   const ctx = await requireUser();
   if (!canAccessApp(ctx, customerId)) {
@@ -298,6 +425,15 @@ export async function requireAppAccess(customerId?: string): Promise<AccessConte
 
 export function primaryCustomerId(ctx: AccessContext): string | null {
   return ctx.customerId ?? ctx.memberships[0]?.customer_id ?? null;
+}
+
+/** Customer IDs the current user may see in the project console. */
+export function accessibleCustomerIds(ctx: AccessContext): string[] {
+  if (ctx.isPlatformAdmin || ctx.isGeneralAdmin) return [];
+  const ids = new Set<string>();
+  if (ctx.customerId) ids.add(ctx.customerId);
+  for (const m of ctx.memberships) ids.add(m.customer_id);
+  return [...ids];
 }
 
 /** Persist active module (product mode) for branding. */

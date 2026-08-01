@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { themeInitScript } from "@/lib/theme";
 import { APP_MANIFEST_PATH, APP_NAME, APP_TAGLINE, getAppIconPath } from "@/lib/branding";
 import { PwaInstallListener } from "@/components/pwa/PwaInstallListener";
+import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,6 +36,7 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#1e3a5f" },
     { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
   ],
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -50,7 +51,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* Inline in Server Component — keeps FOUC fix without client hydration of <script>. */}
+        <script
+          id="ga-theme-init"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
       </head>
       <body className="flex min-h-full flex-col">
         <PwaInstallListener />

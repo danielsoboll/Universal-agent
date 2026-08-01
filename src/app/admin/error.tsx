@@ -21,7 +21,7 @@ export default function AdminError({
     <div>
       <PageError
         title="Admin-Bereich konnte nicht geladen werden"
-        message="Prüfen Sie Ihre Anmeldung und versuchen Sie es erneut."
+        message="Prüfen Sie Ihre Anmeldung und versuchen Sie es erneut"
         digest={error.digest}
       />
       <div className="mx-auto max-w-md px-6 pb-8 text-center">

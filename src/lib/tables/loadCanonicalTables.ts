@@ -82,6 +82,82 @@ function readJson<T>(absolute: string): T | null {
   return JSON.parse(readFileSync(absolute, "utf8")) as T;
 }
 
+function indexCorpusMaps(params: {
+  definitions: CanonicalTableDefinition[];
+  classifications: CanonicalTableClassification[];
+  rows: CanonicalTableRow[];
+}): Pick<
+  TableCorpusBundle,
+  "classificationByTable" | "definitionByTable" | "rowsByTable"
+> {
+  const classificationByTable = new Map(
+    params.classifications.map((c) => [c.table_name, c]),
+  );
+  const definitionByTable = new Map(
+    params.definitions.map((d) => [d.table_name, d]),
+  );
+  const rowsByTable = new Map<string, CanonicalTableRow[]>();
+  for (const row of params.rows) {
+    const list = rowsByTable.get(row.table_name) ?? [];
+    list.push(row);
+    rowsByTable.set(row.table_name, list);
+  }
+  return { classificationByTable, definitionByTable, rowsByTable };
+}
+
+function loadCodeSideArtifacts(projectKey: string): {
+  links: CodeTableLinkRecord[];
+  accesses: CodeTableAccessLog[];
+  dynamicAccesses: DynamicAccessRecord[];
+} {
+  const linkPath = resolveWritablePath(
+    projectKey,
+    "canonical",
+    "relations/code_table_links.jsonl",
+  );
+  const accessPath = resolveWritablePath(
+    projectKey,
+    "logs",
+    "code_table_accesses.jsonl",
+  );
+  const dynPath = resolveWritablePath(
+    projectKey,
+    "analyses",
+    "relations/dynamic_table_accesses.jsonl",
+  );
+  return {
+    links: readJsonl<CodeTableLinkRecord>(linkPath),
+    accesses: readJsonl<CodeTableAccessLog>(accessPath),
+    dynamicAccesses: readJsonl<DynamicAccessRecord>(dynPath),
+  };
+}
+
+/**
+ * Build corpus from in-memory canonical (staging) + existing code-side artifacts.
+ * Does not read control-table canonical from disk — used for prepare-then-swap.
+ */
+export function buildTableCorpusFromCanonical(params: {
+  projectKey: string;
+  definitions: CanonicalTableDefinition[];
+  classifications: CanonicalTableClassification[];
+  rows: CanonicalTableRow[];
+  ingestReport?: IngestReport | null;
+}): TableCorpusBundle {
+  const side = loadCodeSideArtifacts(params.projectKey);
+  const maps = indexCorpusMaps(params);
+  return {
+    projectKey: params.projectKey,
+    definitions: params.definitions,
+    classifications: params.classifications,
+    rows: params.rows,
+    links: side.links,
+    accesses: side.accesses,
+    dynamicAccesses: side.dynamicAccesses,
+    ingestReport: params.ingestReport ?? null,
+    ...maps,
+  };
+}
+
 export function loadTableCorpus(projectKey: string): TableCorpusBundle {
   const defPath = resolveWritablePath(
     projectKey,
@@ -98,21 +174,6 @@ export function loadTableCorpus(projectKey: string): TableCorpusBundle {
     "canonical",
     "control-tables/table_rows.jsonl",
   );
-  const linkPath = resolveWritablePath(
-    projectKey,
-    "canonical",
-    "relations/code_table_links.jsonl",
-  );
-  const accessPath = resolveWritablePath(
-    projectKey,
-    "logs",
-    "code_table_accesses.jsonl",
-  );
-  const dynPath = resolveWritablePath(
-    projectKey,
-    "analyses",
-    "relations/dynamic_table_accesses.jsonl",
-  );
   const ingestPath = resolveWritablePath(
     projectKey,
     "canonical",
@@ -122,34 +183,20 @@ export function loadTableCorpus(projectKey: string): TableCorpusBundle {
   const definitions = readJsonl<CanonicalTableDefinition>(defPath);
   const classifications = readJsonl<CanonicalTableClassification>(clsPath);
   const rows = readJsonl<CanonicalTableRow>(rowPath);
-  const links = readJsonl<CodeTableLinkRecord>(linkPath);
-  const accesses = readJsonl<CodeTableAccessLog>(accessPath);
-  const dynamicAccesses = readJsonl<DynamicAccessRecord>(dynPath);
   const ingestReport = readJson<IngestReport>(ingestPath);
-
-  const classificationByTable = new Map(
-    classifications.map((c) => [c.table_name, c]),
-  );
-  const definitionByTable = new Map(definitions.map((d) => [d.table_name, d]));
-  const rowsByTable = new Map<string, CanonicalTableRow[]>();
-  for (const row of rows) {
-    const list = rowsByTable.get(row.table_name) ?? [];
-    list.push(row);
-    rowsByTable.set(row.table_name, list);
-  }
+  const side = loadCodeSideArtifacts(projectKey);
+  const maps = indexCorpusMaps({ definitions, classifications, rows });
 
   return {
     projectKey,
     definitions,
     classifications,
     rows,
-    links,
-    accesses,
-    dynamicAccesses,
+    links: side.links,
+    accesses: side.accesses,
+    dynamicAccesses: side.dynamicAccesses,
     ingestReport,
-    classificationByTable,
-    definitionByTable,
-    rowsByTable,
+    ...maps,
   };
 }
 

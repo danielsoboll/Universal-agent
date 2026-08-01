@@ -16,14 +16,14 @@ export const WORKFLOW_PHASES: Array<{ key: string; title: string; order: number 
 ];
 
 export const STEP_STATUS_LABELS: Record<string, string> = {
-  not_started: "Nicht gestartet",
+  not_started: "Noch nicht bereit",
   ready: "Bereit",
   in_progress: "In Arbeit",
-  waiting_for_input: "Wartet auf Eingabe",
+  waiting_for_input: "Wartet auf Datei",
   completed: "Abgeschlossen",
   skipped: "Übersprungen",
-  blocked: "Blockiert",
-  failed: "Fehlgeschlagen",
+  blocked: "Wartet auf Voraussetzung",
+  failed: "Blockiert",
 };
 
 export function phaseTitle(phaseKey: string): string {

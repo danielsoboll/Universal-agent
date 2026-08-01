@@ -71,7 +71,7 @@ async function main() {
         name: "General Agent",
         status: "onboarding",
         description: "Standardprojekt",
-        landscape_label: "Intern",
+        landscape_label: "P01",
         brand_subtitle: "Universal Knowledge Analyzer",
         created_by: user.id,
       },

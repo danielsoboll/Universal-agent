@@ -18,7 +18,7 @@ export default async function AdminPipelinePage({
     return (
       <EmptyState
         title="Kein Kunde ausgewählt"
-        message="Bitte zuerst einen Kunden im Setup anlegen."
+        message="Bitte zuerst einen Kunden im Setup anlegen"
         actionHref="/admin/setup"
         actionLabel="Zum Setup"
       />
@@ -40,11 +40,7 @@ export default async function AdminPipelinePage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold sm:text-2xl">Pipeline</h1>
-        <p className="muted mt-1 text-sm">
-          Runs werden serverseitig angelegt. Ohne Worker bleiben sie auf ready /
-          configured.
-        </p>
+        <h1 className="admin-page-title">Pipeline</h1>
       </div>
 
       <section className="panel compact p-4">
@@ -78,7 +74,7 @@ export default async function AdminPipelinePage({
         {!runs?.length ? (
           <EmptyState
             title="Keine Runs"
-            message="Pipeline-Runs erscheinen, sobald Schritte aus dem Fahrplan gestartet werden."
+            message="Pipeline-Runs erscheinen, sobald Schritte aus dem Fahrplan gestartet werden"
           />
         ) : null}
       </section>

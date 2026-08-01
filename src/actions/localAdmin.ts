@@ -8,9 +8,50 @@ import { fileProjectRepository } from "@/lib/localAuth/projectRepository";
 import { fileUserRepository } from "@/lib/localAuth/userRepository";
 import { KnowledgeRetriever } from "@/lib/knowledge/knowledgeRetriever";
 import type { LocalRole } from "@/lib/localAuth/types";
+import {
+  DEFAULT_PROCESS_CONFIG,
+  type ProjectProcessConfig,
+} from "@/lib/workflow/types";
+import { mergeProcessConfig } from "@/lib/workflow/placeholders";
 
 function adminError(path: string, message: string) {
   redirect(`${path}?error=${encodeURIComponent(message)}`);
+}
+
+function readProcessConfig(formData: FormData): ProjectProcessConfig {
+  const base = mergeProcessConfig(DEFAULT_PROCESS_CONFIG);
+  return {
+    sap_system_label:
+      String(formData.get("sap_system_label") ?? "").trim() ||
+      base.sap_system_label,
+    repository_export_report: String(
+      formData.get("repository_export_report") ?? "",
+    ).trim(),
+    repository_export_variant: String(
+      formData.get("repository_export_variant") ?? "",
+    ).trim(),
+    table_definition_export_report: String(
+      formData.get("table_definition_export_report") ?? "",
+    ).trim(),
+    table_content_export_report: String(
+      formData.get("table_content_export_report") ?? "",
+    ).trim(),
+    table_export_variant: String(
+      formData.get("table_export_variant") ?? "",
+    ).trim(),
+    object_prefixes:
+      String(formData.get("object_prefixes") ?? "").trim() ||
+      base.object_prefixes,
+    repository_raw_path:
+      String(formData.get("repository_raw_path") ?? "").trim() ||
+      base.repository_raw_path,
+    table_definitions_raw_path:
+      String(formData.get("table_definitions_raw_path") ?? "").trim() ||
+      base.table_definitions_raw_path,
+    table_contents_raw_path:
+      String(formData.get("table_contents_raw_path") ?? "").trim() ||
+      base.table_contents_raw_path,
+  };
 }
 
 export async function saveLocalProjectAction(formData: FormData) {
@@ -27,6 +68,7 @@ export async function saveLocalProjectAction(formData: FormData) {
   const enabled_knowledge_unit_types = typesRaw
     ? typesRaw.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
+  const process_config = readProcessConfig(formData);
 
   if (!name || !customer_id || !system_id) {
     adminError(
@@ -44,6 +86,7 @@ export async function saveLocalProjectAction(formData: FormData) {
     local_data_root,
     active_index_path,
     enabled_knowledge_unit_types,
+    process_config,
   });
 
   const check = KnowledgeRetriever.inspect(project);

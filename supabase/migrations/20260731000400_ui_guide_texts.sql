@@ -75,7 +75,7 @@ insert into public.ui_guide_texts (guide_key, surface, title, body, sort_order) 
   'admin.setup.step2_goals',
   'admin_setup',
   'Was ist zu tun?',
-  'Wählen Sie eine oder mehrere Zielsetzungen. Die Infotexte erklären Bedeutung, Ergebnisse und typische Quellen. Speichern und weiter.',
+  'Wählen Sie eine oder mehrere Zielsetzungen. Über den Info-Button neben jedem Ziel sehen Sie Bedeutung, erwartete Ergebnisse und typische Quellen. Speichern und weiter.',
   20
 ),
 (

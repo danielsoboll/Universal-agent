@@ -17,8 +17,10 @@ export {
 } from "@/lib/localData/paths";
 export {
   appendLogLine,
+  deleteGeneratedPath,
   ensureWritableDir,
   listRawEntries,
+  listWritableEntries,
   readRawBuffer,
   readRawText,
   writeGeneratedText,

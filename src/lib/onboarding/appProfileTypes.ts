@@ -12,6 +12,8 @@ export type ResolvedAppProfile = {
   customerName: string | null;
   customerSlug: string | null;
   customerLogoUrl: string | null;
+  /** Klassifizierung des zugeordneten Projekts (DB: customers.product_module). */
+  productModule: AppModuleKey;
   moduleSap: boolean;
   moduleHomepage: boolean;
   moduleDatabase: boolean;
@@ -37,9 +39,9 @@ export function roleLabelFor(role: AppProfileRole): string {
     case "general_admin":
       return "General Admin";
     case "admin":
-      return "Admin";
+      return "Projekt-Admin";
     case "user":
-      return "Anwender";
+      return "Projekt-Benutzer";
   }
 }
 
@@ -81,4 +83,28 @@ export function enabledModules(profile: {
   if (profile.moduleHomepage) list.push("homepage");
   if (profile.moduleDatabase) list.push("database");
   return list;
+}
+
+/** Modul-Flags aus der Projekt-Klassifizierung (customers.product_module). */
+export function moduleFlagsFromProduct(module: AppModuleKey): {
+  module_sap: boolean;
+  module_homepage: boolean;
+  module_database: boolean;
+  active_module: AppModuleKey;
+} {
+  return {
+    module_sap: module === "sap",
+    module_homepage: module === "homepage",
+    module_database: module === "database",
+    active_module: module,
+  };
+}
+
+export function isAppModuleKey(value: string): value is AppModuleKey {
+  return (
+    value === "general" ||
+    value === "sap" ||
+    value === "homepage" ||
+    value === "database"
+  );
 }

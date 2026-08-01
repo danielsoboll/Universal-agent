@@ -1,24 +1,65 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  LOCAL_SESSION_COOKIE,
-  verifySessionTokenAsync,
-} from "@/lib/localAuth/sessionToken";
 
-/**
- * Local-session gate for today's E2E flow.
- * Supabase is not required. Role enforcement is also done in layouts.
- */
+function getPublicEnv(): { url: string; anonKey: string } | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+
+  if (!url || !anonKey) {
+    return null;
+  }
+
+  return { url, anonKey };
+}
+
 export async function updateSession(request: NextRequest) {
+  const env = getPublicEnv();
+  if (!env) {
+    console.error(
+      "[middleware] Missing public Supabase env. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY). Middleware does not use service role keys.",
+    );
+    return new NextResponse(
+      "Server misconfigured: missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      { status: 500 },
+    );
+  }
+
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
+
+  const supabase = createServerClient(env.url, env.anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          supabaseResponse.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const pathname = request.nextUrl.pathname;
   const isPublic =
     pathname === "/login" ||
     pathname.startsWith("/auth/") ||
     pathname === "/forbidden";
 
-  const token = request.cookies.get(LOCAL_SESSION_COOKIE)?.value;
-  const session = await verifySessionTokenAsync(token);
-
-  if (!session && !isPublic) {
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     if (pathname !== "/") {
@@ -27,19 +68,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (session && pathname === "/login") {
+  if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = session.role === "admin" ? "/admin" : "/app";
+    url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  if (session?.role === "user" && pathname.startsWith("/admin")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/forbidden";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  return NextResponse.next({ request });
+  return supabaseResponse;
 }

@@ -17,7 +17,7 @@ export default async function AdminUploadsPage({
     return (
       <EmptyState
         title="Kein Kunde ausgewählt"
-        message="Bitte zuerst einen Kunden im Setup anlegen."
+        message="Bitte zuerst einen Kunden im Setup anlegen"
         actionHref="/admin/setup"
         actionLabel="Zum Setup"
       />
@@ -37,11 +37,7 @@ export default async function AdminUploadsPage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold sm:text-2xl">Uploads</h1>
-        <p className="muted mt-1 text-sm">
-          Speicherpfade sind mandantengetrennt. Upload-UI folgt; Metadaten sind
-          modelliert.
-        </p>
+        <h1 className="admin-page-title">Uploads</h1>
       </div>
       <div className="space-y-2">
         {(data ?? []).map((u) => (
@@ -55,7 +51,7 @@ export default async function AdminUploadsPage({
         {!data?.length ? (
           <EmptyState
             title="Keine Uploads"
-            message="Sobald Dateien hochgeladen werden, erscheinen sie hier."
+            message="Sobald Dateien hochgeladen werden, erscheinen sie hier"
           />
         ) : null}
       </div>

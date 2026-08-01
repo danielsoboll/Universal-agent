@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "fs";
@@ -123,4 +124,42 @@ export function appendLogLine(
   const payload = line.endsWith("\n") ? line : `${line}\n`;
   appendFileSync(absolutePath, payload, "utf8");
   return absolutePath;
+}
+
+/** List entries directly under a writable subdirectory (never raw/). */
+export function listWritableEntries(
+  projectKey: string,
+  zone: WritableZone,
+  ...relativeParts: string[]
+): string[] {
+  const absolutePath = assertWritablePath(
+    resolveWritablePath(projectKey, zone, ...relativeParts),
+  );
+  if (!existsSync(absolutePath)) return [];
+  if (!statSync(absolutePath).isDirectory()) {
+    throw new LocalDataError(
+      "NOT_FOUND",
+      `Pfad ist kein Verzeichnis: ${absolutePath}`,
+    );
+  }
+  return readdirSync(absolutePath);
+}
+
+/**
+ * Delete a file or directory tree under a writable zone only.
+ * Never touches raw/. Missing paths are ignored.
+ */
+export function deleteGeneratedPath(
+  projectKey: string,
+  zone: WritableZone,
+  relativePath: string,
+): { deleted: boolean; absolutePath: string } {
+  const absolutePath = assertWritablePath(
+    resolveWritablePath(projectKey, zone, relativePath),
+  );
+  if (!existsSync(absolutePath)) {
+    return { deleted: false, absolutePath };
+  }
+  rmSync(absolutePath, { recursive: true, force: true });
+  return { deleted: true, absolutePath };
 }

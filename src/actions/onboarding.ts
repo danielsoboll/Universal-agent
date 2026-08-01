@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   canAccessAdmin,
   canAccessApp,
+  canAccessProjectConsole,
   requireAdminAccess,
   requireUser,
 } from "@/lib/onboarding/access";
@@ -18,6 +19,11 @@ import {
   type VisibleWhen,
 } from "@/lib/onboarding/generateCustomerWorkflow";
 import { getPipelineStep } from "@/lib/core/pipelineRegistry";
+import {
+  isAppModuleKey,
+  moduleFlagsFromProduct,
+  type AppModuleKey,
+} from "@/lib/onboarding/appProfileTypes";
 
 /** Matches DB constraint customers_slug_format */
 const CUSTOMER_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,62}$/;
@@ -84,19 +90,30 @@ function formatCustomerInsertError(error: PostgrestLikeError): string {
 export async function createCustomerAction(formData: FormData) {
   const ctx = await requireAdminAccess();
   if (!ctx.isPlatformAdmin) {
-    setupErrorRedirect("Nur Platform Admins dürfen Kunden anlegen.");
+    setupErrorRedirect("Nur Platform Admins dürfen Projekte anlegen.");
   }
 
   const name = String(formData.get("name") ?? "").trim();
+  const clientName = String(
+    formData.get("client_name") ?? formData.get("brand_subtitle") ?? "",
+  ).trim();
   const description = String(formData.get("description") ?? "").trim();
   const landscape = String(formData.get("landscape_label") ?? "").trim();
+  const productModuleRaw = String(formData.get("product_module") ?? "general")
+    .trim()
+    .toLowerCase();
+  // Slug bleibt intern (unique key) — optional aus Formular, sonst aus Projektname.
   let slug = String(formData.get("slug") ?? "").trim().toLowerCase() || slugify(name);
   if (!name) setupErrorRedirect("Projektname ist erforderlich.");
   if (!CUSTOMER_SLUG_RE.test(slug)) {
     setupErrorRedirect(
-      `Slug „${slug}“ ist ungültig. Erlaubt: ^[a-z0-9][a-z0-9_-]{1,62}$ (mind. 2 Zeichen).`,
+      `Interner Projekt-Schlüssel „${slug}“ ist ungültig. Bitte Projektname anpassen.`,
     );
   }
+  if (!isAppModuleKey(productModuleRaw)) {
+    setupErrorRedirect("Ungültige Projekt-Klassifizierung.");
+  }
+  const productModule = productModuleRaw;
 
   const supabase = await createClient();
 
@@ -132,7 +149,9 @@ export async function createCustomerAction(formData: FormData) {
     name,
     slug,
     description: description || null,
+    brand_subtitle: clientName || null,
     landscape_label: landscape || null,
+    product_module: productModule,
     status: "onboarding" as const,
     created_by: ctx.userId,
   };
@@ -211,7 +230,7 @@ export async function createCustomerAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/setup");
-  redirect(`/admin/setup?customer=${data!.id}`);
+  redirect(`/admin/setup?customer=${data!.id}&step=2`);
 }
 
 export async function saveSetupGoalsAction(formData: FormData) {
@@ -253,24 +272,75 @@ export async function saveSetupAdaptersAction(formData: FormData) {
   const customerId = String(formData.get("customer_id") ?? "");
   const ctx = await requireAdminAccess(customerId);
   const supabase = await createClient();
-  const selectedIds = formData.getAll("adapter_id").map(String);
+  const selectedIds = [
+    ...new Set(formData.getAll("adapter_id").map(String).filter(Boolean)),
+  ];
 
-  await supabase
+  if (selectedIds.length === 0) {
+    setupErrorRedirect(
+      "Bitte mindestens einen Adapter auswählen, bevor Sie weitergehen.",
+      customerId,
+      3,
+    );
+  }
+
+  const { error: delErr } = await supabase
     .from("customer_input_adapters")
     .delete()
     .eq("customer_id", customerId);
-
-  if (selectedIds.length) {
-    const { error } = await supabase.from("customer_input_adapters").insert(
-      selectedIds.map((id) => ({
-        customer_id: customerId,
-        input_adapter_id: id,
-        status: "selected",
-        selected_by: ctx.userId,
-        configuration: {},
-      })),
+  if (delErr) {
+    console.error("[onboarding] saveSetupAdapters delete", delErr);
+    setupErrorRedirect(
+      `Adapter-Auswahl konnte nicht aktualisiert werden: ${delErr.message}`,
+      customerId,
+      3,
     );
-    if (error) throw new Error(error.message);
+  }
+
+  const rows = selectedIds.map((id) => ({
+    customer_id: customerId,
+    input_adapter_id: id,
+    status: "selected" as const,
+    selected_by: ctx.userId,
+    configuration: {},
+  }));
+
+  let { error } = await supabase.from("customer_input_adapters").insert(rows);
+  if (error) {
+    const firstError = error;
+    console.error("[onboarding] saveSetupAdapters insert", firstError);
+    try {
+      const admin = createAdminClient();
+      const retry = await admin.from("customer_input_adapters").insert(rows);
+      error = retry.error;
+    } catch (e) {
+      setupErrorRedirect(
+        `Adapter speichern fehlgeschlagen: ${firstError.message}. Fallback: ${
+          e instanceof Error ? e.message : "unbekannt"
+        }`,
+        customerId,
+        3,
+      );
+    }
+  }
+  if (error) {
+    setupErrorRedirect(
+      `Adapter speichern fehlgeschlagen: ${error.message}`,
+      customerId,
+      3,
+    );
+  }
+
+  const { count, error: countErr } = await supabase
+    .from("customer_input_adapters")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_id", customerId);
+  if (countErr || !count) {
+    setupErrorRedirect(
+      "Adapter wurden nicht gespeichert (keine Zeilen nach dem Insert). Bitte erneut versuchen.",
+      customerId,
+      3,
+    );
   }
 
   revalidatePath("/admin/setup");
@@ -469,54 +539,32 @@ export async function generateWorkflowAction(formData: FormData) {
     .update({ status: "onboarding" })
     .eq("id", customerId);
 
+  const { data: customerRow } = await supabase
+    .from("customers")
+    .select("slug")
+    .eq("id", customerId)
+    .maybeSingle();
+  const projectKey = (customerRow?.slug ?? "").trim() || "P01";
+
   revalidatePath("/admin");
-  redirect(`/admin/checklist?customer=${customerId}`);
+  revalidatePath("/admin/dashboard");
+  // Hauptschritt Validierung (Control-Tables-Import).
+  redirect(`/admin/steps/4?project=${encodeURIComponent(projectKey)}`);
 }
 
 export async function completeManualStepAction(formData: FormData) {
   const customerId = String(formData.get("customer_id") ?? "");
-  const stepId = String(formData.get("step_id") ?? "");
-  const ctx = await requireAdminAccess(customerId);
-  const supabase = await createClient();
-
-  const { data: step } = await supabase
-    .from("customer_workflow_steps")
-    .select("*")
-    .eq("id", stepId)
-    .eq("customer_id", customerId)
-    .single();
-
-  if (!step) throw new Error("Schritt nicht gefunden.");
-  if (step.status === "blocked") throw new Error("Schritt ist blockiert.");
-  if (
-    step.completion_type !== "manual_checkbox" &&
-    step.completion_type !== "approval" &&
-    step.completion_type !== "configuration_completed"
-  ) {
-    throw new Error("Dieser Schritt ist nicht manuell abschließbar.");
-  }
-
-  await supabase
-    .from("customer_workflow_steps")
-    .update({
-      completed: true,
-      completed_at: new Date().toISOString(),
-      completed_by: ctx.userId,
-      status: "completed",
-    })
-    .eq("id", stepId)
-    .eq("customer_id", customerId);
-
-  if (step.completion_type === "approval" && step.step_key.includes("release")) {
-    await supabase
-      .from("customers")
-      .update({ status: "active" })
-      .eq("id", customerId);
-  }
-
-  await refreshStepStatuses(customerId, step.customer_workflow_id);
-  revalidatePath("/admin/checklist");
-  revalidatePath("/admin/dashboard");
+  await requireAdminAccess(customerId);
+  // Manuelles „Schritt abschließen“ ist deaktiviert — nur technische Aktionen.
+  const { data: customerRow } = await (
+    await createClient()
+  )
+    .from("customers")
+    .select("slug")
+    .eq("id", customerId)
+    .maybeSingle();
+  const projectKey = (customerRow?.slug ?? "").trim() || "P01";
+  redirect(`/admin/steps/4?project=${encodeURIComponent(projectKey)}`);
 }
 
 async function refreshStepStatuses(customerId: string, workflowId: string) {
@@ -601,30 +649,241 @@ export async function createPipelineRunStubAction(formData: FormData) {
     .eq("customer_id", customerId);
 
   revalidatePath("/admin/pipeline");
-  revalidatePath("/admin/checklist");
+  revalidatePath("/admin/extraction");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/steps", "layout");
+}
+
+export async function updateCustomerProductModuleAction(formData: FormData) {
+  const customerId = String(formData.get("customer_id") ?? "").trim();
+  await requireAdminAccess(customerId);
+  const productModuleRaw = String(formData.get("product_module") ?? "general")
+    .trim()
+    .toLowerCase();
+  if (!isAppModuleKey(productModuleRaw)) {
+    setupErrorRedirect("Ungültige Projekt-Klassifizierung.", customerId);
+  }
+  const productModule: AppModuleKey = productModuleRaw as AppModuleKey;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("customers")
+    .update({ product_module: productModule })
+    .eq("id", customerId);
+  if (error) {
+    setupErrorRedirect(
+      `Klassifizierung konnte nicht gespeichert werden: ${error.message}`,
+      customerId,
+    );
+  }
+
+  // Zugeordnete Anwender-Profile an die Projekt-Klassifizierung anpassen.
+  const flags = moduleFlagsFromProduct(productModule);
+  await admin
+    .from("app_user_profiles")
+    .update({
+      ...flags,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("customer_id", customerId)
+    .neq("role", "general_admin");
+
+  // Lokales Projekt-Domain-Profil mitführen (keine parallelen Widersprüche).
+  try {
+    const { fileProjectRepository } = await import(
+      "@/lib/localAuth/projectRepository"
+    );
+    const { domainProfileIdForAppModule } = await import(
+      "@/lib/domain/capabilities"
+    );
+    const projects = await fileProjectRepository.list();
+    const local = projects.find((p) => p.id === customerId);
+    if (local) {
+      await fileProjectRepository.upsert({
+        ...local,
+        domain_profile_id: domainProfileIdForAppModule(productModule),
+      });
+    }
+  } catch {
+    /* optional local sync */
+  }
+
+  revalidatePath("/admin/setup");
+  redirect(`/admin/setup?customer=${customerId}&step=1`);
+}
+
+const BRANDING_BUCKET = "customer-branding";
+const BRANDING_MIME: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/svg+xml": "svg",
+};
+
+/** Upload project branding image → customers.logo_url (public bucket). */
+export async function uploadCustomerLogoAction(formData: FormData) {
+  const customerId = String(formData.get("customer_id") ?? "").trim();
+  await requireAdminAccess(customerId);
+
+  const raw = formData.get("logo");
+  if (!(raw instanceof File) || raw.size <= 0) {
+    setupErrorRedirect("Bitte eine Bilddatei auswählen.", customerId);
+    return;
+  }
+  const file = raw;
+  if (file.size > 2 * 1024 * 1024) {
+    setupErrorRedirect("Bild darf maximal 2 MB groß sein.", customerId);
+    return;
+  }
+  const ext = BRANDING_MIME[file.type];
+  if (!ext) {
+    setupErrorRedirect(
+      "Ungültiges Format. Erlaubt: PNG, JPEG, WebP, GIF, SVG.",
+      customerId,
+    );
+    return;
+  }
+
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
+    setupErrorRedirect(
+      e instanceof Error
+        ? e.message
+        : "Service-Role nicht konfiguriert — Logo-Upload nicht möglich.",
+      customerId,
+    );
+    return;
+  }
+
+  const path = `${customerId}/logo.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { error: uploadError } = await admin.storage
+    .from(BRANDING_BUCKET)
+    .upload(path, buffer, {
+      contentType: file.type,
+      upsert: true,
+      cacheControl: "3600",
+    });
+  if (uploadError) {
+    setupErrorRedirect(
+      `Logo-Upload fehlgeschlagen: ${uploadError.message}`,
+      customerId,
+    );
+    return;
+  }
+
+  const { data: pub } = admin.storage.from(BRANDING_BUCKET).getPublicUrl(path);
+  const logoUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  const { error: updErr } = await admin
+    .from("customers")
+    .update({ logo_url: logoUrl })
+    .eq("id", customerId);
+  if (updErr) {
+    setupErrorRedirect(
+      `Logo gespeichert, DB-Update fehlgeschlagen: ${updErr.message}`,
+      customerId,
+    );
+    return;
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/setup");
+  revalidatePath("/app", "layout");
+  redirect(`/admin/setup?customer=${customerId}&step=1&logo=1`);
 }
 
 export async function inviteCustomerUserAction(formData: FormData) {
   const customerId = String(formData.get("customer_id") ?? "");
-  await requireAdminAccess(customerId);
+  const ctx = await requireAdminAccess(customerId);
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const displayName = String(formData.get("display_name") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
   const role = String(formData.get("role") ?? "customer_user") as
     | "customer_admin"
     | "customer_user";
-  if (!email) throw new Error("E-Mail erforderlich.");
+  if (!email || !email.includes("@")) {
+    throw new Error("Gültige E-Mail ist erforderlich.");
+  }
+  if (password.length < 8) {
+    throw new Error("Passwort muss mindestens 8 Zeichen haben.");
+  }
 
-  // Membership by user_id requires existing auth user — look up via admin is service-role only.
-  // For V1: store invite intent only if user exists in same session lookup is impossible with anon.
-  // Use RPC-less approach: customer_admin enters user UUID temporarily OR we document service invite.
-  const userId = String(formData.get("user_id") ?? "").trim();
-  if (!userId) {
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
     throw new Error(
-      "V1: Bitte die User-ID (UUID) eines bestehenden Auth-Nutzers angeben. E-Mail-Einladung folgt später.",
+      e instanceof Error
+        ? e.message
+        : "Service-Role nicht konfiguriert — User-Anlage nicht möglich.",
     );
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("customer_memberships").upsert(
+  const { data: customer, error: customerError } = await admin
+    .from("customers")
+    .select("id, name, product_module")
+    .eq("id", customerId)
+    .maybeSingle();
+  if (customerError || !customer) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const productModule: AppModuleKey = isAppModuleKey(
+    String(customer.product_module ?? "general"),
+  )
+    ? (customer.product_module as AppModuleKey)
+    : "general";
+  const flags = moduleFlagsFromProduct(productModule);
+
+  const listed = await admin.auth.admin.listUsers({ perPage: 1000 });
+  if (listed.error) throw new Error(listed.error.message);
+
+  let userId =
+    listed.data.users.find(
+      (u) => (u.email ?? "").toLowerCase() === email,
+    )?.id ?? null;
+
+  if (!userId) {
+    const created = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        display_name: displayName || email,
+        invited_by: ctx.userId,
+        customer_id: customerId,
+      },
+    });
+    if (created.error || !created.data.user) {
+      throw new Error(
+        created.error?.message ?? "Auth-User konnte nicht angelegt werden.",
+      );
+    }
+    userId = created.data.user.id;
+  } else {
+    // Bestehender User: Passwort auf den angegebenen Klartext-Wert setzen.
+    const updated = await admin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+      user_metadata: {
+        display_name: displayName || email,
+        invited_by: ctx.userId,
+        customer_id: customerId,
+      },
+    });
+    if (updated.error) {
+      throw new Error(
+        `User existiert, Passwort konnte nicht gesetzt werden: ${updated.error.message}`,
+      );
+    }
+  }
+
+  const { error: memErr } = await admin.from("customer_memberships").upsert(
     {
       customer_id: customerId,
       user_id: userId,
@@ -633,17 +892,48 @@ export async function inviteCustomerUserAction(formData: FormData) {
     },
     { onConflict: "customer_id,user_id" },
   );
-  if (error) throw new Error(error.message);
+  if (memErr) throw new Error(memErr.message);
+
+  const profileRole = role === "customer_admin" ? "admin" : "user";
+  const { data: existingProfile } = await admin
+    .from("app_user_profiles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingProfile?.role === "general_admin") {
+    // Platform-Admin nicht herabstufen — nur Mitgliedschaft reicht.
+  } else {
+    const { error: profileErr } = await admin.from("app_user_profiles").upsert(
+      {
+        user_id: userId,
+        role: profileRole,
+        customer_id: customerId,
+        display_name: displayName || email,
+        ...flags,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (profileErr) {
+      throw new Error(
+        `Mitgliedschaft ok, Profil fehlgeschlagen: ${profileErr.message}`,
+      );
+    }
+  }
+
   revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  redirect(`/admin/users?customer=${customerId}&invited=1`);
 }
 
 export async function resolveHomeDestination() {
   const ctx = await requireUser();
-  if (canAccessAdmin(ctx)) {
+  if (canAccessProjectConsole(ctx)) {
     redirect("/admin/dashboard");
   }
   if (canAccessApp(ctx)) {
-    redirect("/app/ask");
+    redirect("/app");
   }
   redirect("/");
 }
@@ -668,18 +958,47 @@ export async function deleteCustomerAction(formData: FormData) {
     dashboardErrorRedirect("Kein Projekt ausgewählt.");
   }
 
-  const supabase = await createClient();
-  const { data: customer, error: loadError } = await supabase
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
+    dashboardErrorRedirect(
+      e instanceof Error
+        ? e.message
+        : "Service-Role fehlt — vollständiges Löschen nicht möglich.",
+      customerId,
+    );
+    return;
+  }
+
+  // Wie bei createCustomer: App-Recht general_admin mit platform_admins synchron halten
+  // (Fallback-Löschen über User-Client braucht is_platform_admin()).
+  try {
+    await admin.from("platform_admins").upsert(
+      { user_id: ctx.userId, created_by: ctx.userId },
+      { onConflict: "user_id" },
+    );
+  } catch (error) {
+    console.error("[onboarding] deleteCustomer platform_admins sync", error);
+  }
+
+  // Service-Role laden — unabhängig von Session-RLS.
+  const { data: customer, error: loadError } = await admin
     .from("customers")
     .select("id, name, slug")
     .eq("id", customerId)
     .maybeSingle();
 
   if (loadError || !customer) {
-    dashboardErrorRedirect("Projekt nicht gefunden oder kein Zugriff.", customerId);
+    dashboardErrorRedirect(
+      loadError
+        ? `Projekt nicht ladbar: ${loadError.message}`
+        : "Projekt nicht gefunden.",
+      customerId,
+    );
   }
 
-  if (confirmName !== customer!.name) {
+  if (confirmName !== String(customer!.name ?? "").trim()) {
     dashboardErrorRedirect(
       "Löschen abgebrochen: der Bestätigungsname stimmt nicht überein.",
       customerId,
@@ -688,7 +1007,6 @@ export async function deleteCustomerAction(formData: FormData) {
 
   // Storage best-effort vor dem DB-Cascade bereinigen
   try {
-    const admin = createAdminClient();
     const { data: uploads } = await admin
       .from("source_uploads")
       .select("storage_path")
@@ -713,16 +1031,112 @@ export async function deleteCustomerAction(formData: FormData) {
     console.error("[onboarding] deleteCustomer storage cleanup", error);
   }
 
-  const { error } = await supabase.from("customers").delete().eq("id", customerId);
-  if (error) {
-    console.error("[onboarding] deleteCustomer", error.message);
-    dashboardErrorRedirect(
-      "Projekt konnte nicht gelöscht werden. Bitte erneut versuchen.",
-      customerId,
+  // app_user_profiles.customer_id ist ON DELETE SET NULL, aber die Check-Constraint
+  // app_user_profiles_admin_needs_customer erlaubt NULL nur für general_admin.
+  // Vor dem Cascade Profile umhängen bzw. freigeben, sonst scheitert DELETE.
+  {
+    const { data: profiles, error: profileLoadError } = await admin
+      .from("app_user_profiles")
+      .select("user_id, role, customer_id")
+      .eq("customer_id", customerId);
+    if (profileLoadError) {
+      console.error(
+        "[onboarding] deleteCustomer profiles load",
+        profileLoadError.message,
+      );
+    }
+    for (const profile of profiles ?? []) {
+      if (profile.role === "general_admin") {
+        const { error: clearError } = await admin
+          .from("app_user_profiles")
+          .update({ customer_id: null })
+          .eq("user_id", profile.user_id);
+        if (clearError) {
+          console.error(
+            "[onboarding] deleteCustomer clear admin customer_id",
+            clearError.message,
+          );
+        }
+        continue;
+      }
+
+      const { data: otherMemberships } = await admin
+        .from("customer_memberships")
+        .select("customer_id")
+        .eq("user_id", profile.user_id)
+        .neq("customer_id", customerId)
+        .limit(1);
+      const nextCustomerId = otherMemberships?.[0]?.customer_id ?? null;
+
+      if (nextCustomerId) {
+        const { error: reassignError } = await admin
+          .from("app_user_profiles")
+          .update({ customer_id: nextCustomerId })
+          .eq("user_id", profile.user_id);
+        if (reassignError) {
+          console.error(
+            "[onboarding] deleteCustomer reassign profile",
+            reassignError.message,
+          );
+          dashboardErrorRedirect(
+            `Projekt konnte nicht gelöscht werden: ${reassignError.message}`,
+            customerId,
+          );
+        }
+      } else {
+        // Letztes Projekt dieses Anwenders — Profil entfernen, sonst Check-Constraint.
+        const { error: deleteProfileError } = await admin
+          .from("app_user_profiles")
+          .delete()
+          .eq("user_id", profile.user_id);
+        if (deleteProfileError) {
+          console.error(
+            "[onboarding] deleteCustomer remove orphan profile",
+            deleteProfileError.message,
+          );
+          dashboardErrorRedirect(
+            `Projekt konnte nicht gelöscht werden: ${deleteProfileError.message}`,
+            customerId,
+          );
+        }
+      }
+    }
+  }
+
+  // Service-Role: Cascade löscht Memberships, Workflow, Uploads, Gates usw.
+  // .select() ist nötig — ohne Returning wirkt „0 Zeilen“ wie Erfolg.
+  const { data: deleted, error } = await admin
+    .from("customers")
+    .delete()
+    .eq("id", customerId)
+    .select("id");
+
+  if (error || !deleted?.length) {
+    console.error(
+      "[onboarding] deleteCustomer",
+      error?.message ?? "keine Zeile gelöscht",
     );
+    const supabase = await createClient();
+    const retry = await supabase
+      .from("customers")
+      .delete()
+      .eq("id", customerId)
+      .select("id");
+    if (retry.error || !retry.data?.length) {
+      dashboardErrorRedirect(
+        `Projekt konnte nicht gelöscht werden${
+          error?.message || retry.error?.message
+            ? `: ${error?.message || retry.error?.message}`
+            : " (keine Zeile entfernt)."
+        }`,
+        customerId,
+      );
+    }
   }
 
   revalidatePath("/admin");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/setup");
   revalidatePath("/");
   redirect("/admin/dashboard?deleted=1");
 }

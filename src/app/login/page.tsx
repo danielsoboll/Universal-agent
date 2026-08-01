@@ -24,7 +24,7 @@ export default async function LoginPage({
         </h1>
         <p className="muted mt-1 text-center text-sm">{APP_TAGLINE}</p>
         <p className="muted mt-3 text-center text-sm">
-          Lokale Anmeldung mit vorbereitetem Konto.
+          Anmeldung nur mit bestehendem Konto.
         </p>
         <LoginForm next={params.next} initialError={params.error} />
       </div>
