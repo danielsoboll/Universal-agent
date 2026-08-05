@@ -2,19 +2,22 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   canAccessApp,
+  canMutateProjectSetup,
   getAccessContext,
 } from "@/lib/onboarding/access";
 import { answerQuestion } from "@/lib/knowledge/answerQuestion";
 import { resolveAskLocalProject } from "@/lib/knowledge/resolveAskProject";
 
 export const runtime = "nodejs";
-/** Lokaler Index + OpenAI — kein Edge. */
-export const maxDuration = 60;
+/** Lokaler Index + OpenAI — Vollanalyse kann länger laufen. */
+export const maxDuration = 180;
 
 const bodySchema = z.object({
   question: z.string().min(1).max(4000),
   projectId: z.string().uuid().or(z.string().min(1)),
-  searchMode: z.enum(["direct_rag", "planned_rag"]).optional(),
+  searchMode: z
+    .enum(["direct_rag", "planned_rag", "full_analysis", "deep_search"])
+    .optional(),
   /** Accepted but ignored — ask is always isolated (no chat memory). */
   conversationMode: z.literal(false).optional(),
 });
@@ -101,6 +104,22 @@ export async function POST(request: Request) {
     );
   }
 
+  if (
+    searchMode === "full_analysis" &&
+    !canMutateProjectSetup(ctx, projectId)
+  ) {
+    return NextResponse.json(
+      {
+        status: "error",
+        message:
+          "Vollanalyse ist nur für General Admin und Projekt-Admin verfügbar.",
+        searchMode: "full_analysis",
+        requestedSearchMode: "full_analysis",
+      },
+      { status: 403 },
+    );
+  }
+
   const resolved = await resolveAskLocalProject(projectId);
   if (!resolved.ok) {
     if (resolved.detail) {
@@ -113,8 +132,10 @@ export async function POST(request: Request) {
         message: resolved.message,
         answer: null,
         processAnswer: null,
+        technicalAnswer: null,
         technicalDetails: null,
         compactTechnicalDetails: null,
+        questionIntent: null,
         entityGrounding: [],
         sources: [],
         retrievalMode: "none",
@@ -154,8 +175,10 @@ export async function POST(request: Request) {
       answer: result.direct_answer || null,
       reasoning: result.reasoning || null,
       processAnswer: result.process_answer,
+      technicalAnswer: result.technical_answer,
       technicalDetails: result.technical_details,
       compactTechnicalDetails: result.compact_technical_details,
+      questionIntent: result.question_intent,
       entityGrounding: result.entity_grounding,
       relevanceGate: result.relevance_gate
         ? {
@@ -196,6 +219,7 @@ export async function POST(request: Request) {
       promptKey: result.prompt_key,
       promptVersion: result.prompt_version,
       searchProfileId: result.search_profile_id,
+      fullAnalysisReport: result.full_analysis_report,
     },
     { status: httpStatus },
   );

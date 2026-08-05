@@ -25,6 +25,10 @@ const WIPE_TARGETS: Record<RebuildDataType, WipeTarget[]> = {
     { zone: "canonical", relativePath: "classes" },
     { zone: "analyses", relativePath: "classes" },
     { zone: "indexes", relativePath: "classes" },
+    { zone: "logs", relativePath: "datenbasis/classes" },
+    { zone: "logs", relativePath: "datenbasis/classes-pipeline.json" },
+    { zone: "logs", relativePath: "datenbasis-classes.log" },
+    { zone: "logs", relativePath: "canonicalize-sap-classes.log" },
   ],
   programs: [{ zone: "canonical", relativePath: "programs" }],
   materials: [{ zone: "canonical", relativePath: "master-data/materials" }],
@@ -98,6 +102,35 @@ export function isControlTableHybridDocument(doc: {
     doc.knowledge_unit_type &&
     CONTROL_TABLE_HYBRID_KNOWLEDGE_TYPES.has(doc.knowledge_unit_type)
   ) {
+    return true;
+  }
+  return false;
+}
+
+/** Source / knowledge types from classes (code unit) ingest in hybrid search. */
+export const CLASS_HYBRID_SOURCE_TYPES = new Set([
+  "code_unit_analysis",
+]);
+
+export const CLASS_HYBRID_KNOWLEDGE_TYPES = new Set([
+  "code_unit",
+]);
+
+export function isClassHybridDocument(doc: {
+  source_type?: string;
+  knowledge_unit_type?: string;
+  object_type?: string;
+}): boolean {
+  if (doc.source_type && CLASS_HYBRID_SOURCE_TYPES.has(doc.source_type)) {
+    return true;
+  }
+  if (
+    doc.knowledge_unit_type &&
+    CLASS_HYBRID_KNOWLEDGE_TYPES.has(doc.knowledge_unit_type)
+  ) {
+    return true;
+  }
+  if (String(doc.object_type ?? "").toUpperCase() === "CLASS") {
     return true;
   }
   return false;

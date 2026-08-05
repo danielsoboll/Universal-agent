@@ -945,11 +945,12 @@ function dashboardErrorRedirect(message: string, customerId?: string) {
   redirect(`/admin/dashboard?${q.toString()}`);
 }
 
-/** Platform-Admin: Kunde/Projekt inkl. abhängiger Onboarding-Daten löschen. */
+/** General Admin: Kunde/Projekt inkl. abhängiger Onboarding-Daten löschen. */
 export async function deleteCustomerAction(formData: FormData) {
   const ctx = await requireAdminAccess();
-  if (!ctx.isPlatformAdmin) {
-    dashboardErrorRedirect("Nur Platform Admins dürfen Projekte löschen.");
+  // Nur General Admin (inkl. platform_admins) — Projekt-Admin nie.
+  if (!(ctx.isGeneralAdmin || ctx.isPlatformAdmin)) {
+    dashboardErrorRedirect("Nur General Admins dürfen Projekte löschen.");
   }
 
   const customerId = String(formData.get("customer_id") ?? "").trim();

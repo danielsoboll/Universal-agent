@@ -1,6 +1,31 @@
 import { z } from "zod";
 
-/** Structured RAG answer: process narrative + technical evidence. */
+/** Internal evidence strength — only confirmed is a safe fact in answers. */
+export const evidenceLevelSchema = z.enum([
+  "confirmed",
+  "inferred",
+  "possible",
+  "not_supported",
+  "contradicted",
+]);
+
+export type EvidenceLevel = z.infer<typeof evidenceLevelSchema>;
+
+export const classifiedStatementSchema = z.object({
+  text: z.string(),
+  level: evidenceLevelSchema,
+  /** Source ranks (#N from evidence context) backing this claim. */
+  source_ranks: z.array(z.number().int().positive()).default([]),
+  /** Optional source_key refs for UI assignment. */
+  source_ids: z.array(z.string()).default([]),
+});
+
+export type ClassifiedStatement = z.infer<typeof classifiedStatementSchema>;
+
+/**
+ * Prozessantwort — fachliche Nutzer.
+ * Legacy narrative fields remain for compatibility; classified sections are canonical.
+ */
 export const processAnswerSchema = z.object({
   direct_answer: z.string().default(""),
   special_process: z.string().default(""),
@@ -8,6 +33,14 @@ export const processAnswerSchema = z.object({
   process_effect: z.string().default(""),
   business_interpretation: z.string().default(""),
   open_validation_questions: z.array(z.string()).default([]),
+  /** Sicher belegt (green). */
+  confirmed: z.array(classifiedStatementSchema).default([]),
+  /** Wahrscheinlich / abgeleitet (yellow). */
+  inferred: z.array(classifiedStatementSchema).default([]),
+  /** Offen / nicht belegt (neutral). */
+  open: z.array(classifiedStatementSchema).default([]),
+  has_safe_process_claim: z.boolean().default(false),
+  no_process_claim_message: z.string().default(""),
 });
 
 export const technicalSourceSchema = z.object({
@@ -48,9 +81,23 @@ export const technicalDetailsSchema = z.object({
     .default([]),
 });
 
+/** Compact substantial technical answer with evidence levels. */
+export const technicalAnswerSchema = z.object({
+  entry_point: z.array(classifiedStatementSchema).default([]),
+  trigger: z.array(classifiedStatementSchema).default([]),
+  processing: z.array(classifiedStatementSchema).default([]),
+  objects: z.array(classifiedStatementSchema).default([]),
+  results: z.array(classifiedStatementSchema).default([]),
+  relations: z.array(classifiedStatementSchema).default([]),
+  open: z.array(classifiedStatementSchema).default([]),
+});
+
+export type TechnicalAnswer = z.infer<typeof technicalAnswerSchema>;
+
 export const structuredAnswerSchema = z.object({
   process_answer: processAnswerSchema,
   technical_details: technicalDetailsSchema,
+  technical_answer: technicalAnswerSchema,
   source_ranks_used: z.array(z.number().int().positive()).default([]),
   insufficient_evidence: z.boolean(),
 });
@@ -92,6 +139,21 @@ export const EMPTY_PROCESS_ANSWER: ProcessAnswer = {
   process_effect: "",
   business_interpretation: "",
   open_validation_questions: [],
+  confirmed: [],
+  inferred: [],
+  open: [],
+  has_safe_process_claim: false,
+  no_process_claim_message: "",
+};
+
+export const EMPTY_TECHNICAL_ANSWER: TechnicalAnswer = {
+  entry_point: [],
+  trigger: [],
+  processing: [],
+  objects: [],
+  results: [],
+  relations: [],
+  open: [],
 };
 
 export const EMPTY_TECHNICAL_DETAILS: TechnicalDetails = {
@@ -109,9 +171,33 @@ export const EMPTY_TECHNICAL_DETAILS: TechnicalDetails = {
   retrieval_scores: [],
 };
 
-/** LLM-facing subset: narrative fields only; lists are merged from sources. */
+/** LLM statement — ranks required for confirmed; inferred may omit. */
+const llmStatementSchema = z.object({
+  text: z.string(),
+  level: z.enum(["confirmed", "inferred", "possible"]).default("inferred"),
+  source_ranks: z.array(z.number().int().positive()).default([]),
+});
+
+/**
+ * LLM-facing answer contract.
+ * Server merges lists / demotes unverifiable confirmed claims.
+ */
 export const llmAnswerSchema = z.object({
-  process_answer: processAnswerSchema,
+  process_answer: z.object({
+    summary: z.string().default(""),
+    statements: z.array(llmStatementSchema).default([]),
+    open_items: z.array(z.string()).default([]),
+    has_safe_process_claim: z.boolean().default(false),
+  }),
+  technical_answer: z.object({
+    entry_point: z.array(llmStatementSchema).default([]),
+    trigger: z.array(llmStatementSchema).default([]),
+    processing: z.array(llmStatementSchema).default([]),
+    objects: z.array(llmStatementSchema).default([]),
+    results: z.array(llmStatementSchema).default([]),
+    relations: z.array(llmStatementSchema).default([]),
+    open: z.array(llmStatementSchema).default([]),
+  }),
   technical_details: z.object({
     conditions: z.array(z.string()).default([]),
     changed_fields: z.array(z.string()).default([]),

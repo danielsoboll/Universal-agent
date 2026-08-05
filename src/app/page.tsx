@@ -11,6 +11,23 @@ import {
 import { MODULE_LABELS } from "@/lib/onboarding/appProfileTypes";
 import { resolveShellBranding } from "@/lib/onboarding/projectBranding";
 
+function RoleArrowIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -42,13 +59,27 @@ export default async function HomePage({
           <InlineError title="Aktion fehlgeschlagen" message={sp.error} />
         ) : null}
 
-        <section className="panel compact p-4 sm:p-5">
-          <h1 className="admin-main-title">
+        <section className="panel compact home-user-role p-4 sm:p-5">
+          <h1 className="text-[1.375rem] font-semibold leading-tight tracking-tight text-[color-mix(in_srgb,var(--warning)_42%,var(--foreground))] sm:text-[1.5rem] [overflow-wrap:anywhere]">
             {access?.displayName ?? access?.email ?? "Willkommen"}
           </h1>
           {access?.roleLabel ? (
             <p className="mt-1 text-[0.8125rem] text-[var(--muted)]">
-              {access.roleLabel}
+              {access.role === "general_admin" || access.role === "admin" ? (
+                <span className="home-role home-role--admin">
+                  <span aria-hidden="true" className="home-role__arrow">
+                    <RoleArrowIcon />
+                  </span>
+                  {access.roleLabel}
+                </span>
+              ) : (
+                <span className="home-role home-role--keyuser">
+                  <span aria-hidden="true" className="home-role__arrow">
+                    <RoleArrowIcon />
+                  </span>
+                  Keyuser
+                </span>
+              )}
               {access.customerName
                 ? ` · ${access.customerName}`
                 : access.customerId
@@ -73,7 +104,7 @@ export default async function HomePage({
               </p>
             </div>
             <Link
-              href="/admin/dashboard"
+              href={isUserOnly ? "/app" : "/admin/dashboard"}
               className="btn btn-primary flex min-h-12 w-full items-center justify-center text-[1.0625rem]"
             >
               Zum Dashboard

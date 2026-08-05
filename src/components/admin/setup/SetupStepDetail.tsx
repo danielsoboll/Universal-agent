@@ -37,9 +37,12 @@ function SubTaskRow({ task }: { task: SetupSubTask }) {
 export function SetupStepDetail({
   step,
   children,
+  hideSubTasks = false,
 }: {
   step: SetupMainStepState;
   children?: React.ReactNode;
+  /** When true, skip Teilaufgaben — e.g. Areas 3–5 use export-group cards instead. */
+  hideSubTasks?: boolean;
 }) {
   const tone = mainStatusToFahrplanTone(step.status);
   const statusLabel =
@@ -100,16 +103,18 @@ export function SetupStepDetail({
         </p>
       </section>
 
-      <section className="admin-card rounded-[12px] border border-[var(--border)] bg-[var(--panel)] px-3 py-1">
-        <p className="pt-2 text-[0.875rem] font-medium text-[var(--muted)]">
-          Teilaufgaben
-        </p>
-        <ol className="mt-0.5">
-          {step.subTasks.map((task) => (
-            <SubTaskRow key={task.id} task={task} />
-          ))}
-        </ol>
-      </section>
+      {hideSubTasks ? null : (
+        <section className="admin-card rounded-[12px] border border-[var(--border)] bg-[var(--panel)] px-3 py-1">
+          <p className="pt-2 text-[0.875rem] font-medium text-[var(--muted)]">
+            Teilaufgaben
+          </p>
+          <ol className="mt-0.5">
+            {step.subTasks.map((task) => (
+              <SubTaskRow key={task.id} task={task} />
+            ))}
+          </ol>
+        </section>
+      )}
 
       {children}
     </div>

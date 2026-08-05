@@ -1,25 +1,37 @@
 /**
  * Ask page session cache — display-only.
  *
- * MUST NOT be read by Retrieval, Query Planner, Entity Grounding, or Answer
- * Synthesizer. It only stores finished results so the UI can switch search
- * modes for the exact same question without re-calling the API.
+ * MUST NOT be read by Retrieval, Query Planner, Entity Grounding, Topic
+ * Grounding, or Answer Synthesizer. It only stores finished results so the UI
+ * can switch search modes for the exact same question without re-calling the API.
+ *
+ * Cache key MUST include project_id + normalized exact question + search_mode
+ * + active_index_hash + planner_version. Different question ⇒ no hit.
  */
 
-import type { AskQuestionResult } from "@/actions/ask";
+import type { AskQuestionResult } from "@/lib/app/askTypes";
 import type { SearchMode } from "@/lib/knowledge/queryPlanSchema";
+import {
+  DEEP_SEARCH_VERSION,
+  FULL_ANALYSIS_VERSION,
+  PLANNED_RAG_PLANNER_VERSION,
+  computeActiveIndexHash,
+} from "@/lib/knowledge/askModeVersions";
 
-export const ASK_SESSION_CACHE_KEY = "ga-ask-session-cache-v2";
-export const ASK_SESSION_MAX_ENTRIES = 12; // up to ~3 questions × 2 modes + slack
+export const ASK_SESSION_CACHE_KEY = "ga-ask-session-cache-v3";
+export const ASK_SESSION_MAX_ENTRIES = 16; // up to ~3 questions × 3 modes + slack
 
 export type AskCacheKeyParts = {
   projectId: string;
   sessionId: string;
   normalizedQuestion: string;
   searchMode: SearchMode;
+  /** Hash of active index path + document count — invalidates on index change. */
+  activeIndexHash: string;
+  /** planned_rag / full_analysis revision; empty for direct_rag. */
+  plannerVersion: string;
   indexVersion: string;
   searchProfileVersion: string;
-  plannerPromptVersion: string;
   answerPromptVersion: string;
 };
 
@@ -39,12 +51,12 @@ export function normalizeAskQuestion(q: string): string {
 export function buildAskCacheKeyString(parts: AskCacheKeyParts): string {
   return [
     parts.projectId,
-    parts.sessionId,
     parts.normalizedQuestion,
     parts.searchMode,
+    parts.activeIndexHash,
+    parts.plannerVersion,
     parts.indexVersion,
     parts.searchProfileVersion,
-    parts.plannerPromptVersion,
     parts.answerPromptVersion,
   ].join("\u001f");
 }
@@ -104,6 +116,7 @@ export function getSessionAskId(): string {
  * Lookup for mode switching: exact question + mode + project.
  * If several versioned entries exist, return the newest.
  * Never returns a result for a different question or mode.
+ * Display-only — never fed into retrieval/planner/synthesis.
  */
 export function getCachedAskResult(params: {
   projectId: string;
@@ -169,17 +182,27 @@ export function cacheKeyFromAskResult(params: {
   searchMode: SearchMode;
   result: AskQuestionResult;
 }): AskCacheKeyParts {
+  const indexPath = params.result.indexPath ?? "";
+  const docCount = params.result.searchedDocumentCount ?? 0;
   return {
     projectId: params.projectId,
     sessionId: params.sessionId,
     normalizedQuestion: params.normalizedQuestion,
     searchMode: params.searchMode,
-    indexVersion: params.result.indexPath ?? "",
+    activeIndexHash: computeActiveIndexHash({
+      indexPath,
+      documentCount: docCount,
+    }),
+    plannerVersion:
+      params.searchMode === "planned_rag"
+        ? PLANNED_RAG_PLANNER_VERSION
+        : params.searchMode === "full_analysis"
+          ? FULL_ANALYSIS_VERSION
+          : params.searchMode === "deep_search"
+            ? DEEP_SEARCH_VERSION
+            : "",
+    indexVersion: indexPath,
     searchProfileVersion: params.result.searchProfileId ?? "",
-    plannerPromptVersion:
-      params.result.searchMode === "planned_rag"
-        ? (params.result.promptVersion ?? "")
-        : "",
     answerPromptVersion: params.result.promptVersion ?? "",
   };
 }

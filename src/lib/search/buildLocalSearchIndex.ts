@@ -124,9 +124,9 @@ export function buildLocalSearchIndex(params: {
   now?: string;
 }): LocalSearchIndex {
   const cfg = getEmbeddingRuntimeConfig();
-  const exact_index: LocalSearchIndex["exact_index"] = {};
-  const fulltext_index: LocalSearchIndex["fulltext_index"] = {};
-  const metadata_index: LocalSearchIndex["metadata_index"] = {};
+  const exact_index: LocalSearchIndex["exact_index"] = Object.create(null);
+  const fulltext_index: LocalSearchIndex["fulltext_index"] = Object.create(null);
+  const metadata_index: LocalSearchIndex["metadata_index"] = Object.create(null);
   const relation_index: LocalSearchIndex["relation_index"] = [];
   const embById = new Map(
     params.embeddings.map((e) => [e.search_document_id, e]),

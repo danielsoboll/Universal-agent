@@ -56,7 +56,7 @@ export function AppShell({
           <AppBackNav />
         </div>
       }
-      mainClassName="page-shell mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8"
+      mainClassName="page-shell mx-auto flex w-full max-w-5xl flex-col px-3 py-4 sm:px-6 sm:py-8"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <nav
@@ -74,14 +74,6 @@ export function AppShell({
           <span className="muted hidden max-w-[9rem] truncate text-xs lg:inline">
             {email}
           </span>
-          <form action="/auth/signout" method="post">
-            <button
-              className="btn btn-secondary px-2 text-xs sm:px-2.5 sm:text-sm"
-              type="submit"
-            >
-              Abmelden
-            </button>
-          </form>
         </div>
       </div>
       {!released ? (
@@ -96,7 +88,17 @@ export function AppShell({
           </p>
         </div>
       ) : null}
-      {children}
+      <div className="min-w-0 flex-1">{children}</div>
+      <div className="mt-8 border-t border-[var(--border)] pt-4 pb-2">
+        <form action="/auth/signout" method="post">
+          <button
+            type="submit"
+            className="btn btn-secondary btn-quiet flex min-h-12 w-full items-center justify-center text-[1.0625rem]"
+          >
+            Abmelden
+          </button>
+        </form>
+      </div>
     </InternalStickyChrome>
   );
 }

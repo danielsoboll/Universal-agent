@@ -130,6 +130,7 @@ function validateRecord(
 /**
  * Canonical identity key for deduplication / collision detection.
  * source_fragment: system_id|object_type|object_name|SOURCE_FRAGMENT|include_name
+ * code_unit: code_unit|{source_key}|{include_name} when include_name present
  */
 export function canonicalKeyForRecord(
   recordType: SapClassRecordType,
@@ -167,6 +168,24 @@ export function canonicalKeyForRecord(
         ? obj.metadata
         : JSON.stringify(obj.metadata ?? null),
     ].join("|");
+  }
+
+  // code_unit / source_object: source_key is primary, but schema 2.8 full
+  // exports can repeat the same source_key across different includes
+  // (e.g. CONSTRUCTOR bodies mis-keyed under a related class name).
+  // Disambiguate with include_name when present — same pattern as source_fragment.
+  if (recordType === "code_unit") {
+    const sourceKey = asNonEmptyString(obj.source_key);
+    const includeName = asNonEmptyString(obj.include_name);
+    if (sourceKey && includeName) {
+      return `code_unit|${sourceKey}|${includeName}`;
+    }
+    if (sourceKey) {
+      return `code_unit|${sourceKey}`;
+    }
+    return `code_unit|${createHash("sha256")
+      .update(JSON.stringify(obj))
+      .digest("hex")}`;
   }
 
   const sourceKey = asNonEmptyString(obj.source_key);

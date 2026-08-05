@@ -31,6 +31,20 @@ function AdminBackNavInner() {
     return <BackNavLink href="/" label="Zur Startseite" />;
   }
 
+  // /admin/steps/3/zy-tables → back to Hauptschritt; else → Dashboard
+  const stepGroupMatch = pathname.match(
+    /^\/admin\/steps\/([1-6])\/([^/]+)\/?$/,
+  );
+  if (stepGroupMatch) {
+    const stepId = stepGroupMatch[1];
+    return (
+      <BackNavLink
+        href={withCustomer(`/admin/steps/${stepId}`, customer)}
+        label="Zum Hauptschritt"
+      />
+    );
+  }
+
   if (pathname.startsWith("/admin/steps/")) {
     return (
       <BackNavLink

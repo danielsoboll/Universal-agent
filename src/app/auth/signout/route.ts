@@ -22,9 +22,22 @@ function publicOrigin(request: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+/** Clear sb-*-auth-token cookies so /login is not bounced back to /. */
+function clearAuthCookies(request: NextRequest, response: NextResponse) {
+  for (const { name } of request.cookies.getAll()) {
+    if (name.startsWith("sb-") && name.includes("auth-token")) {
+      response.cookies.set(name, "", {
+        path: "/",
+        maxAge: 0,
+      });
+    }
+  }
+}
+
 /**
  * Reliable logout via Route Handler so Set-Cookie from signOut
  * is attached to the redirect response (Server Actions can drop them).
+ * Always ends on the email login screen.
  */
 export async function POST(request: NextRequest) {
   let response = NextResponse.redirect(new URL("/login", publicOrigin(request)), {
@@ -50,6 +63,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[auth/signout]", error);
   }
+
+  // Ensure session cookies are gone even if signOut omitted a chunk.
+  clearAuthCookies(request, response);
 
   return response;
 }

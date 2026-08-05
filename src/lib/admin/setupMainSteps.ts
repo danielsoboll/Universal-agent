@@ -14,6 +14,17 @@ import {
   type FahrplanStepStatus,
 } from "@/lib/rebuild/controlTablesFahrplanTypes";
 import { reconcileControlTablesFahrplanFromDisk } from "@/lib/rebuild/controlTablesFahrplan";
+import { computeExportGroupsOverview } from "@/lib/admin/exportGroups/computeExportGroups";
+import type {
+  ExportGroupsOverview,
+  PointStatus,
+} from "@/lib/admin/exportGroups/types";
+import {
+  computeDatenbasisOverview,
+  isStage2Done,
+  reconcileSetupStage2,
+} from "@/lib/admin/datenbasis";
+import type { DatenbasisOverview } from "@/lib/admin/datenbasis/types";
 
 /** Six main SAP data-import setup steps (exact UI titles). */
 export const SETUP_MAIN_STEP_IDS = [1, 2, 3, 4, 5, 6] as const;
@@ -63,46 +74,44 @@ export const SETUP_MAIN_STEP_META: Record<SetupMainStepId, SetupMainStepMeta> = 
   2: {
     id: 2,
     title: "Projekt- und Agent-Struktur",
-    purpose: "Lokale Ordnerstruktur und Daten-Zonen prüfen",
+    purpose: "Lokale Ordnerstruktur anlegen und manuell abschließen",
     subTaskDefs: [
-      { id: "folder_linked", label: "Ordnerstruktur verknüpft" },
-      { id: "input_present", label: "Eingabe vorhanden" },
-      { id: "raw_present", label: "RAW vorhanden" },
-      { id: "zones_present", label: "Canonical / Embeddings / Indexes / Logs vorhanden" },
-      { id: "structure_ok", label: "Agent-Struktur validiert" },
+      { id: "folders_ok", label: "Ordnerstruktur vorhanden" },
+      { id: "manual_complete", label: "Manuell abgeschlossen" },
     ],
   },
   3: {
     id: 3,
-    title: "Exporte Teil 1",
-    purpose: "Erste Exportdateien finden und Import-Basis prüfen",
+    title: "Datenbasis",
+    purpose:
+      "Exporttypen geführt prüfen, konvertieren und freigeben (Klassen zuerst)",
     subTaskDefs: [
-      { id: "export_files", label: "Erste Exportdateien vorhanden" },
-      { id: "source_paths", label: "Quellpfade erkannt" },
-      { id: "file_types", label: "Dateitypen geprüft" },
-      { id: "import_base", label: "Import-Basis vollständig" },
+      { id: "classes", label: "Klassen freigegeben" },
+      { id: "programs", label: "Programme vorbereitet" },
+      { id: "other_types", label: "Weitere Typen (Scaffold)" },
     ],
   },
   4: {
     id: 4,
     title: "Validierung",
-    purpose: "Quellen erkennen, RAW prüfen, konvertieren und Ergebnis prüfen",
+    purpose:
+      "Pro erkannter Exportgruppe: Quelle, RAW, Konvertierung, Canonical prüfen",
     subTaskDefs: [
-      { id: "source_recognized", label: "Quelldatei erkannt" },
+      { id: "source_recognized", label: "Quelle erkannt" },
       { id: "raw_checked", label: "RAW geprüft" },
       { id: "data_converted", label: "Daten konvertiert" },
-      { id: "converted_checked", label: "Konvertierte Daten geprüft" },
+      { id: "canonical_checked", label: "Canonical geprüft" },
     ],
   },
   5: {
     id: 5,
     title: "Export Teil 2 und Feintuning",
-    purpose: "Wissensbestand, Index und Suche absichern",
+    purpose:
+      "Pro validierter Gruppe: Wissen, Index, Direct-/KI-Suche und Plausibilität",
     subTaskDefs: [
-      { id: "knowledge_updated", label: "Wissensbestand aktualisiert" },
-      { id: "index_built", label: "Index aufgebaut" },
-      { id: "search_tested", label: "Suche getestet" },
-      { id: "answers_ok", label: "Antworten plausibilisiert" },
+      { id: "knowledge_build", label: "Wissensbestand aufgebaut" },
+      { id: "index_search", label: "Index & Suche getestet" },
+      { id: "deep_plaus", label: "KI-Suche & Plausibilität" },
     ],
   },
   6: {
@@ -245,6 +254,15 @@ function fromCt(
   return "open";
 }
 
+function fromPoint(status: PointStatus, locked: boolean): SetupSubTaskStatus {
+  if (locked) return "locked";
+  if (status === "done") return "done";
+  if (status === "error") return "error";
+  if (status === "in_progress") return "in_progress";
+  if (status === "locked") return "locked";
+  return "open";
+}
+
 function boolTask(
   ok: boolean,
   locked: boolean,
@@ -300,6 +318,10 @@ function buildSubTasks(
   ctx: ProjectSetupContext,
   ct: ControlTablesFahrplanState | null,
   localOk: boolean,
+  groups: ExportGroupsOverview | null,
+  datenbasis: DatenbasisOverview | null,
+  stage2Done: boolean,
+  stage2FoldersOk: boolean,
 ): SetupSubTask[] {
   const meta = SETUP_MAIN_STEP_META[stepId];
 
@@ -339,88 +361,132 @@ function buildSubTasks(
           map(d.id, locked ? "locked" : "error", "LOCAL_DATA_ROOT nicht verfügbar"),
         );
       }
-      const folder = projectRootExists(ctx.projectKey);
-      const raw = zoneExists(ctx.projectKey, "raw");
-      const input = raw && rawHasContent(ctx.projectKey);
-      const writableOk = (["canonical", "embeddings", "indexes", "logs"] as const).every(
-        (z) => zoneExists(ctx.projectKey, z),
-      );
-      const structureOk = folder && raw && writableOk;
       return [
         map(
-          "folder_linked",
-          boolTask(folder, locked, !folder && localOk),
-          folder ? undefined : `Ordner ${ctx.projectKey} fehlt unter LOCAL_DATA_ROOT`,
+          "folders_ok",
+          boolTask(stage2FoldersOk, locked, !stage2FoldersOk && localOk),
+          stage2FoldersOk
+            ? undefined
+            : "Ordner unter LOCAL_DATA_ROOT anlegen",
         ),
         map(
-          "input_present",
-          boolTask(input, locked),
-          input ? undefined : "Noch keine Dateien unter raw/",
+          "manual_complete",
+          boolTask(stage2Done, locked),
+          stage2Done
+            ? undefined
+            : "Nach Ordnerprüfung manuell abschließen",
         ),
-        map("raw_present", boolTask(raw, locked)),
-        map("zones_present", boolTask(writableOk, locked)),
-        map("structure_ok", boolTask(structureOk, locked)),
       ];
     }
     case 3: {
-      if (!localOk) {
-        return meta.subTaskDefs.map((d) =>
-          map(d.id, locked ? "locked" : "error", "LOCAL_DATA_ROOT nicht verfügbar"),
-        );
-      }
-      const exportFiles = rawHasContent(ctx.projectKey);
-      const s1 = ctStatus(ct, 1);
-      const s2 = ctStatus(ct, 2);
-      const pathsOk =
-        s1 === "success" || (ct?.steps[1]?.result?.files?.length ?? 0) > 0;
-      const importBase = s1 === "success" && s2 === "success";
+      const classes = datenbasis?.types.find((t) => t.id === "classes");
+      const programs = datenbasis?.types.find((t) => t.id === "programs");
+      const classesDone = classes?.overall === "approved";
+      const programsReady =
+        Boolean(programs?.unlocked) && programs?.implementation === "prepared";
       return [
-        map("export_files", boolTask(exportFiles, locked)),
         map(
-          "source_paths",
+          "classes",
           locked
             ? "locked"
-            : pathsOk
+            : classesDone
               ? "done"
-              : fromCt(s1, locked),
+              : classes?.overall === "failed"
+                ? "error"
+                : classes?.overall === "in_progress" ||
+                    classes?.overall === "awaiting_approval"
+                  ? "in_progress"
+                  : "open",
+          classes?.nextActionLabel,
         ),
-        map("file_types", fromCt(s2, locked)),
-        map("import_base", boolTask(importBase, locked)),
+        map(
+          "programs",
+          locked ? "locked" : programsReady ? "open" : "locked",
+          programsReady
+            ? "Scaffold — Regeln noch unknown"
+            : "Gesperrt bis Klassen freigegeben",
+        ),
+        map(
+          "other_types",
+          locked ? "locked" : "open",
+          "Scaffold ohne erfundene Namensregeln",
+        ),
       ];
     }
     case 4: {
+      const zy = groups?.groups.find((g) => g.id === "zy-tables");
+      const stages = zy?.validation.stages;
+      const vLocked = locked || Boolean(zy?.validation.locked);
       return [
-        map("source_recognized", fromCt(ctStatus(ct, 1), locked)),
-        map("raw_checked", fromCt(ctStatus(ct, 2), locked)),
-        map("data_converted", fromCt(ctStatus(ct, 3), locked)),
-        map("converted_checked", fromCt(ctStatus(ct, 4), locked)),
+        map(
+          "source_recognized",
+          vLocked
+            ? "locked"
+            : fromPoint(
+                stages?.find((s) => s.id === "source_recognized")?.status ??
+                  fromCt(ctStatus(ct, 1), locked),
+                vLocked,
+              ),
+        ),
+        map(
+          "raw_checked",
+          vLocked
+            ? "locked"
+            : fromPoint(
+                stages?.find((s) => s.id === "raw_checked")?.status ??
+                  fromCt(ctStatus(ct, 2), locked),
+                vLocked,
+              ),
+        ),
+        map(
+          "data_converted",
+          vLocked
+            ? "locked"
+            : fromPoint(
+                stages?.find((s) => s.id === "data_converted")?.status ??
+                  fromCt(ctStatus(ct, 3), locked),
+                vLocked,
+              ),
+        ),
+        map(
+          "canonical_checked",
+          vLocked
+            ? "locked"
+            : fromPoint(
+                stages?.find((s) => s.id === "canonical_checked")?.status ??
+                  fromCt(ctStatus(ct, 4), locked),
+                vLocked,
+              ),
+        ),
       ];
     }
     case 5: {
-      const s5 = ctStatus(ct, 5);
-      const s6 = ctStatus(ct, 6);
+      const zy = groups?.groups.find((g) => g.id === "zy-tables");
+      const fLocked = locked || Boolean(zy?.feintuning.locked);
+      const stages = zy?.feintuning.stages ?? [];
+      const knowledge = stages.find((s) => s.id === "knowledge_build");
       const indexOk =
-        hybridIndexPresent(ctx.projectKey) || s5 === "success";
-      const samples = ct?.steps[6]?.result?.samples ?? [];
-      const answersOk =
-        s6 === "success" &&
-        (samples.length === 0 || samples.every((s) => s.ok));
+        stages.find((s) => s.id === "index_update")?.status === "done" &&
+        stages.find((s) => s.id === "direct_search")?.status === "done";
+      const deepPlaus =
+        stages.find((s) => s.id === "deep_search")?.status === "done" &&
+        stages.find((s) => s.id === "plausibilize")?.status === "done";
       return [
-        map("knowledge_updated", fromCt(s5, locked)),
-        map("index_built", boolTask(indexOk, locked, s5 === "failed")),
-        map("search_tested", fromCt(s6, locked)),
         map(
-          "answers_ok",
-          locked
+          "knowledge_build",
+          fLocked
             ? "locked"
-            : answersOk
-              ? "done"
-              : s6 === "failed"
-                ? "error"
-                : "open",
-          answersOk
-            ? undefined
-            : "Smoke-Tests der Suche noch nicht erfolgreich",
+            : fromPoint(knowledge?.status ?? "open", fLocked),
+        ),
+        map(
+          "index_search",
+          fLocked ? "locked" : boolTask(indexOk, fLocked),
+          indexOk ? undefined : "Index + Direct-Suche",
+        ),
+        map(
+          "deep_plaus",
+          fLocked ? "locked" : boolTask(deepPlaus, fLocked),
+          deepPlaus ? undefined : "KI-Suche + Plausibilität",
         ),
       ];
     }
@@ -468,7 +534,8 @@ function customerQuery(
 
 /**
  * Compute the 6-step setup overview from project DB fields + LOCAL_DATA_ROOT
- * (+ control-tables fahrplan for steps 3–5). No parallel PM checklist DB.
+ * (+ Datenbasis for step 3, export-group / CT fahrplan for steps 4–5).
+ * No parallel PM checklist DB.
  */
 export function computeSetupOverview(
   ctx: ProjectSetupContext,
@@ -476,11 +543,28 @@ export function computeSetupOverview(
   let ct: ControlTablesFahrplanState | null = null;
   let localDataError: string | null = null;
   let localOk = false;
+  let groups: ExportGroupsOverview | null = null;
+  let datenbasis: DatenbasisOverview | null = null;
+  let stage2Done = false;
+  let stage2FoldersOk = false;
 
   try {
     getLocalDataRoot();
     localOk = true;
+    const stage2 = reconcileSetupStage2(ctx.projectKey);
+    stage2FoldersOk = stage2.folders_ok;
+    stage2Done = isStage2Done(stage2);
     ct = reconcileControlTablesFahrplanFromDisk(ctx.projectKey);
+    groups = computeExportGroupsOverview({
+      projectKey: ctx.projectKey,
+      customerId: ctx.customerId,
+    });
+    datenbasis = computeDatenbasisOverview({
+      projectKey: ctx.projectKey,
+      customerId: ctx.customerId,
+    });
+    if (groups.localDataError) localDataError = groups.localDataError;
+    if (datenbasis.localDataError) localDataError = datenbasis.localDataError;
   } catch (error) {
     localDataError =
       error instanceof Error
@@ -495,13 +579,63 @@ export function computeSetupOverview(
     const meta = SETUP_MAIN_STEP_META[id];
     const locked: boolean = id === 1 ? false : !previousDone;
     const active = !locked;
-    const subTasks = buildSubTasks(id, locked, ctx, ct, localOk);
-    const progressPercent: number = locked
-      ? 0
-      : progressFromSubTasks(subTasks);
+    const subTasks = buildSubTasks(
+      id,
+      locked,
+      ctx,
+      ct,
+      localOk,
+      groups,
+      datenbasis,
+      stage2Done,
+      stage2FoldersOk,
+    );
+
+    let progressPercent: number = locked ? 0 : progressFromSubTasks(subTasks);
+    // Area 3: Datenbasis (classes approved = done). Areas 4–5: export-groups.
+    if (!locked) {
+      if (id === 3 && datenbasis) {
+        progressPercent = datenbasis.area3Done
+          ? 100
+          : datenbasis.progressPercent;
+      } else if (groups) {
+        if (id === 4) {
+          progressPercent = groups.area4Done ? 100 : groups.area4Percent;
+        } else if (id === 5) {
+          progressPercent = groups.area5Done ? 100 : groups.area5Percent;
+        }
+      }
+    }
+
     const hasError = !locked && subTasks.some((t) => t.status === "error");
-    const status = statusFromProgress(progressPercent, locked, hasError);
-    const done = subTasks.filter((t) => t.status === "done").length;
+    let status = statusFromProgress(progressPercent, locked, hasError);
+    if (!locked) {
+      if (id === 3 && datenbasis?.area3Done) status = "done";
+      if (id === 2 && stage2Done) {
+        status = "done";
+        progressPercent = 100;
+      }
+      if (groups) {
+        if (id === 4 && groups.area4Done) status = "done";
+        if (id === 5 && groups.area5Done) status = "done";
+      }
+    }
+
+    let done = subTasks.filter((t) => t.status === "done").length;
+    let total = subTasks.length;
+    if (!locked && id === 3 && datenbasis) {
+      done = datenbasis.area3Done ? 1 : 0;
+      total = 1;
+    } else if (!locked && groups && (id === 4 || id === 5)) {
+      const required = groups.groups.filter((g) => g.requiredForMainProgress);
+      if (id === 4) {
+        done = required.filter((g) => g.validation.fullyValidated).length;
+        total = required.length;
+      } else {
+        done = required.filter((g) => g.feintuning.fullyTuned).length;
+        total = required.length;
+      }
+    }
     const qs = customerQuery(ctx.customerId);
 
     steps.push({
@@ -513,12 +647,7 @@ export function computeSetupOverview(
       active,
       locked,
       subTasks,
-      statusSentence: sentenceFor(
-        status,
-        progressPercent,
-        done,
-        subTasks.length,
-      ),
+      statusSentence: sentenceFor(status, progressPercent, done, total),
       href: `/admin/steps/${id}${qs}`,
     });
 

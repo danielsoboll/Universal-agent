@@ -287,6 +287,22 @@ async function main() {
       );
     } else {
       analyzed += 1;
+      if (analyzed % 10 === 0 || analyzed === 1) {
+        const checkpoint = units
+          .map((u) => existing.get(u.source_key))
+          .filter((r): r is UnitAnalysisRecord => r != null);
+        writeGeneratedText(
+          PROJECT_KEY,
+          "analyses",
+          ANALYSES_REL,
+          analysesToJsonl(checkpoint),
+        );
+        appendLogLine(
+          PROJECT_KEY,
+          "analyze-sap-code-units.log",
+          `[${new Date().toISOString()}] CHECKPOINT analyzed=${analyzed} stored=${checkpoint.length}`,
+        );
+      }
       appendLogLine(
         PROJECT_KEY,
         "analyze-sap-code-units.log",

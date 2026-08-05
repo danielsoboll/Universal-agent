@@ -140,29 +140,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    let destination = next;
-    if (!destination) {
-      const { data: platform } = await supabase
-        .from("platform_admins")
-        .select("user_id")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-      const { data: profile } = await supabase
-        .from("app_user_profiles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-
-      if (
-        platform ||
-        profile?.role === "general_admin" ||
-        profile?.role === "admin"
-      ) {
-        destination = "/admin/dashboard";
-      } else {
-        destination = "/app/ask";
-      }
-    }
+    // Always land on the role's first screen (/). `next` is only kept on
+    // error redirects so the form can redisplay — never auto-deep-link.
+    const destination = "/";
 
     if (!pendingCookies.length) {
       await supabase.auth.setSession({

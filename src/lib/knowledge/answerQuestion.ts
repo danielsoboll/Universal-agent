@@ -13,12 +13,21 @@ import { resolveAskLocalProject } from "@/lib/knowledge/resolveAskProject";
 import {
   EMPTY_COMPACT_TECHNICAL_DETAILS,
   EMPTY_PROCESS_ANSWER,
+  EMPTY_TECHNICAL_ANSWER,
   EMPTY_TECHNICAL_DETAILS,
   llmAnswerSchema,
   type CompactTechnicalDetails,
   type ProcessAnswer,
+  type TechnicalAnswer,
   type TechnicalDetails,
 } from "@/lib/knowledge/answerSchema";
+import {
+  buildAnswerContract,
+  enrichTechnicalAnswerFromHits,
+  ANSWER_CONTRACT_NO_PROCESS_MSG,
+} from "@/lib/knowledge/answerContract";
+import { buildEvidenceContext } from "@/lib/knowledge/evidenceContext";
+import { classifyQuestionIntent } from "@/lib/knowledge/questionIntent";
 import {
   buildCompactTechnicalDetails,
   buildTechnicalDetailsFromHits,
@@ -27,11 +36,17 @@ import {
 } from "@/lib/knowledge/buildTechnicalDetails";
 import type { QueryPlan, SearchMode } from "@/lib/knowledge/queryPlanSchema";
 import { planQuery } from "@/lib/knowledge/queryPlanner";
+import { runDeepSearch } from "@/lib/knowledge/deepSearch/runDeepSearch";
 import {
   listAvailableKnowledgeUnitTypes,
-  type AggregatedKnowledgeHit,
 } from "@/lib/knowledge/executeQueryPlan";
 import { executePlannedRagRetrieval } from "@/lib/knowledge/executePlannedRag";
+import { executeFullAnalysisRetrieval } from "@/lib/knowledge/executeFullAnalysis";
+import { FULL_ANALYSIS_SYNTHESIS_ADDENDUM } from "@/lib/knowledge/fullAnalysisPrompt";
+import {
+  buildFullAnalysisReport,
+  type FullAnalysisReport,
+} from "@/lib/knowledge/fullAnalysisReport";
 import {
   extractQueryEntities,
   groundQueryEntities,
@@ -47,6 +62,15 @@ import {
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
 
+function resolveRequestedSearchMode(
+  mode: SearchMode | undefined,
+): SearchMode {
+  if (mode === "planned_rag") return "planned_rag";
+  if (mode === "full_analysis") return "full_analysis";
+  if (mode === "deep_search") return "deep_search";
+  return "direct_rag";
+}
+
 export type AnswerQuestionResult = {
   status: "ok" | "insufficient" | "error";
   question: string;
@@ -56,9 +80,22 @@ export type AnswerQuestionResult = {
   technical_objects: string[];
   uncertainties: string[];
   process_answer: ProcessAnswer;
+  /** Compact technical answer with evidence levels (Einstiegspunkt…offen). */
+  technical_answer: TechnicalAnswer;
   technical_details: TechnicalDetails;
   /** Compact, max-5-section technical explanation (Quelle/Auslöser/Systemaktion/Beleg/Unsicherheit). */
   compact_technical_details: CompactTechnicalDetails;
+  /** Synthesis intent (does not alter Direct RAG retrieval). */
+  question_intent: string | null;
+  /** Diagnostics: evidence-context truncation / diversification. */
+  evidence_context_report: {
+    input_hit_count: number;
+    detailed_count: number;
+    compact_count: number;
+    omitted_count: number;
+    previously_weak_fields_now_included: string[];
+    notes: string[];
+  } | null;
   /** Deterministic entity-grounding check, computed before answer synthesis. */
   entity_grounding: EntityGroundingResult[];
   /** Deterministic relevance gate — blocks synthesis when concepts lack evidence. */
@@ -92,6 +129,23 @@ export type AnswerQuestionResult = {
   workflow_template_id: string | null;
   /** Ask page is not a multi-turn chat; always false. */
   conversation_mode: false;
+  /** planned_rag / full_analysis — fresh per question; null for direct_rag. */
+  planned_run_id: string | null;
+  /** planned_rag / full_analysis topic-gate summary; null for direct_rag. */
+  topic_gate: {
+    excluded: Array<{
+      source_key: string;
+      status: string;
+      reason: string;
+    }>;
+    statuses: Array<{
+      source_key: string;
+      topic_status: string;
+      reason: string;
+    }>;
+  } | null;
+  /** full_analysis only — Markdown + Word download payload. */
+  full_analysis_report: FullAnalysisReport | null;
 };
 
 function emptyResult(
@@ -107,8 +161,11 @@ function emptyResult(
     technical_objects: [],
     uncertainties: [],
     process_answer: { ...EMPTY_PROCESS_ANSWER },
+    technical_answer: { ...EMPTY_TECHNICAL_ANSWER },
     technical_details: { ...EMPTY_TECHNICAL_DETAILS },
     compact_technical_details: { ...EMPTY_COMPACT_TECHNICAL_DETAILS },
+    question_intent: null,
+    evidence_context_report: null,
     entity_grounding: [],
     relevance_gate: null,
     sources: [],
@@ -135,6 +192,9 @@ function emptyResult(
     search_profile_id: "",
     workflow_template_id: null,
     conversation_mode: false,
+    planned_run_id: null,
+    topic_gate: null,
+    full_analysis_report: null,
     ...extras,
   };
 }
@@ -157,63 +217,6 @@ function estimateCost(input: number, output: number, embedding: number): number 
   );
 }
 
-function formatSourcesForPrompt(hits: KnowledgeHit[]): string {
-  return hits
-    .map((h) => {
-      const agg = h as AggregatedKnowledgeHit;
-      const facts = h.facts.map((f) => `- FACT: ${f}`).join("\n");
-      const inferences = h.inferences
-        .map((i) => `- INFERENCE: ${i}`)
-        .join("\n");
-      const hard = (h.hardcoded_values ?? []).slice(0, 20).join(", ");
-      const tables = [
-        ...(h.tables_read ?? []).map((t) => `READ ${t}`),
-        ...(h.tables_written ?? []).map((t) => `WRITE ${t}`),
-      ].join(", ");
-      const called = (h.called_methods ?? []).slice(0, 15).join(", ");
-      const evidenceLines = (h.evidence ?? [])
-        .slice(0, 6)
-        .map((e) => {
-          const quotes = (e.lines ?? [])
-            .slice(0, 3)
-            .map((l) => (l.line != null ? `L${l.line}: ${l.quote ?? ""}` : l.quote))
-            .filter(Boolean)
-            .join(" | ");
-          return `- [${e.statement_type}] ${e.text ?? ""} ${quotes}`.trim();
-        })
-        .join("\n");
-      return [
-        `### Quelle #${h.rank} | ${h.title}`,
-        `source_key: ${h.source_key}`,
-        `type: ${h.knowledge_unit_type}`,
-        `object: ${h.object_type} ${h.object_name} ${h.subobject_name}`.trim(),
-        `score: ${h.combined_score.toFixed(3)}`,
-        agg.matched_subqueries?.length
-          ? `matched_subqueries: ${agg.matched_subqueries.join(", ")}`
-          : "",
-        agg.evidence_coverage?.length
-          ? `evidence_coverage: ${agg.evidence_coverage.join(", ")}`
-          : "",
-        `confidence: ${h.doc_confidence ?? h.confidence ?? "—"}`,
-        `snippet: ${h.snippet}`,
-        h.technical_summary ? `technical_summary: ${h.technical_summary}` : "",
-        h.business_purpose ? `business_purpose: ${h.business_purpose}` : "",
-        tables ? `tables: ${tables}` : "",
-        called ? `called_methods: ${called}` : "",
-        hard ? `hardcoded_values: ${hard}` : "",
-        facts,
-        inferences,
-        evidenceLines ? `evidence:\n${evidenceLines}` : "",
-        h.evidence_refs.length
-          ? `evidence_refs: ${h.evidence_refs.slice(0, 8).join(" | ")}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-    })
-    .join("\n\n");
-}
-
 function retrievalModeLabel(vectorActive: boolean, hasEmbeddings: boolean): string {
   if (vectorActive) return "hybrid (exact + fulltext + vector)";
   if (hasEmbeddings) return "lexical (exact + fulltext; vector skipped)";
@@ -221,8 +224,10 @@ function retrievalModeLabel(vectorActive: boolean, hasEmbeddings: boolean): stri
 }
 
 const ANSWER_SCHEMA_HINT = `
-Ausgabeformat: strukturiertes JSON gemäß dem vorgegebenen Schema
-(process_answer + technical_details + insufficient_evidence + source_ranks_used).
+Ausgabeformat: strukturiertes JSON gemäß Schema
+(process_answer mit statements/levels, technical_answer, technical_details,
+insufficient_evidence, source_ranks_used).
+confirmed nur mit source_ranks; inferred sprachlich markieren; possible nur offen.
 `;
 
 /**
@@ -238,8 +243,9 @@ export async function answerQuestion(params: {
   searchMode?: SearchMode;
 }): Promise<AnswerQuestionResult> {
   const started = Date.now();
-  const requestedMode: SearchMode =
-    params.searchMode === "planned_rag" ? "planned_rag" : "direct_rag";
+  const requestedMode: SearchMode = resolveRequestedSearchMode(
+    params.searchMode,
+  );
   let searchMode: SearchMode = requestedMode;
   let queryPlan: QueryPlan | null = null;
   let subqueryCount = 0;
@@ -309,10 +315,186 @@ export async function answerQuestion(params: {
   };
 
   let retrieval: RetrievalBundle;
+  let plannedRunId: string | null = null;
+  let topicGate: AnswerQuestionResult["topic_gate"] = null;
+
+  // --- KI-Tiefensuche: Query Understanding + Multi-Source (nicht direct_rag) ---
+  if (searchMode === "deep_search") {
+    try {
+      const deep = await runDeepSearch({
+        projectId: project.id,
+        project,
+        question,
+        started,
+        domainMeta: {
+          domain_profile_id: domainMeta.domain_profile_id,
+          prompt_key: domainMeta.prompt_key,
+          prompt_version: domainMeta.prompt_version,
+          search_profile_id: domainMeta.search_profile_id,
+          workflow_template_id: domainMeta.workflow_template_id,
+        },
+      });
+      if (params.userId) {
+        try {
+          await fileHistoryRepository.add({
+            user_id: params.userId,
+            project_id: project.id,
+            question,
+            answer: deep.answer.direct_answer,
+            retrieval_summary: deep.answer.retrieval_summary,
+            source_refs: deep.answer.sources.map((s) => ({
+              rank: s.rank,
+              source_key: s.source_key,
+              title: s.title,
+              knowledge_unit_type: s.knowledge_unit_type,
+              score: s.combined_score,
+            })),
+            model: deep.answer.model,
+            token_usage: deep.answer.token_usage,
+            estimated_cost: deep.answer.estimated_cost,
+          });
+        } catch (histErr) {
+          deep.answer.warnings = [
+            ...deep.answer.warnings,
+            `Verlauf konnte nicht gespeichert werden: ${
+              histErr instanceof Error ? histErr.message : "unbekannt"
+            }`,
+          ];
+        }
+      }
+      console.info(
+        "[answerQuestion:deep_search]",
+        JSON.stringify({
+          intent: deep.query_understanding.intent,
+          preferred_plan: deep.query_understanding.preferred_search_plan,
+          technical_tokens: deep.query_understanding.technical_tokens,
+          log_dir: deep.log_dir,
+          runtime_ms: deep.metrics.runtime_ms,
+          evidence_count: deep.metrics.evidence_count,
+          cost: deep.metrics.cost,
+        }),
+      );
+      return deep.answer;
+    } catch (error) {
+      console.error("[answerQuestion] deep_search failed:", error);
+      return emptyResult(
+        question,
+        error instanceof Error ? error.message : "KI-Tiefensuche fehlgeschlagen.",
+        {
+          index_path: project.active_index_path,
+          searched_document_count: inspected.document_count,
+          requested_search_mode: requestedMode,
+          search_mode: "deep_search",
+          duration_ms: Date.now() - started,
+        },
+      );
+    }
+  }
 
   try {
-    if (searchMode === "planned_rag") {
+    if (searchMode === "full_analysis") {
       const availableTypes = await listAvailableKnowledgeUnitTypes(project);
+      const planned = await planQuery({
+        question,
+        availableKnowledgeUnitTypes:
+          availableTypes.length > 0
+            ? availableTypes
+            : [...capabilities.knowledgeUnitTypes],
+        domainProfile: capabilities.domainProfile,
+        plannerPrompt: capabilities.plannerPrompt,
+      });
+      plannerTokens = planned.token_usage;
+      domainMeta.prompt_key = planned.prompt_key ?? capabilities.plannerPrompt.key;
+      domainMeta.prompt_version =
+        planned.prompt_version ?? capabilities.plannerPrompt.version;
+
+      if (!planned.ok) {
+        plannerFallback = true;
+        warnings.push(
+          "Vollanalyse-Suchplanung fehlgeschlagen; breite Direktsuche verwendet.",
+        );
+        console.error(
+          "[answerQuestion] full_analysis planner failed:",
+          planned.message,
+        );
+        domainMeta.prompt_key = capabilities.answerPrompt.key;
+        domainMeta.prompt_version = capabilities.answerPrompt.version;
+        const broad = await KnowledgeRetriever.search({
+          project,
+          query: question,
+          limit: params.limit ?? 40,
+          searchProfile: capabilities.searchProfile,
+          enableRelationExpansion: true,
+        });
+        retrieval = {
+          hits: broad.hits,
+          document_count: broad.document_count,
+          vector_search_active: broad.vector_search_active,
+          index_path: broad.index_path,
+          query_embedding_tokens: broad.query_embedding_tokens,
+          query_embedding_cost: broad.query_embedding_cost,
+          warnings: broad.warnings,
+        };
+        subqueryCount = 1;
+        plannedRunId = null;
+        topicGate = null;
+      } else {
+        queryPlan = planned.plan;
+        subqueryCount = planned.plan.subqueries.length;
+        if (planned.repaired) {
+          warnings.push("Suchplan nach einmaliger Repair-Anfrage validiert.");
+        }
+        const executed = await executeFullAnalysisRetrieval({
+          project,
+          originalQuestion: question,
+          plan: planned.plan,
+          domainProfile: capabilities.domainProfile,
+          searchProfile: capabilities.searchProfile,
+          limitPerSubquery: 16,
+          finalLimit: params.limit ?? 40,
+        });
+        queryPlan = {
+          ...planned.plan,
+          subqueries: executed.refined_plan_subqueries,
+        };
+        subqueryCount = executed.subquery_count;
+        plannedRunId = executed.run_id;
+        topicGate = {
+          excluded: executed.diagnostics.topic_excluded.map((e) => ({
+            source_key: e.source_key,
+            status: e.status,
+            reason: e.reason,
+          })),
+          statuses: executed.diagnostics.topic_statuses.map((s) => ({
+            source_key: s.source_key,
+            topic_status: s.topic_status,
+            reason: s.reason,
+          })),
+        };
+        warnings.push(...executed.warnings);
+        console.info(
+          "[full_analysis:synthesis_context]",
+          JSON.stringify({
+            run_id: executed.run_id,
+            original_question: question,
+            evidence_ids: executed.run_debug.final_evidence_ids,
+            synthesis_context_ids: executed.run_debug.synthesis_context_ids,
+            excluded: executed.run_debug.excluded,
+          }),
+        );
+        retrieval = {
+          hits: executed.hits,
+          document_count: executed.document_count,
+          vector_search_active: executed.vector_search_active,
+          index_path: executed.index_path,
+          query_embedding_tokens: executed.query_embedding_tokens,
+          query_embedding_cost: executed.query_embedding_cost,
+          warnings: [],
+        };
+      }
+    } else if (searchMode === "planned_rag") {
+      const availableTypes = await listAvailableKnowledgeUnitTypes(project);
+      // Isolated planner call — only current question; no prior plan/history.
       const planned = await planQuery({
         question,
         availableKnowledgeUnitTypes:
@@ -357,7 +539,31 @@ export async function answerQuestion(params: {
           subqueries: executed.refined_plan_subqueries,
         };
         subqueryCount = executed.subquery_count;
+        plannedRunId = executed.run_id;
+        topicGate = {
+          excluded: executed.diagnostics.topic_excluded.map((e) => ({
+            source_key: e.source_key,
+            status: e.status,
+            reason: e.reason,
+          })),
+          statuses: executed.diagnostics.topic_statuses.map((s) => ({
+            source_key: s.source_key,
+            topic_status: s.topic_status,
+            reason: s.reason,
+          })),
+        };
         warnings.push(...executed.warnings);
+        // Log synthesis context ids (evidence only from this run).
+        console.info(
+          "[planned_rag:synthesis_context]",
+          JSON.stringify({
+            run_id: executed.run_id,
+            original_question: question,
+            evidence_ids: executed.run_debug.final_evidence_ids,
+            synthesis_context_ids: executed.run_debug.synthesis_context_ids,
+            excluded: executed.run_debug.excluded,
+          }),
+        );
         retrieval = {
           hits: executed.hits,
           document_count: executed.document_count,
@@ -371,6 +577,8 @@ export async function answerQuestion(params: {
     }
 
     if (searchMode === "direct_rag") {
+      // direct_rag path unchanged — fast hybrid (+ exact-symbol pre-pass in hybridSearch).
+      // Query-Understanding / Multi-Source belong exclusively to deep_search.
       const direct = await KnowledgeRetriever.search({
         project,
         query: question,
@@ -387,6 +595,8 @@ export async function answerQuestion(params: {
         warnings: direct.warnings,
       };
       subqueryCount = subqueryCount || 1;
+      plannedRunId = null;
+      topicGate = null;
     }
   } catch (error) {
     console.error("[answerQuestion] retrieval failed:", error);
@@ -442,15 +652,22 @@ export async function answerQuestion(params: {
     warnings: [...warnings],
     ...domainMeta,
     prompt_key:
-      searchMode === "planned_rag" && queryPlan
+      (searchMode === "planned_rag" || searchMode === "full_analysis") &&
+      queryPlan
         ? capabilities.plannerPrompt.key
         : capabilities.answerPrompt.key,
     prompt_version:
-      searchMode === "planned_rag" && queryPlan
+      (searchMode === "planned_rag" || searchMode === "full_analysis") &&
+      queryPlan
         ? capabilities.plannerPrompt.version
         : capabilities.answerPrompt.version,
     conversation_mode: false as const,
+    planned_run_id: plannedRunId,
+    topic_gate: topicGate,
+    full_analysis_report: null as FullAnalysisReport | null,
   };
+
+  const questionIntent = classifyQuestionIntent(question);
 
   if (retrieval!.hits.length === 0) {
     const pa: ProcessAnswer = {
@@ -460,6 +677,16 @@ export async function answerQuestion(params: {
       open_validation_questions: [
         "Keine passenden SearchDocuments gefunden.",
       ],
+      open: [
+        {
+          text: "Keine passenden SearchDocuments gefunden.",
+          level: "not_supported",
+          source_ranks: [],
+          source_ids: [],
+        },
+      ],
+      has_safe_process_claim: false,
+      no_process_claim_message: ANSWER_CONTRACT_NO_PROCESS_MSG,
     };
     return {
       status: "insufficient",
@@ -469,11 +696,14 @@ export async function answerQuestion(params: {
       technical_objects: [],
       uncertainties: pa.open_validation_questions,
       process_answer: pa,
+      technical_answer: { ...EMPTY_TECHNICAL_ANSWER },
       technical_details: {
         ...EMPTY_TECHNICAL_DETAILS,
         retrieval_mode: mode,
       },
       compact_technical_details: { ...EMPTY_COMPACT_TECHNICAL_DETAILS },
+      question_intent: questionIntent.intent,
+      evidence_context_report: null,
       entity_grounding: groundingReport.results,
       relevance_gate: relevanceGate,
       sources: [],
@@ -503,22 +733,31 @@ export async function answerQuestion(params: {
       retrieval!.hits,
       relevanceGate.similar_but_insufficient_source_ids,
     ).slice(0, 5);
+    const openNotes = [
+      relevanceGate.reason,
+      relevanceGate.missing_concepts.length
+        ? `Fehlende zentrale Belege: ${relevanceGate.missing_concepts.join(", ")}`
+        : "",
+      relevanceGate.query_concepts.length
+        ? `Gesuchte Konzepte: ${relevanceGate.query_concepts.join(", ")}`
+        : "",
+      similarHits.length
+        ? "Es liegen nur ähnliche, aber nicht ausreichend passende Treffer vor (siehe Quellen)."
+        : "",
+    ].filter(Boolean);
     const pa: ProcessAnswer = {
       ...EMPTY_PROCESS_ANSWER,
       direct_answer:
         "Im aktuell indexierten Wissensbestand wurde keine belastbare Quelle gefunden, die diese Frage beantwortet.",
-      open_validation_questions: [
-        relevanceGate.reason,
-        relevanceGate.missing_concepts.length
-          ? `Fehlende zentrale Belege: ${relevanceGate.missing_concepts.join(", ")}`
-          : "",
-        relevanceGate.query_concepts.length
-          ? `Gesuchte Konzepte: ${relevanceGate.query_concepts.join(", ")}`
-          : "",
-        similarHits.length
-          ? "Es liegen nur ähnliche, aber nicht ausreichend passende Treffer vor (siehe Quellen)."
-          : "",
-      ].filter(Boolean),
+      open_validation_questions: openNotes,
+      open: openNotes.map((text) => ({
+        text,
+        level: "not_supported" as const,
+        source_ranks: [],
+        source_ids: [],
+      })),
+      has_safe_process_claim: false,
+      no_process_claim_message: ANSWER_CONTRACT_NO_PROCESS_MSG,
     };
     return {
       status: "insufficient",
@@ -528,6 +767,7 @@ export async function answerQuestion(params: {
       technical_objects: [],
       uncertainties: pa.open_validation_questions,
       process_answer: pa,
+      technical_answer: { ...EMPTY_TECHNICAL_ANSWER },
       technical_details: {
         ...EMPTY_TECHNICAL_DETAILS,
         retrieval_mode: mode,
@@ -540,6 +780,8 @@ export async function answerQuestion(params: {
         ...EMPTY_COMPACT_TECHNICAL_DETAILS,
         unsicherheit: pa.open_validation_questions,
       },
+      question_intent: questionIntent.intent,
+      evidence_context_report: null,
       entity_grounding: groundingReport.results,
       relevance_gate: relevanceGate,
       sources: similarHits,
@@ -564,9 +806,11 @@ export async function answerQuestion(params: {
   }
 
   const synthesisHits =
-    relevanceGate.supporting_source_ids.length > 0
-      ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
-      : retrieval!.hits;
+    searchMode === "full_analysis"
+      ? retrieval!.hits
+      : relevanceGate.supporting_source_ids.length > 0
+        ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
+        : retrieval!.hits;
 
   if (!process.env.OPENAI_API_KEY?.trim()) {
     const tech = buildTechnicalDetailsFromHits(synthesisHits, mode);
@@ -578,11 +822,17 @@ export async function answerQuestion(params: {
       technical_objects: tech.called_objects,
       uncertainties: [],
       process_answer: { ...EMPTY_PROCESS_ANSWER },
+      technical_answer: enrichTechnicalAnswerFromHits(
+        { ...EMPTY_TECHNICAL_ANSWER },
+        synthesisHits,
+      ),
       technical_details: tech,
       compact_technical_details: buildCompactTechnicalDetails({
         hits: synthesisHits,
         groundingResults: groundingReport.results,
       }),
+      question_intent: questionIntent.intent,
+      evidence_context_report: null,
       entity_grounding: groundingReport.results,
       relevance_gate: relevanceGate,
       sources: synthesisHits,
@@ -611,14 +861,20 @@ export async function answerQuestion(params: {
   try {
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      timeout: AI_CONFIG.timeoutMs,
+      timeout:
+        searchMode === "full_analysis"
+          ? AI_CONFIG.analysisTimeoutMs
+          : AI_CONFIG.timeoutMs,
       maxRetries: AI_CONFIG.maxRetries,
     });
     const planBlock =
-      searchMode === "planned_rag" && queryPlan
+      (searchMode === "planned_rag" || searchMode === "full_analysis") &&
+      queryPlan
         ? [
             "",
-            "Suchmodus: planned_rag (KI-Tiefensuche)",
+            searchMode === "full_analysis"
+              ? "Suchmodus: full_analysis (Vollanalyse)"
+              : "Suchmodus: planned_rag (KI-Tiefensuche)",
             `Intent: ${queryPlan.intent}`,
             `Planner-Confidence: ${queryPlan.planner_confidence}`,
             queryPlan.ambiguities.length
@@ -669,14 +925,52 @@ export async function answerQuestion(params: {
         : "Nur aus den bereitgestellten (bereits gefilterten) unterstützenden Quellen antworten.",
     ].join("\n");
 
+    const topicGateBlock =
+      (searchMode === "planned_rag" || searchMode === "full_analysis") &&
+      topicGate
+        ? [
+            "",
+            `Topic-Gate (${searchMode}, run_id=${plannedRunId ?? "—"}):`,
+            "Nur confirmed-Quellen als Fakten; possible nur als markierte Unsicherheit; not_relevant wurde entfernt.",
+            topicGate.statuses.length
+              ? topicGate.statuses
+                  .map(
+                    (s) =>
+                      `- ${s.source_key}: ${s.topic_status} — ${s.reason}`,
+                  )
+                  .join("\n")
+              : "keine Status-Einträge",
+            topicGate.excluded.length
+              ? `ausgeschlossen: ${topicGate.excluded
+                  .map((e) => `${e.source_key} (${e.reason})`)
+                  .join(" | ")}`
+              : "ausgeschlossen: —",
+          ].join("\n")
+        : "";
+
+    const evidenceContext = buildEvidenceContext({
+      hits: synthesisHits,
+      intent: questionIntent,
+      groundingResults: groundingReport.results,
+      question,
+      coverage: searchMode === "full_analysis" ? "exhaustive" : "normal",
+    });
+
+    const intentBlock = [
+      "",
+      `Question-Intent (nur Synthese-Gewichtung, ändert Direct-RAG-Ranking nicht): ${questionIntent.intent}`,
+      `preferences: process=${questionIntent.preferences.prefer_process_weight} tech=${questionIntent.preferences.prefer_tech_weight} relations=${questionIntent.preferences.prefer_relations} comparison_both_sides=${questionIntent.preferences.require_both_comparison_sides}`,
+    ].join("\n");
+
     const userPrompt = [
       `Frage: ${question}`,
       planBlock,
+      intentBlock,
       groundingBlock,
       relevanceBlock,
+      topicGateBlock,
       "",
-      "Quellen (nur relevante/unterstützende Treffer):",
-      formatSourcesForPrompt(synthesisHits),
+      evidenceContext.prompt_text,
     ].join("\n");
 
     const completion = await client.chat.completions.parse({
@@ -688,10 +982,15 @@ export async function answerQuestion(params: {
           content: [
             capabilities.answerPrompt.text,
             ANSWER_SCHEMA_HINT,
+            searchMode === "full_analysis"
+              ? FULL_ANALYSIS_SYNTHESIS_ADDENDUM
+              : "",
             `Domain Profile: ${capabilities.domainProfileId}@${capabilities.domainProfile.version}`,
             `Suchmodus: ${searchMode}`,
             "conversation_mode=false — beantworte nur die aktuelle Frage aus den aktuellen Quellen.",
-          ].join("\n\n"),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
         { role: "user", content: userPrompt },
       ],
@@ -714,23 +1013,9 @@ export async function answerQuestion(params: {
     const output =
       (completion.usage?.completion_tokens ?? 0) + plannerTokens.output;
     const embedding = retrieval!.query_embedding_tokens;
-    const usedRanks = new Set(validated.source_ranks_used);
-    let sources =
-      usedRanks.size > 0
-        ? synthesisHits.filter((h) => usedRanks.has(h.rank))
-        : synthesisHits;
-    // Partial answers: if the model refused ranks, still surface supporting hits.
-    if (
-      sources.length === 0 &&
-      relevanceGate.answerability === "partially_answerable"
-    ) {
-      sources = synthesisHits.slice(0, 8);
-    }
 
     // Deterministic gate — never trust the LLM's insufficient_evidence flag
     // alone for named-entity transfer; grounding was computed before synthesis.
-    // When the relevance gate already classified answerable/partial, do not let
-    // the LLM collapse a partial answer into a full refusal.
     const ungroundedNamed = groundingReport.results.filter(
       (r) =>
         r.entity_type !== "identifier" &&
@@ -743,12 +1028,123 @@ export async function answerQuestion(params: {
       relevanceGate.answerability === "answerable" ||
       relevanceGate.answerability === "partially_answerable";
 
+    // "Welche Kunden …?" without any concrete customer/partner ids in supporting
+    // evidence must not become a positive process answer (DESADV-style false hits).
+    const asksWhichCustomers = /für welche kunden|welche kunden\b/i.test(
+      question,
+    );
+    const customerIdInEvidence = synthesisHits.some((h) =>
+      (h.hardcoded_values ?? []).some((v) =>
+        /'\d{6,}'|\b\d{6,}\b/.test(v),
+      ) ||
+      (h.entities ?? []).some((e) =>
+        /customer|kunde|lifnr|kunnr|partner/i.test(e.kind) &&
+        /\d{4,}/.test(e.name),
+      ),
+    );
+    const customerQuestionWithoutIds =
+      asksWhichCustomers && !customerIdInEvidence;
+
     const insufficient =
       hasUngroundedNamedEntity ||
+      customerQuestionWithoutIds ||
       (validated.insufficient_evidence && !gateAllowsAnswer) ||
-      (!validated.process_answer.direct_answer.trim() &&
-        sources.length === 0 &&
+      (!validated.process_answer.summary.trim() &&
+        validated.process_answer.statements.length === 0 &&
         !gateAllowsAnswer);
+
+    const insufficientMessage = hasUngroundedNamedEntity
+      ? `Für „${ungroundedNamed.map((r) => r.query_entity).join(", ")}“ liegt im aktuell indexierten Wissensbestand keine belastbare, entitätsspezifische Regel vor.`
+      : customerQuestionWithoutIds
+        ? "Im aktuell indexierten Wissensbestand sind keine konkreten kundenspezifischen Anpassungen (mit belegten Kunden-/Partnernummern) für diese Frage nachweisbar."
+        : "Im aktuell indexierten Wissensbestand nicht belastbar beantwortbar.";
+
+    const contract = buildAnswerContract({
+      llm: validated,
+      hits: synthesisHits,
+      intent: questionIntent,
+      forceInsufficient: insufficient,
+      insufficientMessage,
+    });
+
+    let process_answer = contract.process_answer;
+    if (insufficient && hasUngroundedNamedEntity) {
+      const neighbors = similarNeighborEntities(groundingReport);
+      const neighborNote =
+        neighbors.length > 0
+          ? `Ähnliche gefundene Regel (nicht anwendbar): Für ${neighbors.join(", ")} liegt eine belegte Regel vor — diese gilt nicht automatisch für „${ungroundedNamed.map((r) => r.query_entity).join(", ")}“ und wurde nicht übertragen.`
+          : "";
+      process_answer = {
+        ...process_answer,
+        business_interpretation: neighborNote,
+        inferred: neighborNote
+          ? [
+              {
+                text: neighborNote,
+                level: "inferred",
+                source_ranks: [],
+                source_ids: [],
+              },
+            ]
+          : [],
+        open: [
+          ...ungroundedNamed.map((r) => ({
+            text: `Für „${r.query_entity}“ (${r.entity_type}): ${r.reason}`,
+            level: "not_supported" as const,
+            source_ranks: [],
+            source_ids: [],
+          })),
+          ...process_answer.open,
+        ],
+        open_validation_questions: [
+          ...ungroundedNamed.map(
+            (r) => `Für „${r.query_entity}“ (${r.entity_type}): ${r.reason}`,
+          ),
+          ...process_answer.open_validation_questions,
+        ],
+      };
+    } else if (
+      !insufficient &&
+      relevanceGate.answerability === "partially_answerable"
+    ) {
+      const extras = [
+        relevanceGate.reason,
+        ...relevanceGate.missing_concepts.map(
+          (c) => `Nicht belegt / offen: ${c}`,
+        ),
+      ].filter(Boolean);
+      process_answer = {
+        ...process_answer,
+        open: [
+          ...process_answer.open,
+          ...extras.map((text) => ({
+            text,
+            level: "possible" as const,
+            source_ranks: [],
+            source_ids: [],
+          })),
+        ],
+        open_validation_questions: [
+          ...process_answer.open_validation_questions,
+          ...extras,
+        ],
+        direct_answer:
+          process_answer.direct_answer.trim() ||
+          `Nur teilweise belegbar. Belegt: ${relevanceGate.matched_concepts.join(", ") || "—"}. Nicht belegt: ${relevanceGate.missing_concepts.join(", ") || "—"}.`,
+      };
+    }
+
+    const usedRanks = new Set(contract.source_ranks_used);
+    let sources =
+      usedRanks.size > 0
+        ? synthesisHits.filter((h) => usedRanks.has(h.rank))
+        : synthesisHits;
+    if (
+      sources.length === 0 &&
+      relevanceGate.answerability === "partially_answerable"
+    ) {
+      sources = synthesisHits.slice(0, 8);
+    }
 
     const primaryForTech =
       sources.length > 0 ? sources : synthesisHits.slice(0, 5);
@@ -767,8 +1163,6 @@ export async function answerQuestion(params: {
         : validated.technical_details,
     );
 
-    // Neighbor evidence (contradicted entities only) — surfaced transparently
-    // in compact technical details, never as an answer to the question asked.
     const neighborRanks = new Set(
       ungroundedNamed
         .filter((r) => r.grounding_status === "contradicted")
@@ -777,6 +1171,25 @@ export async function answerQuestion(params: {
         .filter((n): n is number => Number.isFinite(n)),
     );
     const neighborHits = retrieval!.hits.filter((h) => neighborRanks.has(h.rank));
+
+    let technical_answer = enrichTechnicalAnswerFromHits(
+      contract.technical_answer,
+      insufficient && hasUngroundedNamedEntity
+        ? neighborHits
+        : techHits.length > 0
+          ? techHits
+          : primaryForTech,
+    );
+    if (insufficient && hasUngroundedNamedEntity) {
+      technical_answer = {
+        ...technical_answer,
+        entry_point: technical_answer.entry_point.map((s) => ({
+          ...s,
+          text: `Ähnliche gefundene Regel (nicht angefragte Entität) — ${s.text}`,
+          level: s.level === "confirmed" ? "inferred" : s.level,
+        })),
+      };
+    }
 
     const compact_technical_details: CompactTechnicalDetails =
       insufficient && hasUngroundedNamedEntity
@@ -799,61 +1212,50 @@ export async function answerQuestion(params: {
             extraSystemaktion: insufficient ? [] : validated.technical_details.changed_fields,
           });
 
-    const process_answer: ProcessAnswer = insufficient
-      ? {
-          ...EMPTY_PROCESS_ANSWER,
-          direct_answer: hasUngroundedNamedEntity
-            ? `Für „${ungroundedNamed.map((r) => r.query_entity).join(", ")}“ liegt im aktuell indexierten Wissensbestand keine belastbare, entitätsspezifische Regel vor.`
-            : "Im aktuell indexierten Wissensbestand nicht belastbar beantwortbar.",
-          business_interpretation: (() => {
-            const neighbors = similarNeighborEntities(groundingReport);
-            if (neighbors.length === 0) return "";
-            return `Ähnliche gefundene Regel (nicht anwendbar): Für ${neighbors.join(", ")} liegt eine belegte Regel vor — diese gilt nicht automatisch für „${ungroundedNamed.map((r) => r.query_entity).join(", ")}“ und wurde nicht übertragen.`;
-          })(),
-          open_validation_questions: hasUngroundedNamedEntity
-            ? [
-                ...ungroundedNamed.map(
-                  (r) => `Für „${r.query_entity}“ (${r.entity_type}): ${r.reason}`,
-                ),
-                ...validated.process_answer.open_validation_questions,
-              ]
-            : validated.process_answer.open_validation_questions.length > 0
-              ? validated.process_answer.open_validation_questions
-              : ["Quellen reichen für eine belastbare Antwort nicht aus."],
-        }
-      : {
-          direct_answer:
-            validated.process_answer.direct_answer.trim() ||
-            (relevanceGate.answerability === "partially_answerable"
-              ? `Nur teilweise belegbar. Belegt: ${relevanceGate.matched_concepts.join(", ") || "—"}. Nicht belegt: ${relevanceGate.missing_concepts.join(", ") || "—"}.`
-              : ""),
-          special_process: validated.process_answer.special_process.trim(),
-          trigger: validated.process_answer.trigger.trim(),
-          process_effect: validated.process_answer.process_effect.trim(),
-          business_interpretation:
-            validated.process_answer.business_interpretation.trim(),
-          open_validation_questions: [
-            ...validated.process_answer.open_validation_questions,
-            ...(relevanceGate.answerability === "partially_answerable"
-              ? [
-                  relevanceGate.reason,
-                  ...relevanceGate.missing_concepts.map(
-                    (c) => `Nicht belegt / offen: ${c}`,
-                  ),
-                ]
-              : []),
-          ],
-        };
-
     const reasoningParts = [
-      process_answer.special_process &&
-        `Besonderheit: ${process_answer.special_process}`,
-      process_answer.trigger && `Auslöser: ${process_answer.trigger}`,
-      process_answer.process_effect &&
-        `Wirkung: ${process_answer.process_effect}`,
-      process_answer.business_interpretation &&
-        `Bedeutung: ${process_answer.business_interpretation}`,
+      process_answer.confirmed.length
+        ? `Sicher belegt: ${process_answer.confirmed.map((s) => s.text).join(" ")}`
+        : "",
+      process_answer.inferred.length
+        ? `Abgeleitet: ${process_answer.inferred.map((s) => s.text).join(" ")}`
+        : "",
+      process_answer.open.length
+        ? `Offen: ${process_answer.open.map((s) => s.text).join(" ")}`
+        : "",
     ].filter(Boolean);
+
+    const durationMs = Date.now() - started;
+    const retrievalSummary = `${retrieval!.hits.length} Treffer aus ${retrieval!.document_count} Dokumenten`;
+
+    let fullAnalysisReport: FullAnalysisReport | null = null;
+    if (searchMode === "full_analysis") {
+      try {
+        const reportSources = insufficient
+          ? hitsByIds(
+              retrieval!.hits,
+              relevanceGate.similar_but_insufficient_source_ids,
+            ).slice(0, 12)
+          : sources.length > 0
+            ? sources
+            : synthesisHits;
+        fullAnalysisReport = await buildFullAnalysisReport({
+          question,
+          processAnswer: process_answer,
+          technicalAnswer: technical_answer,
+          compactTechnicalDetails: compact_technical_details,
+          sources: reportSources,
+          retrievalSummary,
+          durationMs,
+          warnings,
+        });
+      } catch (reportErr) {
+        warnings.push(
+          `Report-Erzeugung fehlgeschlagen: ${
+            reportErr instanceof Error ? reportErr.message : "unbekannt"
+          }`,
+        );
+      }
+    }
 
     const result: AnswerQuestionResult = {
       status: insufficient ? "insufficient" : "ok",
@@ -863,8 +1265,19 @@ export async function answerQuestion(params: {
       technical_objects: technical_details.called_objects.slice(0, 20),
       uncertainties: process_answer.open_validation_questions,
       process_answer,
+      technical_answer,
       technical_details,
       compact_technical_details,
+      question_intent: questionIntent.intent,
+      evidence_context_report: {
+        input_hit_count: evidenceContext.truncation_report.input_hit_count,
+        detailed_count: evidenceContext.truncation_report.detailed_count,
+        compact_count: evidenceContext.truncation_report.compact_count,
+        omitted_count: evidenceContext.truncation_report.omitted_count,
+        previously_weak_fields_now_included:
+          evidenceContext.truncation_report.previously_weak_fields_now_included,
+        notes: evidenceContext.truncation_report.notes,
+      },
       entity_grounding: groundingReport.results,
       relevance_gate: relevanceGate,
       sources: insufficient
@@ -876,7 +1289,7 @@ export async function answerQuestion(params: {
       model: AI_CONFIG.chatModel,
       token_usage: { input, output, embedding },
       estimated_cost: estimateCost(input, output, embedding),
-      retrieval_summary: `${retrieval!.hits.length} Treffer aus ${retrieval!.document_count} Dokumenten`,
+      retrieval_summary: retrievalSummary,
       retrieval_mode: mode,
       searched_document_count: retrieval!.document_count,
       top_score: topScore,
@@ -888,11 +1301,14 @@ export async function answerQuestion(params: {
       subquery_count: subqueryCount,
       planner_fallback: plannerFallback,
       warnings,
-      duration_ms: Date.now() - started,
+      duration_ms: durationMs,
       ...domainMeta,
       prompt_key: capabilities.answerPrompt.key,
       prompt_version: capabilities.answerPrompt.version,
       conversation_mode: false,
+      planned_run_id: plannedRunId,
+      topic_gate: topicGate,
+      full_analysis_report: fullAnalysisReport,
     };
 
     if (params.userId) {
@@ -941,11 +1357,17 @@ export async function answerQuestion(params: {
       technical_objects: tech.called_objects,
       uncertainties: [],
       process_answer: { ...EMPTY_PROCESS_ANSWER },
+      technical_answer: enrichTechnicalAnswerFromHits(
+        { ...EMPTY_TECHNICAL_ANSWER },
+        retrieval!.hits,
+      ),
       technical_details: tech,
       compact_technical_details: buildCompactTechnicalDetails({
         hits: retrieval!.hits,
         groundingResults: groundingReport.results,
       }),
+      question_intent: questionIntent.intent,
+      evidence_context_report: null,
       entity_grounding: groundingReport.results,
       relevance_gate: relevanceGate,
       sources: retrieval!.hits,

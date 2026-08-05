@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import {
-  askQuestionAction,
-  type AskQuestionResult,
-} from "@/actions/ask";
+import { askQuestionAction } from "@/actions/ask";
+import type { AskQuestionResult } from "@/lib/app/askTypes";
 import type {
+  ClassifiedStatement,
   CompactTechnicalDetails,
+  EvidenceLevel,
   ProcessAnswer,
+  TechnicalAnswer,
   TechnicalDetails,
 } from "@/lib/knowledge/answerSchema";
 import type { QueryPlan, SearchMode } from "@/lib/knowledge/queryPlanSchema";
 import type { EntityGroundingResult } from "@/lib/knowledge/entityGrounding";
+import type { FullAnalysisReport } from "@/lib/knowledge/fullAnalysisReport";
 import { InlineError, EmptyState } from "@/components/ui/states";
 import {
   cacheKeyFromAskResult,
@@ -22,7 +24,7 @@ import {
   putCachedAskResult,
 } from "@/lib/app/askSessionCache";
 
-const SEARCH_MODES: { key: SearchMode; label: string; help: string }[] = [
+const BASE_SEARCH_MODES: { key: SearchMode; label: string; help: string }[] = [
   {
     key: "direct_rag",
     label: "Direkte Suche",
@@ -35,8 +37,27 @@ const SEARCH_MODES: { key: SearchMode; label: string; help: string }[] = [
   },
 ];
 
-function searchModeLabel(mode?: SearchMode | null): string {
-  return SEARCH_MODES.find((m) => m.key === mode)?.label ?? mode ?? "—";
+const VOLLANALYSE_MODE: { key: SearchMode; label: string; help: string } = {
+  key: "full_analysis",
+  label: "Vollanalyse",
+  help: "Umfangreiche und kostenintensivere 1×-Vollanalyse eines spezifischen Themas zum Download.",
+};
+
+function modesForUser(canUseVollanalyse: boolean) {
+  return canUseVollanalyse
+    ? [...BASE_SEARCH_MODES, VOLLANALYSE_MODE]
+    : BASE_SEARCH_MODES;
+}
+
+function searchModeLabel(
+  mode?: SearchMode | null,
+  canUseVollanalyse = false,
+): string {
+  return (
+    modesForUser(canUseVollanalyse).find((m) => m.key === mode)?.label ??
+    mode ??
+    "—"
+  );
 }
 
 function formatDuration(ms?: number | null): string {
@@ -45,50 +66,72 @@ function formatDuration(ms?: number | null): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
+/** Compact secondary ask actions (not mode toggle, not „Frage stellen“). */
+const ASK_COMPACT_BTN_SIZE =
+  "inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md border px-2.5 py-1.5 text-sm font-medium leading-tight transition disabled:cursor-not-allowed disabled:opacity-65";
+
+/** Mode toggle: readable type; flex-1 + truncate keeps 3-across on ~390px. */
+const ASK_MODE_BTN_SIZE =
+  "inline-flex min-h-[2.625rem] flex-1 min-w-0 items-center justify-center gap-0.5 rounded-md border px-1 py-2 text-[0.8125rem] font-medium leading-tight tracking-tight transition sm:min-h-[2.75rem] sm:px-2.5 sm:text-sm disabled:cursor-not-allowed disabled:opacity-65";
+function searchModeButtonClass(key: SearchMode, selected: boolean): string {
+  const size = ASK_MODE_BTN_SIZE;
+  // Selected = solid primary blue (all modes, including Vollanalyse)
+  if (selected) {
+    return `${size} border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-contrast)] shadow-[0_1px_0_rgba(255,255,255,0.18)_inset]`;
+  }
+  if (key === "full_analysis") {
+    return `${size} border-amber-300/60 bg-amber-100/75 text-[var(--foreground)] dark:border-amber-400/35 dark:bg-amber-400/15`;
+  }
+  // Direkte Suche + KI-Tiefensuche — hellblau Tint (nicht ausgewählt)
+  return `${size} border-sky-200/70 bg-sky-50/95 text-[var(--foreground)] dark:border-sky-400/30 dark:bg-sky-400/12`;
+}
+
+const ASK_COMPACT_SECONDARY = `${ASK_COMPACT_BTN_SIZE} border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)] hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--border))]`;
+
 function SearchModeToggle({
   mode,
   onChange,
   disabled,
   cachedModes,
+  canUseVollanalyse,
 }: {
   mode: SearchMode;
   onChange: (m: SearchMode) => void;
   disabled?: boolean;
   /** Modes with a stored result for the *exact* current question text */
   cachedModes?: Set<SearchMode>;
+  canUseVollanalyse?: boolean;
 }) {
-  const active = SEARCH_MODES.find((m) => m.key === mode) ?? SEARCH_MODES[0]!;
+  const modes = modesForUser(Boolean(canUseVollanalyse));
+  const active = modes.find((m) => m.key === mode) ?? modes[0]!;
   return (
     <div className="space-y-2">
       <span className="label">Suchmodus</span>
       <div
-        className="flex flex-wrap gap-2"
+        className="flex w-full flex-nowrap gap-1 sm:gap-2"
         role="group"
         aria-label="Suchmodus wählen"
       >
-        {SEARCH_MODES.map((m) => {
+        {modes.map((m) => {
           const hasCache = cachedModes?.has(m.key) ?? false;
+          const selected = mode === m.key;
           return (
             <button
               key={m.key}
               type="button"
               onClick={() => onChange(m.key)}
               disabled={disabled}
-              aria-pressed={mode === m.key}
+              aria-pressed={selected}
               title={
                 hasCache
                   ? "Gespeichertes Ergebnis für exakt diese Frage und diesen Suchmodus vorhanden."
                   : undefined
               }
-              className={
-                mode === m.key
-                  ? "btn btn-primary px-3 py-1.5 text-sm"
-                  : "btn btn-secondary px-3 py-1.5 text-sm"
-              }
+              className={searchModeButtonClass(m.key, selected)}
             >
-              {m.label}
+              <span className="truncate">{m.label}</span>
               {hasCache ? (
-                <span className="ml-1.5 text-[0.65rem] opacity-80" aria-hidden>
+                <span className="shrink-0 text-[0.65rem] opacity-80" aria-hidden>
                   ●
                 </span>
               ) : null}
@@ -97,12 +140,90 @@ function SearchModeToggle({
         })}
       </div>
       <p className="muted text-xs">{active.help}</p>
-      {cachedModes && cachedModes.size > 0 ? (
-        <p className="muted text-[0.65rem]">
-          ● = Gespeichertes Ergebnis für exakt diese Frage und diesen Suchmodus
-          vorhanden (nur Anzeige, kein Kontext für neue Fragen).
-        </p>
+      {mode === "full_analysis" ? (
+        <div
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-[var(--foreground)]"
+          role="status"
+        >
+          <p className="font-medium">Hinweis zur Vollanalyse</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+            Umfangreiche und kostenintensivere 1×-Vollanalyse eines spezifischen
+            Themas zum Download. Läuft länger als die normale Suche und ist für
+            eine einmalige, tiefgehende Auswertung gedacht — nicht für kurze
+            Chat-Antworten.
+          </p>
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+function downloadTextFile(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBase64File(
+  filename: string,
+  base64: string,
+  mime: string,
+) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function FullAnalysisDownloadBar({
+  report,
+}: {
+  report: FullAnalysisReport;
+}) {
+  return (
+    <div className="panel compact space-y-2 p-4">
+      <h3 className="text-sm font-semibold">Report herunterladen</h3>
+      <p className="muted text-xs">
+        Einmalige Vollanalyse als formatierter Bericht — lokal speichern.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={`${ASK_COMPACT_BTN_SIZE} border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-raised))] text-[var(--foreground)]`}
+          onClick={() =>
+            downloadBase64File(
+              `${report.filename_stem}.docx`,
+              report.docx_base64,
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+          }
+        >
+          Word (.docx)
+        </button>
+        <button
+          type="button"
+          className={ASK_COMPACT_SECONDARY}
+          onClick={() =>
+            downloadTextFile(
+              `${report.filename_stem}.md`,
+              report.markdown,
+              "text/markdown;charset=utf-8",
+            )
+          }
+        >
+          Markdown (.md)
+        </button>
+      </div>
     </div>
   );
 }
@@ -212,9 +333,18 @@ function SearchPlanBlock({ plan }: { plan: QueryPlan }) {
   );
 }
 
-function SearchModeSummary({ result }: { result: AskQuestionResult }) {
-  const usedLabel = searchModeLabel(result.searchMode);
-  const requestedLabel = searchModeLabel(result.requestedSearchMode);
+function SearchModeSummary({
+  result,
+  canUseVollanalyse,
+}: {
+  result: AskQuestionResult;
+  canUseVollanalyse?: boolean;
+}) {
+  const usedLabel = searchModeLabel(result.searchMode, canUseVollanalyse);
+  const requestedLabel = searchModeLabel(
+    result.requestedSearchMode,
+    canUseVollanalyse,
+  );
   const fellBack =
     Boolean(result.plannerFallback) &&
     result.requestedSearchMode !== result.searchMode;
@@ -271,6 +401,99 @@ function ScoreBadge({ label, value }: { label: string; value?: number }) {
   );
 }
 
+function evidenceTone(level: EvidenceLevel | "section-confirmed" | "section-inferred" | "section-open" | "section-danger"): {
+  border: string;
+  badge: string;
+  label: string;
+} {
+  switch (level) {
+    case "confirmed":
+    case "section-confirmed":
+      return {
+        border: "border-l-[var(--success)]",
+        badge: "border-[var(--success)]/35 text-[var(--success)]",
+        label: "Belegt",
+      };
+    case "inferred":
+    case "section-inferred":
+      return {
+        border: "border-l-[var(--warning)]",
+        badge: "border-[var(--warning)]/40 text-[var(--warning)]",
+        label: "Abgeleitet",
+      };
+    case "contradicted":
+    case "not_supported":
+    case "section-danger":
+      return {
+        border: "border-l-[var(--danger)]",
+        badge: "border-[var(--danger)]/35 text-[var(--danger)]",
+        label: level === "contradicted" ? "Widerspruch" : "Nicht belegt",
+      };
+    default:
+      return {
+        border: "border-l-[var(--accent)]/50",
+        badge: "border-[var(--accent)]/30 text-[var(--muted)]",
+        label: "Offen",
+      };
+  }
+}
+
+function EvidenceBadge({ level }: { level: EvidenceLevel }) {
+  const tone = evidenceTone(level);
+  return (
+    <span className={`badge text-[0.65rem] ${tone.badge}`}>{tone.label}</span>
+  );
+}
+
+function StatementGroup({
+  title,
+  tone,
+  statements,
+  emptyHint,
+}: {
+  title: string;
+  tone: "section-confirmed" | "section-inferred" | "section-open" | "section-danger";
+  statements: ClassifiedStatement[];
+  emptyHint?: string;
+}) {
+  if (!statements.length && !emptyHint) return null;
+  const t = evidenceTone(tone);
+  return (
+    <div className={`border-l-2 pl-3 ${t.border}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          {title}
+        </h3>
+        <span className={`badge text-[0.65rem] ${t.badge}`}>{t.label}</span>
+      </div>
+      {statements.length ? (
+        <ul className="mt-1.5 space-y-2">
+          {statements.map((s, i) => (
+            <li key={i} className="text-sm leading-relaxed">
+              <div className="flex flex-wrap items-start gap-1.5">
+                <EvidenceBadge level={s.level} />
+                <p className="min-w-0 flex-1 whitespace-pre-wrap">{s.text}</p>
+              </div>
+              {s.source_ranks?.length || s.source_ids?.length ? (
+                <p className="mt-0.5 font-mono text-[0.65rem] text-[var(--muted)]">
+                  {s.source_ranks?.length
+                    ? s.source_ranks.map((r) => `#${r}`).join(" ")
+                    : ""}
+                  {s.source_ids?.length
+                    ? ` · ${s.source_ids.slice(0, 2).join(", ")}`
+                    : ""}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : emptyHint ? (
+        <p className="mt-1.5 text-sm text-[var(--muted)]">{emptyHint}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function ProcessAnswerBlock({
   process,
   fallbackAnswer,
@@ -282,75 +505,38 @@ function ProcessAnswerBlock({
   relevanceGate?: AskQuestionResult["relevanceGate"];
   status?: AskQuestionResult["status"];
 }) {
-  const pa = process ?? {
+  const pa: ProcessAnswer = process ?? {
     direct_answer: fallbackAnswer ?? "",
     special_process: "",
     trigger: "",
     process_effect: "",
     business_interpretation: "",
     open_validation_questions: [],
+    confirmed: [],
+    inferred: [],
+    open: [],
+    has_safe_process_claim: false,
+    no_process_claim_message: "",
   };
 
   const insufficient =
     status === "insufficient" ||
     relevanceGate?.answerability === "insufficient";
 
-  if (insufficient) {
-    return (
-      <section className="panel compact space-y-3 p-4 sm:p-5">
-        <h2 className="text-base font-semibold tracking-tight">Prozessantwort</h2>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Direkte Antwort
-          </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed sm:text-[0.95rem]">
-            {pa.direct_answer.trim() ||
-              "Im aktuell indexierten Wissensbestand nicht belastbar beantwortbar."}
-          </p>
-        </div>
-        {relevanceGate?.reason ? (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Warum
-            </p>
-            <p className="mt-1 text-sm">{relevanceGate.reason}</p>
-          </div>
-        ) : null}
-        {relevanceGate?.missingConcepts?.length ? (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Fehlende Belege
-            </p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm">
-              {relevanceGate.missingConcepts.map((c, i) => (
-                <li key={i}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {pa.open_validation_questions.length > 0 ? (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Hinweise
-            </p>
-            <ul className="mt-1 list-disc space-y-1 pl-4 text-sm leading-relaxed">
-              {pa.open_validation_questions.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </section>
-    );
-  }
+  const confirmed = pa.confirmed ?? [];
+  const inferred = pa.inferred ?? [];
+  const open =
+    pa.open?.length
+      ? pa.open
+      : (pa.open_validation_questions ?? []).map((text) => ({
+          text,
+          level: "possible" as const,
+          source_ranks: [],
+          source_ids: [],
+        }));
 
-  const rows: Array<{ label: string; value: string }> = [
-    { label: "Direkte Antwort", value: pa.direct_answer },
-    { label: "Erkannte Besonderheit", value: pa.special_process },
-    { label: "Auslöser", value: pa.trigger },
-    { label: "Prozesswirkung", value: pa.process_effect },
-    { label: "Bedeutung", value: pa.business_interpretation },
-  ].filter((r) => r.value.trim());
+  const hasClassified =
+    confirmed.length > 0 || inferred.length > 0 || open.length > 0;
 
   return (
     <section className="panel compact space-y-3 p-4 sm:p-5">
@@ -360,34 +546,116 @@ function ProcessAnswerBlock({
           Teilweise beantwortbar — fehlende Konzepte bleiben offen.
         </p>
       ) : null}
-      {rows.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">—</p>
-      ) : (
-        <dl className="space-y-3">
-          {rows.map((r) => (
-            <div key={r.label}>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                {r.label}
-              </dt>
-              <dd className="mt-1 whitespace-pre-wrap text-sm leading-relaxed sm:text-[0.95rem]">
-                {r.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {pa.open_validation_questions.length > 0 ? (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Offen
-          </p>
-          <ul className="mt-1 list-disc space-y-1 pl-4 text-sm leading-relaxed">
-            {pa.open_validation_questions.map((q, i) => (
-              <li key={i}>{q}</li>
-            ))}
-          </ul>
+
+      {pa.direct_answer?.trim() ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed sm:text-[0.95rem]">
+          {pa.direct_answer}
+        </p>
+      ) : null}
+
+      {!pa.has_safe_process_claim && pa.no_process_claim_message ? (
+        <div className="border-l-2 border-l-[var(--accent)]/50 pl-3">
+          <p className="text-sm text-[var(--muted)]">{pa.no_process_claim_message}</p>
         </div>
       ) : null}
+
+      {insufficient && relevanceGate?.reason ? (
+        <p className="text-sm text-[var(--muted)]">{relevanceGate.reason}</p>
+      ) : null}
+
+      {hasClassified ? (
+        <div className="space-y-3">
+          <StatementGroup
+            title="Sicher belegt"
+            tone="section-confirmed"
+            statements={confirmed}
+            emptyHint={
+              insufficient || !pa.has_safe_process_claim
+                ? "Keine direkt belegten Prozessaussagen."
+                : undefined
+            }
+          />
+          <StatementGroup
+            title="Wahrscheinlich / abgeleitet"
+            tone="section-inferred"
+            statements={inferred}
+          />
+          <StatementGroup
+            title="Offen / nicht belegt"
+            tone={insufficient ? "section-danger" : "section-open"}
+            statements={open}
+          />
+        </div>
+      ) : (
+        <dl className="space-y-3">
+          {[
+            { label: "Erkannte Besonderheit", value: pa.special_process },
+            { label: "Auslöser", value: pa.trigger },
+            { label: "Prozesswirkung", value: pa.process_effect },
+            { label: "Bedeutung", value: pa.business_interpretation },
+          ]
+            .filter((r) => r.value.trim())
+            .map((r) => (
+              <div key={r.label}>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  {r.label}
+                </dt>
+                <dd className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                  {r.value}
+                </dd>
+              </div>
+            ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function TechnicalAnswerBlock({
+  technical,
+}: {
+  technical?: TechnicalAnswer | null;
+}) {
+  if (!technical) return null;
+  const sections: Array<{ key: keyof TechnicalAnswer; title: string }> = [
+    { key: "entry_point", title: "Einstiegspunkt" },
+    { key: "trigger", title: "Auslöser / Bedingung" },
+    { key: "processing", title: "Verarbeitung" },
+    { key: "objects", title: "Objekte" },
+    { key: "results", title: "Ergebnis / Werte" },
+    { key: "relations", title: "Call- / Datenbeziehungen" },
+    { key: "open", title: "Technisch offen" },
+  ];
+  const hasAny = sections.some((s) => (technical[s.key] ?? []).length > 0);
+  if (!hasAny) return null;
+
+  return (
+    <section className="panel compact space-y-3 p-4 sm:p-5">
+      <h2 className="text-base font-semibold tracking-tight">
+        Technische Antwort
+      </h2>
+      <div className="space-y-3">
+        {sections.map((s) => {
+          const stmts = technical[s.key] ?? [];
+          if (!stmts.length) return null;
+          const dominant =
+            stmts.every((x) => x.level === "confirmed")
+              ? "section-confirmed"
+              : stmts.some((x) => x.level === "confirmed")
+                ? "section-inferred"
+                : s.key === "open"
+                  ? "section-open"
+                  : "section-inferred";
+          return (
+            <StatementGroup
+              key={s.key}
+              title={s.title}
+              tone={dominant}
+              statements={stmts}
+            />
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -652,9 +920,9 @@ function CompactTechnicalDetailsBlock({
   return (
     <details className="panel compact group">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
-        Technische Details
+        Technische Diagnose
         <span className="ml-2 text-xs font-normal text-[var(--muted)]">
-          (aufklappen)
+          Scores · IDs · Embedding · aufklappen
         </span>
       </summary>
       <div className="space-y-4 border-t border-[var(--border)] px-4 py-3">
@@ -682,7 +950,9 @@ function CompactTechnicalDetailsBlock({
           className="text-xs font-medium text-[var(--accent,#2563eb)] underline underline-offset-2"
           onClick={() => setShowFull((v) => !v)}
         >
-          {showFull ? "Vollständige Analyse ausblenden" : "Vollständige Analyse anzeigen"}
+          {showFull
+            ? "Rohdaten / Scores ausblenden"
+            : "Rohdaten / Scores / volle IDs anzeigen"}
         </button>
 
         {showFull ? (
@@ -855,8 +1125,11 @@ function SourceCard({
 
 export function AskQuestionPanel({
   customerId,
+  canUseVollanalyse = false,
 }: {
   customerId?: string | null;
+  /** General Admin / Projekt-Admin only — Keyuser must not see Vollanalyse. */
+  canUseVollanalyse?: boolean;
 }) {
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
@@ -867,7 +1140,6 @@ export function AskQuestionPanel({
   );
   const [pending, startTransition] = useTransition();
   const [apiError, setApiError] = useState<string | null>(null);
-  const [fromSessionCache, setFromSessionCache] = useState(false);
   /** Monotonic id so late responses from an older ask never overwrite a newer one. */
   const requestSeqRef = useRef(0);
 
@@ -878,12 +1150,12 @@ export function AskQuestionPanel({
       setCachedModes(new Set());
       return;
     }
-    setCachedModes(
-      modesCachedForQuestion({
-        projectId,
-        normalizedQuestion: q,
-      }),
-    );
+    const set = modesCachedForQuestion({
+      projectId,
+      normalizedQuestion: q,
+    });
+    if (!canUseVollanalyse) set.delete("full_analysis");
+    setCachedModes(set);
   }
 
   useEffect(() => {
@@ -892,11 +1164,20 @@ export function AskQuestionPanel({
 
   function clearActiveAnswerContext() {
     setResult(null);
-    setFromSessionCache(false);
     setApiError(null);
   }
 
+  /** Soft reset: question + current answer UI only (mode/cache preserved). */
+  function clearCurrentQuestion() {
+    requestSeqRef.current += 1;
+    setQuestion("");
+    setSubmittedQuestion("");
+    clearActiveAnswerContext();
+    setCachedModes(new Set());
+  }
+
   function selectMode(next: SearchMode) {
+    if (next === "full_analysis" && !canUseVollanalyse) return;
     if (next === mode) return;
     setMode(next);
     setApiError(null);
@@ -914,7 +1195,6 @@ export function AskQuestionPanel({
     if (cached) {
       setResult(cached.result);
       setSubmittedQuestion(q);
-      setFromSessionCache(true);
     } else {
       clearActiveAnswerContext();
       setSubmittedQuestion(q);
@@ -945,8 +1225,10 @@ export function AskQuestionPanel({
         reasoning?: string | null;
         message?: string | null;
         processAnswer?: ProcessAnswer | null;
+        technicalAnswer?: TechnicalAnswer | null;
         technicalDetails?: TechnicalDetails | null;
         compactTechnicalDetails?: CompactTechnicalDetails | null;
+        questionIntent?: string | null;
         entityGrounding?: EntityGroundingResult[];
         sources?: Array<{
           rank: number;
@@ -993,6 +1275,7 @@ export function AskQuestionPanel({
         promptVersion?: string;
         searchProfileId?: string;
         relevanceGate?: AskQuestionResult["relevanceGate"];
+        fullAnalysisReport?: FullAnalysisReport | null;
       };
 
       const evidence =
@@ -1050,8 +1333,10 @@ export function AskQuestionPanel({
         answer: data.answer ?? null,
         reasoning: data.reasoning,
         processAnswer: data.processAnswer,
+        technicalAnswer: data.technicalAnswer,
         technicalDetails: data.technicalDetails,
         compactTechnicalDetails: data.compactTechnicalDetails,
+        questionIntent: data.questionIntent,
         entityGrounding: data.entityGrounding,
         relevanceGate,
         evidence,
@@ -1079,6 +1364,7 @@ export function AskQuestionPanel({
         promptKey: data.promptKey,
         promptVersion: data.promptVersion,
         searchProfileId: data.searchProfileId,
+        fullAnalysisReport: data.fullAnalysisReport ?? null,
       };
     } catch {
       return askQuestionAction({ question: q, customerId, searchMode });
@@ -1097,7 +1383,6 @@ export function AskQuestionPanel({
     setQuestion(q);
     setSubmittedQuestion(q);
     clearActiveAnswerContext();
-    setFromSessionCache(false);
 
     startTransition(async () => {
       try {
@@ -1117,7 +1402,6 @@ export function AskQuestionPanel({
         });
         refreshCachedModesFor(q);
         setResult(r);
-        setFromSessionCache(false);
       } catch (err) {
         if (seq !== requestSeqRef.current) return;
         setApiError(
@@ -1136,8 +1420,12 @@ export function AskQuestionPanel({
           onChange={selectMode}
           disabled={pending}
           cachedModes={cachedModes}
+          canUseVollanalyse={canUseVollanalyse}
         />
-        <label className="label" htmlFor="ask-question">
+        <label
+          className="label text-[color-mix(in_srgb,var(--warning)_42%,var(--foreground))]"
+          htmlFor="ask-question"
+        >
           Was möchten Sie über Ihr System wissen?
         </label>
         <textarea
@@ -1149,7 +1437,6 @@ export function AskQuestionPanel({
           onChange={(e) => {
             const v = e.target.value;
             setQuestion(v);
-            setFromSessionCache(false);
             // Drafting a different question must not keep the previous answer visible.
             const norm = normalizeAskQuestion(v);
             if (norm !== submittedQuestion) {
@@ -1163,21 +1450,38 @@ export function AskQuestionPanel({
               });
               if (cached) {
                 setResult(cached.result);
-                setFromSessionCache(true);
               }
             }
           }}
           disabled={pending}
           required
         />
-        <button
-          type="submit"
-          className="btn btn-primary w-full sm:w-auto"
-          disabled={pending || !question.trim() || !customerId}
-          aria-busy={pending}
-        >
-          {pending ? "Wird gesucht …" : "Frage stellen"}
-        </button>
+        <div className="flex flex-col gap-2 sm:items-start">
+          <button
+            type="submit"
+            className="btn btn-primary w-full sm:w-auto"
+            disabled={pending || !customerId}
+            aria-busy={pending}
+          >
+            {pending
+              ? mode === "full_analysis"
+                ? "Vollanalyse läuft …"
+                : "Wird gesucht …"
+              : mode === "full_analysis"
+                ? "Vollanalyse starten"
+                : "Frage stellen"}
+          </button>
+          <button
+            type="button"
+            className={ASK_COMPACT_SECONDARY}
+            onClick={clearCurrentQuestion}
+            disabled={
+              pending || (!question.trim() && !result && !apiError)
+            }
+          >
+            Frage löschen
+          </button>
+        </div>
         {!customerId ? (
           <p className="muted text-sm">
             Kein Projekt zugeordnet — Fragen sind nicht möglich.
@@ -1195,7 +1499,9 @@ export function AskQuestionPanel({
           <div className="h-4 w-full animate-pulse rounded bg-[var(--surface-raised)]" />
           <div className="h-4 w-5/6 max-w-[20rem] animate-pulse rounded bg-[var(--surface-raised)]" />
           <p className="muted text-xs">
-            Isolierte Anfrage — ohne Kontext vorheriger Fragen …
+            {mode === "full_analysis"
+              ? "Vollanalyse — breite Evidenzsammlung und tiefere Auswertung, bitte etwas Geduld …"
+              : "Isolierte Anfrage — ohne Kontext vorheriger Fragen …"}
           </p>
         </div>
       ) : null}
@@ -1211,24 +1517,12 @@ export function AskQuestionPanel({
               ? "Kein Ergebnis in diesem Suchmodus"
               : "Noch keine Frage"
           }
-          message={
-            normalizeAskQuestion(question) && cachedModes.size > 0
-              ? "Für exakt diese Frage liegt in einem anderen Suchmodus ein gespeichertes Ergebnis vor. Stellen Sie die Frage erneut in diesem Modus, oder schalten Sie oben um."
-              : "Stellen Sie eine Frage zu Ihrem System. Jede Frage wird isoliert beantwortet — ohne Chat-Verlauf."
-          }
+          message="Stellen Sie eine Frage zu Ihrem System. Jede Frage wird isoliert beantwortet — ohne Chat-Verlauf."
         />
       ) : null}
 
       {!pending && result?.status === "error" ? (
         <section className="space-y-3">
-          {fromSessionCache ? (
-            <p className="muted text-xs">
-              Gespeichertes Ergebnis für exakt diese Frage und diesen Suchmodus
-              {submittedQuestion
-                ? ` · ${searchModeLabel(result.searchMode ?? mode)}`
-                : ""}
-            </p>
-          ) : null}
           <InlineError title="Frage nicht möglich" message={result.message} />
           {result.technicalDetails ? (
             <TechnicalDetailsBlock
@@ -1259,13 +1553,6 @@ export function AskQuestionPanel({
       {!pending &&
       (result?.status === "ok" || result?.status === "insufficient") ? (
         <section className="space-y-3 sm:space-y-4">
-          {fromSessionCache ? (
-            <p className="muted text-xs">
-              Gespeichertes Ergebnis für exakt diese Frage und diesen Suchmodus
-              · erneut „Frage stellen“ startet eine isolierte Neu-Berechnung.
-            </p>
-          ) : null}
-
           <ProcessAnswerBlock
             process={result.processAnswer}
             fallbackAnswer={result.answer}
@@ -1273,23 +1560,36 @@ export function AskQuestionPanel({
             status={result.status}
           />
 
-          <SearchModeSummary result={result} />
+          {result.status !== "insufficient" ||
+          (result.technicalAnswer &&
+            Object.values(result.technicalAnswer).some(
+              (v) => Array.isArray(v) && v.length > 0,
+            )) ? (
+            <TechnicalAnswerBlock technical={result.technicalAnswer} />
+          ) : null}
 
-          {result.searchMode === "planned_rag" && result.queryPlan ? (
+          <SearchModeSummary result={result} canUseVollanalyse={canUseVollanalyse} />
+
+          {result.searchMode === "full_analysis" &&
+          result.fullAnalysisReport ? (
+            <FullAnalysisDownloadBar report={result.fullAnalysisReport} />
+          ) : null}
+
+          {(result.searchMode === "planned_rag" ||
+            result.searchMode === "full_analysis") &&
+          result.queryPlan ? (
             <SearchPlanBlock plan={result.queryPlan} />
           ) : null}
 
-          {result.status !== "insufficient" ? (
-            <CompactTechnicalDetailsBlock
-              compact={result.compactTechnicalDetails}
-              entityGrounding={result.entityGrounding}
-              rawDetails={result.technicalDetails}
-              retrievalMode={result.retrievalMode}
-              topScore={result.topScore}
-              vectorSearchActive={result.vectorSearchActive}
-              searchedDocumentCount={result.searchedDocumentCount}
-            />
-          ) : null}
+          <CompactTechnicalDetailsBlock
+            compact={result.compactTechnicalDetails}
+            entityGrounding={result.entityGrounding}
+            rawDetails={result.technicalDetails}
+            retrievalMode={result.retrievalMode}
+            topScore={result.topScore}
+            vectorSearchActive={result.vectorSearchActive}
+            searchedDocumentCount={result.searchedDocumentCount}
+          />
 
           {result.warnings?.length ? (
             <ul className="list-disc space-y-1 pl-4 text-xs text-[var(--muted)]">

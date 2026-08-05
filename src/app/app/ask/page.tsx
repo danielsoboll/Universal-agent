@@ -1,4 +1,4 @@
-import { primaryCustomerId, requireAppAccess } from "@/lib/onboarding/access";
+import { primaryCustomerId, requireAppAccess, canMutateProjectSetup } from "@/lib/onboarding/access";
 import { AskQuestionPanel } from "@/components/app/AskQuestionPanel";
 import { EmptyState } from "@/components/ui/states";
 
@@ -17,6 +17,8 @@ export default async function AppAskPage() {
     );
   }
 
+  const canUseVollanalyse = canMutateProjectSetup(ctx, customerId);
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <div>
@@ -24,7 +26,10 @@ export default async function AppAskPage() {
           Fragen
         </h1>
       </div>
-      <AskQuestionPanel customerId={customerId} />
+      <AskQuestionPanel
+        customerId={customerId}
+        canUseVollanalyse={canUseVollanalyse}
+      />
     </div>
   );
 }

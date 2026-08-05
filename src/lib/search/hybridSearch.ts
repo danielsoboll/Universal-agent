@@ -12,6 +12,11 @@ import {
 } from "@/lib/search/buildLocalSearchIndex";
 import { normalizeSearchToken } from "@/lib/search/buildSearchText";
 import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
+import {
+  documentSymbolHaystack,
+  extractTechnicalSymbols,
+  haystackMatchesSymbol,
+} from "@/lib/search/technicalSymbols";
 
 /** Fixed generic weights — not tuned to evaluation questions. */
 const W_EXACT = 4;
@@ -255,6 +260,8 @@ export async function hybridSearch(params: {
   );
   const terms = lexicalQueryTerms(query);
   const exactTerms = exactQueryTerms(query);
+  const technicalSymbols = extractTechnicalSymbols(query);
+  const symbolNeedles = technicalSymbols.map((s) => s.norm);
 
   type Acc = {
     exact: number;
@@ -262,24 +269,51 @@ export async function hybridSearch(params: {
     vector: number;
     meta: number;
     matched: Set<string>;
+    /** Forced technical symbol hit — must not be dropped by type filters. */
+    symbol_forced: boolean;
   };
   const scores = new Map<string, Acc>();
 
-  const bump = (id: string, patch: Partial<Acc> & { term?: string }) => {
+  const bump = (
+    id: string,
+    patch: Partial<Acc> & { term?: string; symbol_forced?: boolean },
+  ) => {
     const cur = scores.get(id) ?? {
       exact: 0,
       fulltext: 0,
       vector: 0,
       meta: 0,
       matched: new Set<string>(),
+      symbol_forced: false,
     };
     if (patch.exact) cur.exact += patch.exact;
     if (patch.fulltext) cur.fulltext += patch.fulltext;
     if (patch.vector) cur.vector = Math.max(cur.vector, patch.vector);
     if (patch.meta) cur.meta += patch.meta;
     if (patch.term) cur.matched.add(patch.term);
+    if (patch.symbol_forced) cur.symbol_forced = true;
     scores.set(id, cur);
   };
+
+  // 0) Global exact / substring symbol search BEFORE semantic scoring.
+  // Technical hits must survive even if knowledge_unit_type filters disagree.
+  if (symbolNeedles.length > 0) {
+    for (const doc of params.documents) {
+      const hay = documentSymbolHaystack(doc);
+      let matched = 0;
+      for (const needle of symbolNeedles) {
+        if (haystackMatchesSymbol(hay, needle)) {
+          matched += 1;
+          bump(doc.search_document_id, {
+            exact: needle.length >= 6 ? 3 : 2,
+            term: `sym:${needle}`,
+            symbol_forced: true,
+          });
+        }
+      }
+      if (matched === 0) continue;
+    }
+  }
 
   // 1) exact term → exact_index
   for (const term of exactTerms) {
@@ -383,10 +417,11 @@ export async function hybridSearch(params: {
   for (const [id, s] of scores) {
     const doc = documentsById.get(id);
     if (!doc) continue;
-    if (
+    const typeFiltered =
       options.knowledge_unit_types &&
-      !options.knowledge_unit_types.includes(doc.knowledge_unit_type)
-    ) {
+      !options.knowledge_unit_types.includes(doc.knowledge_unit_type);
+    // Technical symbol hits bypass type filters (wrong business object type in question)
+    if (typeFiltered && !s.symbol_forced) {
       continue;
     }
     if (options.metadata_filters && Object.keys(options.metadata_filters).length) {

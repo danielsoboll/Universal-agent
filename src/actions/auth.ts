@@ -2,34 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import {
-  canAccessApp,
-  canAccessProjectConsole,
-  getAccessContext,
-} from "@/lib/onboarding/access";
-
-function safeNextPath(raw: string): string | null {
-  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  return null;
-}
-
-async function resolvePostLoginPath(): Promise<string> {
-  try {
-    const ctx = await getAccessContext();
-    if (!ctx) return "/";
-    // Projekt-Admin, Projekt-Benutzer und General Admin → Dashboard
-    if (canAccessProjectConsole(ctx)) return "/admin/dashboard";
-    if (canAccessApp(ctx)) return "/app/ask";
-  } catch {
-    /* Schema/Profil noch nicht verfügbar */
-  }
-  return "/";
-}
 
 export async function signInWithPassword(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const nextRaw = String(formData.get("next") ?? "").trim();
 
   if (!email || !password) {
     redirect(
@@ -51,12 +27,8 @@ export async function signInWithPassword(formData: FormData) {
     );
   }
 
-  const next = safeNextPath(nextRaw);
-  if (next && next !== "/login") {
-    redirect(next);
-  }
-
-  redirect(await resolvePostLoginPath());
+  // First screen for every role — navigate to dashboard/app from there.
+  redirect("/");
 }
 
 /** Fallback — bevorzugter Logout: POST /auth/signout */

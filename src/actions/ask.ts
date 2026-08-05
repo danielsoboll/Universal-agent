@@ -2,96 +2,22 @@
 
 import {
   canAccessApp,
+  canMutateProjectSetup,
   getAccessContext,
 } from "@/lib/onboarding/access";
 import { answerQuestion } from "@/lib/knowledge/answerQuestion";
 import { resolveAskLocalProject } from "@/lib/knowledge/resolveAskProject";
 import type {
-  CompactTechnicalDetails,
-  ProcessAnswer,
-  TechnicalDetails,
-} from "@/lib/knowledge/answerSchema";
-import type { QueryPlan, SearchMode } from "@/lib/knowledge/queryPlanSchema";
-import type { EntityGroundingResult } from "@/lib/knowledge/entityGrounding";
+  AskEvidenceRef,
+  AskQuestionInput,
+  AskQuestionResult,
+} from "@/lib/app/askTypes";
 
-export type AskEvidenceRef = {
-  title: string;
-  sourceKey?: string;
-  snippet?: string;
-  rank?: number;
-  score?: number;
-  exactScore?: number;
-  fulltextScore?: number;
-  vectorScore?: number;
-  knowledgeUnitType?: string;
-  objectLabel?: string;
-  objectType?: string;
-  objectName?: string;
-  subobjectName?: string;
-  evidenceRefs?: string[];
-  facts?: string[];
-  inferences?: string[];
-  tablesRead?: string[];
-  tablesWritten?: string[];
-  calledMethods?: string[];
-  hardcodedValues?: string[];
-  evidence?: Array<{
-    statement_type: string;
-    text?: string;
-    lines?: Array<{ line?: number; quote?: string }>;
-  }>;
-  confidence?: number | null;
-};
-
-export type AskQuestionInput = {
-  question: string;
-  customerId?: string | null;
-  searchMode?: SearchMode;
-};
-
-export type AskQuestionResult = {
-  status: "ok" | "insufficient" | "error" | "not_connected";
-  answer: string | null;
-  reasoning?: string | null;
-  processAnswer?: ProcessAnswer | null;
-  technicalDetails?: TechnicalDetails | null;
-  compactTechnicalDetails?: CompactTechnicalDetails | null;
-  entityGrounding?: EntityGroundingResult[];
-  relevanceGate?: {
-    answerability: "answerable" | "partially_answerable" | "insufficient";
-    queryConcepts: string[];
-    matchedConcepts: string[];
-    missingConcepts: string[];
-    supportingSourceIds: string[];
-    contradictingSourceIds: string[];
-    similarButInsufficientSourceIds: string[];
-    reason: string;
-  } | null;
-  evidence: AskEvidenceRef[];
-  message: string;
-  retrievalMode?: string;
-  searchedDocumentCount?: number;
-  topScore?: number | null;
-  vectorSearchActive?: boolean;
-  model?: string;
-  tokenUsage?: { input: number; output: number; embedding: number };
-  estimatedCost?: number;
-  warnings?: string[];
-  indexPath?: string;
-  searchMode?: SearchMode;
-  requestedSearchMode?: SearchMode;
-  queryPlan?: QueryPlan | null;
-  subqueryCount?: number;
-  plannerFallback?: boolean;
-  durationMs?: number;
-  /** Always false on /app/ask — each question is an isolated knowledge query. */
-  conversationMode?: false;
-  domainProfileId?: string;
-  promptKey?: string;
-  promptVersion?: string;
-  searchProfileId?: string;
-};
-
+export type {
+  AskEvidenceRef,
+  AskQuestionInput,
+  AskQuestionResult,
+} from "@/lib/app/askTypes";
 function mapRelevanceGate(
   gate: Awaited<ReturnType<typeof answerQuestion>>["relevance_gate"],
 ): AskQuestionResult["relevanceGate"] {
@@ -176,6 +102,21 @@ export async function askQuestionAction(
     };
   }
 
+  if (
+    input.searchMode === "full_analysis" &&
+    !canMutateProjectSetup(ctx, customerId)
+  ) {
+    return {
+      status: "error",
+      answer: null,
+      evidence: [],
+      message:
+        "Vollanalyse ist nur für General Admin und Projekt-Admin verfügbar.",
+      searchMode: "full_analysis",
+      requestedSearchMode: "full_analysis",
+    };
+  }
+
   const resolved = await resolveAskLocalProject(customerId);
   if (!resolved.ok) {
     if (resolved.detail) {
@@ -206,8 +147,10 @@ export async function askQuestionAction(
       answer: result.direct_answer || null,
       reasoning: result.reasoning,
       processAnswer: result.process_answer,
+      technicalAnswer: result.technical_answer,
       technicalDetails: result.technical_details,
       compactTechnicalDetails: result.compact_technical_details,
+      questionIntent: result.question_intent,
       entityGrounding: result.entity_grounding,
       relevanceGate: mapRelevanceGate(result.relevance_gate),
       evidence,
@@ -232,6 +175,7 @@ export async function askQuestionAction(
       promptKey: result.prompt_key,
       promptVersion: result.prompt_version,
       searchProfileId: result.search_profile_id,
+      fullAnalysisReport: result.full_analysis_report,
     };
   }
 
@@ -240,8 +184,10 @@ export async function askQuestionAction(
     answer: result.direct_answer,
     reasoning: result.reasoning,
     processAnswer: result.process_answer,
+    technicalAnswer: result.technical_answer,
     technicalDetails: result.technical_details,
     compactTechnicalDetails: result.compact_technical_details,
+    questionIntent: result.question_intent,
     entityGrounding: result.entity_grounding,
     relevanceGate: mapRelevanceGate(result.relevance_gate),
     evidence,
@@ -266,5 +212,6 @@ export async function askQuestionAction(
     promptKey: result.prompt_key,
     promptVersion: result.prompt_version,
     searchProfileId: result.search_profile_id,
+    fullAnalysisReport: result.full_analysis_report,
   };
 }

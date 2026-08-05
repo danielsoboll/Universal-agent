@@ -7,6 +7,7 @@ import {
   buildAskCacheKeyString,
   normalizeAskQuestion,
 } from "../../src/lib/app/askSessionCache";
+import { PLANNED_RAG_PLANNER_VERSION } from "../../src/lib/knowledge/plannedTopicGrounding";
 
 function testNormalize() {
   assert.equal(
@@ -31,9 +32,10 @@ function testKeysSeparateQuestionsAndModes() {
     sessionId: "s1",
     normalizedQuestion: "frage a",
     searchMode: "direct_rag",
+    activeIndexHash: "hash1",
+    plannerVersion: "",
     indexVersion: "indexes/search",
     searchProfileVersion: "search.sap.v1",
-    plannerPromptVersion: "",
     answerPromptVersion: "v1",
   });
   const fullB = buildAskCacheKeyString({
@@ -41,13 +43,51 @@ function testKeysSeparateQuestionsAndModes() {
     sessionId: "s1",
     normalizedQuestion: "frage b",
     searchMode: "direct_rag",
+    activeIndexHash: "hash1",
+    plannerVersion: "",
     indexVersion: "indexes/search",
     searchProfileVersion: "search.sap.v1",
-    plannerPromptVersion: "",
     answerPromptVersion: "v1",
   });
   assert.notEqual(fullA, fullB);
-  console.log("ok cache keys isolate question and mode");
+
+  const planned = buildAskCacheKeyString({
+    projectId: "proj1",
+    sessionId: "s1",
+    normalizedQuestion: "frage a",
+    searchMode: "planned_rag",
+    activeIndexHash: "hash1",
+    plannerVersion: PLANNED_RAG_PLANNER_VERSION,
+    indexVersion: "indexes/search",
+    searchProfileVersion: "search.sap.v1",
+    answerPromptVersion: "v1",
+  });
+  const plannedOtherIndex = buildAskCacheKeyString({
+    projectId: "proj1",
+    sessionId: "s1",
+    normalizedQuestion: "frage a",
+    searchMode: "planned_rag",
+    activeIndexHash: "hash2",
+    plannerVersion: PLANNED_RAG_PLANNER_VERSION,
+    indexVersion: "indexes/search",
+    searchProfileVersion: "search.sap.v1",
+    answerPromptVersion: "v1",
+  });
+  assert.notEqual(planned, plannedOtherIndex, "active_index_hash isolates cache");
+
+  const full = buildAskCacheKeyString({
+    projectId: "proj1",
+    sessionId: "s1",
+    normalizedQuestion: "frage a",
+    searchMode: "full_analysis",
+    activeIndexHash: "hash1",
+    plannerVersion: "full-analysis-v1",
+    indexVersion: "indexes/search",
+    searchProfileVersion: "search.sap.v1",
+    answerPromptVersion: "v1",
+  });
+  assert.notEqual(full, planned, "full_analysis cache key differs from planned_rag");
+  console.log("ok cache keys isolate question, mode, and index hash");
 }
 
 testNormalize();

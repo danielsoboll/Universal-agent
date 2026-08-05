@@ -1,26 +1,48 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import {
+  canAccessApp,
   primaryCustomerId,
   requireAppAccess,
 } from "@/lib/onboarding/access";
+import { EmptyState, InlineError } from "@/components/ui/states";
+import { SetupOverallProgress } from "@/components/admin/setup/SetupOverallProgress";
 import {
-  MODULE_LABELS,
-  type AppModuleKey,
-} from "@/lib/onboarding/appProfileTypes";
-import { EmptyState } from "@/components/ui/states";
-import {
-  FAHRPLAN_STEP_IDS,
-  FAHRPLAN_STEP_META,
-  FAHRPLAN_STEP_STATUS_LABELS_DE,
-  getControlTablesNextAction,
-} from "@/lib/rebuild/controlTablesFahrplanTypes";
-import { reconcileControlTablesFahrplanFromDisk } from "@/lib/rebuild/controlTablesFahrplan";
-import { getLocalDataRoot } from "@/lib/localData/root";
+  buildDashboardOverview,
+  loadScopedCustomers,
+} from "@/lib/admin/loadDashboardSetup";
 
-export default async function AppOverviewPage() {
+export default async function AppOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customer?: string }>;
+}) {
   const ctx = await requireAppAccess();
-  const customerId = primaryCustomerId(ctx);
+  const sp = await searchParams;
+
+  const { customers, error: customersError } = await loadScopedCustomers(ctx);
+  if (customersError) {
+    console.error("[app] customers", customersError);
+    return (
+      <div className="space-y-3">
+        <h1 className="text-[1.5rem] font-semibold tracking-tight sm:text-[1.75rem]">
+          Übersicht
+        </h1>
+        <InlineError
+          title="Projekte nicht ladbar"
+          message="Die Projektliste konnte nicht geladen werden. Bitte später erneut versuchen."
+        />
+      </div>
+    );
+  }
+
+  // Prefer explicit ?customer=, then profile primary, then first membership.
+  const requestedId = sp.customer || primaryCustomerId(ctx) || customers[0]?.id;
+  const customerId =
+    requestedId &&
+    customers.some((c) => c.id === requestedId) &&
+    canAccessApp(ctx, requestedId)
+      ? requestedId
+      : customers[0]?.id;
 
   if (!customerId && !ctx.isPlatformAdmin && !ctx.isGeneralAdmin) {
     return (
@@ -33,139 +55,85 @@ export default async function AppOverviewPage() {
     );
   }
 
-  const supabase = await createClient();
-  let customerName = ctx.customerName;
-  let productModule: AppModuleKey = ctx.productModule;
-  let status: string | null = null;
-  let projectKey = (ctx.customerSlug ?? "").trim() || "P01";
+  const selectedCustomer =
+    customers.find((c) => c.id === customerId) ?? null;
 
-  if (customerId) {
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("name, status, product_module, slug")
-      .eq("id", customerId)
-      .maybeSingle();
-    if (customer) {
-      customerName = customer.name;
-      status = customer.status;
-      if (customer.product_module) {
-        productModule = customer.product_module as AppModuleKey;
-      }
-      if (customer.slug) projectKey = customer.slug;
-    }
-  }
+  const overview =
+    customerId && selectedCustomer
+      ? await buildDashboardOverview({
+          ctx,
+          customerId,
+          selected: selectedCustomer,
+        })
+      : null;
 
-  let ctError: string | null = null;
-  let percent = 0;
-  let done = 0;
-  let nextLabel = "Z-/Y-Tabellen: Quelldateien erkennen";
-  let stepRows: Array<{
-    id: number;
-    title: string;
-    statusLabel: string;
-    ok: boolean;
-  }> = [];
-
-  try {
-    getLocalDataRoot();
-    const state = reconcileControlTablesFahrplanFromDisk(projectKey);
-    done = FAHRPLAN_STEP_IDS.filter(
-      (id) => state.steps[id].status === "success",
-    ).length;
-    percent = Math.round((done / FAHRPLAN_STEP_IDS.length) * 100);
-    nextLabel = getControlTablesNextAction(state).label;
-    stepRows = FAHRPLAN_STEP_IDS.map((id) => ({
-      id,
-      title: FAHRPLAN_STEP_META[id].title,
-      statusLabel: FAHRPLAN_STEP_STATUS_LABELS_DE[state.steps[id].status],
-      ok: state.steps[id].status === "success",
-    }));
-  } catch (error) {
-    ctError =
-      error instanceof Error
-        ? error.message
-        : "Lokale Daten nicht verfügbar.";
-  }
+  const showProjectSwitcher = customers.length > 1;
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          Projektübersicht
+        <h1 className="text-[1.5rem] font-semibold tracking-tight sm:text-[1.75rem]">
+          Übersicht
         </h1>
-        <p className="muted mt-1 text-sm">
-          {customerName ?? "Projekt"}
-          {" · "}
-          {MODULE_LABELS[productModule]}
-          {status ? ` · ${status}` : ""}
-        </p>
+        {selectedCustomer ? (
+          <p className="mt-1 text-[0.9375rem] text-[var(--muted)] break-words">
+            {selectedCustomer.name}
+          </p>
+        ) : null}
       </div>
 
-      <section className="panel compact space-y-3 p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-              Datenimport
-            </p>
-            <p className="text-3xl font-semibold tracking-tight">{percent}%</p>
-            <p className="muted mt-1 text-sm">
-              {done} von {FAHRPLAN_STEP_IDS.length} technischen Schritten OK
-            </p>
-          </div>
-          <Link href="/app/ask" className="btn btn-primary">
-            Frage stellen
-          </Link>
-        </div>
-        <div
-          className="h-2 overflow-hidden rounded-full"
-          style={{ background: "var(--border)" }}
-          role="progressbar"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div
-            className="h-full rounded-full bg-[var(--accent)] transition-all"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <p className="text-sm">
-          Nächste Aktion: <span className="font-medium">{nextLabel}</span>
-        </p>
-        {ctError ? (
-          <p className="text-sm text-[var(--danger)]">{ctError}</p>
-        ) : null}
-      </section>
+      <Link
+        href="/app/ask"
+        className="btn btn-primary flex min-h-12 w-full items-center justify-center text-[1.0625rem]"
+      >
+        Frage stellen
+      </Link>
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Z-/Y-Tabellen · Status</h2>
-          <p className="muted text-sm">
-            Technischer Importstand für{" "}
-            <code className="font-mono">{projectKey}</code>
+      {showProjectSwitcher ? (
+        <section className="rounded-[12px] border border-[var(--border)] bg-[var(--panel)] p-3">
+          <p className="text-[0.875rem] font-medium text-[var(--muted)]">
+            Projekt wechseln
           </p>
-        </div>
-        {stepRows.length ? (
-          <ul className="space-y-2">
-            {stepRows.map((step) => (
-              <li key={step.id} className="panel compact p-3 sm:p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span aria-hidden>{step.ok ? "✓" : "○"}</span>
-                  <p className="font-medium">
-                    {step.id}. {step.title}
-                  </p>
-                  <span className="muted text-sm">{step.statusLabel}</span>
-                </div>
-              </li>
-            ))}
+          <ul className="mt-2 space-y-1">
+            {customers.map((c) => {
+              const current = c.id === customerId;
+              return (
+                <li key={c.id}>
+                  <Link
+                    href={`/app?customer=${c.id}`}
+                    className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-[1.0625rem] ${
+                      current
+                        ? "project-current font-medium text-[var(--foreground)]"
+                        : "border-transparent bg-[var(--surface)]/60 hover:border-[var(--border)]"
+                    }`}
+                  >
+                    <span className="min-w-0 break-words">{c.name}</span>
+                    {current ? (
+                      <span className="project-current-label shrink-0">
+                        Aktuell
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
-        ) : (
-          <EmptyState
-            title="Kein Importstatus"
-            message="Sobald der Admin den technischen Datenimport startet, erscheint hier der Status."
-          />
-        )}
-      </section>
+        </section>
+      ) : null}
+
+      {overview ? (
+        <SetupOverallProgress
+          percent={overview.overallPercent}
+          doneCount={overview.doneCount}
+          totalCount={overview.totalCount}
+          sentence={overview.overallSentence}
+        />
+      ) : (
+        <EmptyState
+          title="Kein Projekt zugeordnet"
+          message="Ihrem Konto ist noch kein Kundenprojekt zugewiesen"
+        />
+      )}
     </div>
   );
 }

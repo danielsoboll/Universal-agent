@@ -8,7 +8,7 @@ import type { AppModuleKey } from "@/lib/onboarding/appProfileTypes";
 /**
  * Compact admin chrome for the SAP data-import setup app.
  * Sticky: global header (logo + name + theme) + back link only.
- * Logout lives only on the start page (/).
+ * Logo → Startseite (/); Logout lives on the start page.
  */
 export function AdminShell({
   agentTitle,
@@ -35,7 +35,7 @@ export function AdminShell({
             <BrandMark
               size={22}
               withName
-              href="/admin/dashboard"
+              href="/"
               title={agentTitle}
               logoUrl={logoUrl}
             />

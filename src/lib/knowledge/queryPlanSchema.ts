@@ -3,7 +3,11 @@ import type { DomainProfile, NonEmptyTuple } from "@/lib/domain/types";
 
 export const QUERY_PLAN_SCHEMA_VERSION = "query-plan-v1" as const;
 
-export type SearchMode = "direct_rag" | "planned_rag";
+export type SearchMode =
+  | "direct_rag"
+  | "planned_rag"
+  | "full_analysis"
+  | "deep_search";
 
 /** Soft query-plan shape — allowed enums come from the active DomainProfile. */
 export type QueryPlanEntity = {

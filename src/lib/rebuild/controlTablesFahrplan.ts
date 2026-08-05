@@ -2252,39 +2252,39 @@ async function runStep6Smoke(projectKey: string): Promise<FahrplanStepResult> {
   try {
     const { answerQuestion } = await import("@/lib/knowledge/answerQuestion");
 
-    const edekaQ = "Was ist zu Edeka virtuellen Lager hinterlegt?";
-    const edeka = await answerQuestion({
+    const sampleQ = "Was ist zum virtuellen Lager hinterlegt?";
+    const sample = await answerQuestion({
       projectId: projectKey,
-      question: edekaQ,
+      question: sampleQ,
       searchMode: "direct_rag",
     });
-    const edekaSourcesOk = sourcesAreCurrentQ01(edeka.sources);
-    const edekaHasEvidence =
-      edeka.sources.length > 0 &&
-      (Boolean(edeka.technical_details) ||
-        Boolean(edeka.compact_technical_details));
-    const edekaNoInvented =
-      edeka.status !== "ok" ||
-      (edeka.sources.length > 0 &&
-        edeka.relevance_gate?.answerability !== "insufficient");
+    const sampleSourcesOk = sourcesAreCurrentQ01(sample.sources);
+    const sampleHasEvidence =
+      sample.sources.length > 0 &&
+      (Boolean(sample.technical_details) ||
+        Boolean(sample.compact_technical_details));
+    const sampleNoInvented =
+      sample.status !== "ok" ||
+      (sample.sources.length > 0 &&
+        sample.relevance_gate?.answerability !== "insufficient");
     // Pass when: sources+tech evidence returned AND no invented positive without evidence
     // insufficient with similar sources is OK; error is fail; ok without sources is fail
-    const edekaOk =
-      edeka.status !== "error" &&
-      edekaHasEvidence &&
-      edekaSourcesOk.ok &&
-      !(edeka.status === "ok" && edeka.sources.length === 0) &&
-      edekaNoInvented;
+    const sampleOk =
+      sample.status !== "error" &&
+      sampleHasEvidence &&
+      sampleSourcesOk.ok &&
+      !(sample.status === "ok" && sample.sources.length === 0) &&
+      sampleNoInvented;
     samples.push({
-      query: edekaQ,
-      ok: edekaOk,
-      detail: edekaOk
-        ? `Direct RAG status=${edeka.status}, sources=${edeka.sources.length}, ${edekaSourcesOk.detail}`
-        : `Direct RAG status=${edeka.status}, sources=${edeka.sources.length}, ${edekaSourcesOk.detail}, message=${edeka.message ?? edeka.direct_answer?.slice(0, 120) ?? ""}`,
+      query: sampleQ,
+      ok: sampleOk,
+      detail: sampleOk
+        ? `Direct RAG status=${sample.status}, sources=${sample.sources.length}, ${sampleSourcesOk.detail}`
+        : `Direct RAG status=${sample.status}, sources=${sample.sources.length}, ${sampleSourcesOk.detail}, message=${sample.message ?? sample.direct_answer?.slice(0, 120) ?? ""}`,
     });
     smoke.push({
-      name: "Direct RAG: Edeka virtuellen Lager",
-      ok: edekaOk,
+      name: "Direct RAG: virtuelles Lager (Smoke)",
+      ok: sampleOk,
       detail: samples[samples.length - 1]!.detail,
     });
 

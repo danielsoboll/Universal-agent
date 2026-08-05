@@ -28,10 +28,15 @@ function main() {
 
   assert.equal(SETUP_MAIN_STEP_META[1].title, "Initialisierung");
   assert.equal(SETUP_MAIN_STEP_META[2].title, "Projekt- und Agent-Struktur");
-  assert.equal(SETUP_MAIN_STEP_META[3].title, "Exporte Teil 1");
+  assert.equal(SETUP_MAIN_STEP_META[3].title, "Datenbasis");
   assert.equal(SETUP_MAIN_STEP_META[4].title, "Validierung");
   assert.equal(SETUP_MAIN_STEP_META[5].title, "Export Teil 2 und Feintuning");
   assert.equal(SETUP_MAIN_STEP_META[6].title, "Schulung und Nutzung");
+
+  assert.deepEqual(
+    SETUP_MAIN_STEP_META[2].subTaskDefs.map((s) => s.id),
+    ["folders_ok", "manual_complete"],
+  );
 
   // Without LOCAL_DATA_ROOT, compute may set localDataError — still must lock 2–6
   // if step 1 is not done.

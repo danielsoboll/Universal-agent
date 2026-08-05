@@ -94,9 +94,16 @@ function listJsonlInRawFolder(
     );
   }
 
-  const entries = listRawEntries(projectKey, ...folderParts).filter(
-    (name) => !name.startsWith(".") && name.toLowerCase().endsWith(".jsonl"),
-  );
+  const entries = listRawEntries(projectKey, ...folderParts).filter((name) => {
+    if (name.startsWith(".") || name === "_quarantine") return false;
+    if (!name.toLowerCase().endsWith(".jsonl")) return false;
+    try {
+      const absolutePath = resolveRawPath(projectKey, ...folderParts, name);
+      return existsSync(absolutePath) && statSync(absolutePath).isFile();
+    } catch {
+      return false;
+    }
+  });
 
   return entries
     .map((fileName) => {

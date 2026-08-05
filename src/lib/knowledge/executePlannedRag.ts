@@ -16,6 +16,17 @@ import {
   type AggregatedKnowledgeHit,
   type PlannedRetrievalResult,
 } from "@/lib/knowledge/executeQueryPlan";
+import {
+  PLANNED_RAG_PLANNER_VERSION,
+  buildPlannedRunDebugLog,
+  createPlannedRagRunState,
+  groundPlannedCandidates,
+  logPlannedRunDebug,
+  synthesisHitsFromTopicGrounding,
+  type PlannedRunDebugLog,
+  type TopicExclusion,
+  type TopicGroundedHit,
+} from "@/lib/knowledge/plannedTopicGrounding";
 
 const BASELINE_SUBQUERY_ID = "baseline";
 const MAX_PLANNED_SUBQUERIES = 4;
@@ -143,18 +154,32 @@ export type PlannedRagDiagnostics = {
     top: Array<{ rank: number; source_key: string; combined_score: number }>;
   }>;
   refined_subquery_count: number;
+  topic_excluded: TopicExclusion[];
+  topic_statuses: Array<{
+    source_key: string;
+    topic_status: TopicGroundedHit["topic_status"];
+    reason: string;
+  }>;
 };
 
 export type PlannedRagExecutionResult = PlannedRetrievalResult & {
   diagnostics: PlannedRagDiagnostics;
   refined_plan_subqueries: QueryPlanSubquery[];
+  /** Fresh per call — never reused across questions. */
+  run_id: string;
+  topic_grounded_hits: TopicGroundedHit[];
+  run_debug: PlannedRunDebugLog;
+  planner_version: string;
 };
 
 /**
- * planned_rag retrieval:
+ * planned_rag retrieval (isolated per call):
  * 1) unchanged direct search on the original question (baseline)
- * 2) refined planner subqueries (additive)
+ * 2) refined planner subqueries (additive — never replace baseline)
  * 3) merge with baseline protection
+ * 4) topic grounding → drop entity-only / off-topic candidates
+ *
+ * No previous Q/A, plans, candidates, or session memory are read or reused.
  */
 export async function executePlannedRagRetrieval(params: {
   project: LocalProject;
@@ -164,7 +189,11 @@ export async function executePlannedRagRetrieval(params: {
   searchProfile: DomainSearchProfile;
   limitPerSubquery?: number;
   finalLimit?: number;
+  /** Optional override for tests; otherwise a fresh id per call. */
+  runId?: string;
 }): Promise<PlannedRagExecutionResult> {
+  // Fresh run container — never mutate/reuse a prior run object.
+  const run = createPlannedRagRunState(params.originalQuestion, params.runId);
   const warnings: string[] = [];
   const finalLimit = params.finalLimit ?? 12;
   const limitPerSubquery = params.limitPerSubquery ?? 8;
@@ -182,6 +211,7 @@ export async function executePlannedRagRetrieval(params: {
     params.project,
   );
   const refined = refinePlanSubqueries(params.plan);
+  run.subqueries = refined.map((sq) => ({ id: sq.id, query: sq.query }));
   const mapping = params.domainProfile.targetTypeToKnowledgeUnitType;
   const metaFields = params.searchProfile.metadataFields;
   const confidence = params.plan.planner_confidence ?? 0;
@@ -232,7 +262,11 @@ export async function executePlannedRagRetrieval(params: {
     embeddingCost += result.query_embedding_cost;
     vectorActive = vectorActive || result.vector_search_active;
     warnings.push(...result.warnings.map((w) => `[${sq.id}] ${w}`));
-    perSubquery.push({ subqueryId: sq.id, hits: result.hits });
+    // Copy hits into run-local arrays (no shared global candidate list).
+    perSubquery.push({
+      subqueryId: sq.id,
+      hits: result.hits.map((h) => ({ ...h })),
+    });
     subqueryTops.push({
       subquery_id: sq.id,
       query: sq.query,
@@ -245,10 +279,59 @@ export async function executePlannedRagRetrieval(params: {
     });
   }
 
-  const hits = fuseBaselineAndSubqueries({
-    baselineHits: baseline.hits,
+  const fused = fuseBaselineAndSubqueries({
+    baselineHits: baseline.hits.map((h) => ({ ...h })),
     perSubquery,
-    finalLimit,
+    finalLimit: Math.max(finalLimit * 2, 24),
+  });
+  run.candidates_before = fused.map((h) => ({ ...h }));
+
+  // --- 4) Topic grounding before evidence / synthesis admission ---
+  const grounded = groundPlannedCandidates({
+    run_id: run.run_id,
+    question: params.originalQuestion,
+    plan: params.plan,
+    candidates: fused,
+  });
+  const { synthesis_hits } = synthesisHitsFromTopicGrounding(grounded.kept);
+  const limited = synthesis_hits.slice(0, finalLimit).map((h, i) => ({
+    ...h,
+    rank: i + 1,
+  }));
+
+  run.candidates_after = limited;
+  run.excluded = grounded.excluded;
+  run.evidence_ids = limited.map((h) => h.search_document_id);
+  run.synthesis_context_ids = limited.map((h) => h.search_document_id);
+
+  const run_debug = buildPlannedRunDebugLog({
+    state: run,
+    topic_concepts: grounded.topic_concepts,
+    topic_phrases: grounded.topic_phrases,
+    entity_anchors: grounded.entity_anchors,
+  });
+  logPlannedRunDebug(run_debug);
+
+  if (grounded.excluded.length > 0) {
+    warnings.push(
+      `[topic_ground] ${grounded.excluded.length} fachfremde Kandidaten entfernt.`,
+    );
+  }
+
+  const hits: AggregatedKnowledgeHit[] = limited.map((h) => {
+    const { topic_status: _ts, topic_reason: _tr, topic_matched: _tm, ...rest } =
+      h;
+    void _ts;
+    void _tr;
+    void _tm;
+    const agg = rest as AggregatedKnowledgeHit;
+    return {
+      ...agg,
+      matched_subqueries: agg.matched_subqueries ?? [],
+      source_ranks: agg.source_ranks ?? [agg.rank],
+      aggregate_score: agg.aggregate_score ?? agg.combined_score,
+      evidence_coverage: agg.evidence_coverage ?? [],
+    };
   });
 
   return {
@@ -261,6 +344,10 @@ export async function executePlannedRagRetrieval(params: {
     query_embedding_cost: embeddingCost,
     warnings: [...new Set(warnings)],
     refined_plan_subqueries: refined,
+    run_id: run.run_id,
+    topic_grounded_hits: limited,
+    run_debug,
+    planner_version: PLANNED_RAG_PLANNER_VERSION,
     diagnostics: {
       baseline_top: baseline.hits.slice(0, 20).map((h) => ({
         rank: h.rank,
@@ -269,6 +356,12 @@ export async function executePlannedRagRetrieval(params: {
       })),
       subquery_tops: subqueryTops,
       refined_subquery_count: refined.length,
+      topic_excluded: grounded.excluded,
+      topic_statuses: grounded.kept.map((h) => ({
+        source_key: h.source_key,
+        topic_status: h.topic_status,
+        reason: h.topic_reason,
+      })),
     },
   };
 }
