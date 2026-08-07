@@ -52,6 +52,8 @@ export function decideSearchBudgetAfterLocalExact(params: {
   searchMode: SearchMode;
   localHits: KnowledgeHit[];
   onDemandLimit?: number;
+  /** When true: literal-index was primary and returned 0 — do not escalate to vector. */
+  literalMiss?: boolean;
 }): SearchBudgetGateDecision {
   const named = extractNamedExternalEntity(params.question);
   const anchors = namedEntityTechnicalAnchors(params.question);
@@ -80,6 +82,31 @@ export function decideSearchBudgetAfterLocalExact(params: {
   diag.cache_hits = coverage.cache_hits;
   diag.on_demand_limit = onDemandLimit;
   diag.notes.push(coverage.reason);
+
+  // Literal-Index Miss: stay closed — no 284MB embedding load
+  if (params.literalMiss) {
+    diag.stage_reached = "LOCAL_EXACT";
+    diag.blocked_reason =
+      "LITERAL_INDEX: kein belegter Treffer — Vector/Embeddings nicht geladen.";
+    diag.notes.push(
+      "Literal-Suche ohne Treffer; semantische Escalation unterdrückt.",
+    );
+    return {
+      stage: "LOCAL_EXACT",
+      hits: [],
+      fail_closed: false,
+      fail_closed_message: null,
+      allow_vector_retrieval: false,
+      allow_on_demand_analysis: false,
+      on_demand_limit: onDemandLimit,
+      coverage: {
+        ...coverage,
+        sufficient: true,
+        reason: "Literal-Index ohne Treffer (kein Vector-Fallback).",
+      },
+      diagnostics: diag,
+    };
+  }
 
   // Stage 3 reserved for Vollanalyse / deep_search
   if (

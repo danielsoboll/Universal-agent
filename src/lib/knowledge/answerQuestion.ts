@@ -72,6 +72,15 @@ import {
   type SearchBudgetDiagnostics,
   type SearchBudgetGateDecision,
 } from "@/lib/knowledge/searchBudget";
+import {
+  askPerfBegin,
+  askPerfEnd,
+  askPerfMark,
+  askPerfNote,
+  askPerfRecordOpenAi,
+  getAskPerfReport,
+  type AskPerfReport,
+} from "@/lib/knowledge/askPerf";
 
 function resolveRequestedSearchMode(
   mode: SearchMode | undefined,
@@ -159,6 +168,8 @@ export type AnswerQuestionResult = {
   full_analysis_report: FullAnalysisReport | null;
   /** SEARCH_BUDGET_GATE diagnostics (stage, cache, OpenAI calls). */
   search_budget: SearchBudgetDiagnostics | null;
+  /** Performance timings for this ask (null when not under askPerf ALS). */
+  ask_perf?: AskPerfReport | null;
 };
 
 function emptyResult(
@@ -209,6 +220,7 @@ function emptyResult(
     topic_gate: null,
     full_analysis_report: null,
     search_budget: null,
+    ask_perf: null,
     ...extras,
   };
 }
@@ -246,6 +258,8 @@ confirmed nur mit source_ranks; inferred sprachlich markieren; possible nur offe
 
 /**
  * Shared ask service for CLI and web UI.
+ * When called under `runWithAskPerf`, phase marks are recorded in ALS;
+ * call `finalizeAskPerfOnResult` (or getAskPerfReport) after the last mark.
  */
 export async function answerQuestion(params: {
   projectId: string;
@@ -256,7 +270,35 @@ export async function answerQuestion(params: {
   /** Manually selected search mode. Default: direct_rag */
   searchMode?: SearchMode;
 }): Promise<AnswerQuestionResult> {
+  const result = await answerQuestionCore(params);
+  askPerfMark("answer_complete");
+  askPerfNote(
+    `node_env=${process.env.NODE_ENV ?? "unknown"}; next_dev=${
+      process.env.NODE_ENV !== "production"
+    }`,
+  );
+  // Snapshot only if no outer runner will finalize (report stays null until finalize).
+  return result;
+}
+
+/** Attach ask_perf snapshot after all marks (api_response_sent, etc.). */
+export function finalizeAskPerfOnResult(
+  result: AnswerQuestionResult,
+): AnswerQuestionResult {
+  const report = getAskPerfReport();
+  return { ...result, ask_perf: report };
+}
+
+async function answerQuestionCore(params: {
+  projectId: string;
+  userId?: string;
+  question: string;
+  limit?: number;
+  project?: LocalProject;
+  searchMode?: SearchMode;
+}): Promise<AnswerQuestionResult> {
   const started = Date.now();
+  askPerfMark("answer_question_entered");
   const requestedMode: SearchMode = resolveRequestedSearchMode(
     params.searchMode,
   );
@@ -292,7 +334,9 @@ export async function answerQuestion(params: {
     project = resolved.project;
   }
 
+  askPerfBegin("inspect_project_knowledge");
   const inspected = KnowledgeRetriever.inspect(project);
+  askPerfEnd("inspect_project_knowledge");
   if (!inspected.ok) {
     console.error(
       "[answerQuestion] index validation failed:",
@@ -595,6 +639,7 @@ export async function answerQuestion(params: {
 
     if (searchMode === "direct_rag") {
       // SEARCH_BUDGET_GATE Stage 0: LOCAL_EXACT (no vector / no embedding OpenAI)
+      askPerfBegin("retrieval_search");
       const local = await KnowledgeRetriever.search({
         project,
         query: question,
@@ -602,15 +647,26 @@ export async function answerQuestion(params: {
         searchProfile: capabilities.searchProfile,
         enableVector: false,
       });
+      askPerfEnd("retrieval_search");
+
+      const literalMiss = Boolean(local.access_index?.literal_miss);
+
+      askPerfBegin("technical_symbol_extraction");
       searchBudget = decideSearchBudgetAfterLocalExact({
         question,
         searchMode,
         localHits: local.hits,
+        literalMiss,
       });
+      askPerfEnd("technical_symbol_extraction");
+      askPerfNote(
+        `SEARCH_BUDGET stage=${searchBudget.stage}; local_hits=${local.hits.length}; literal_miss=${literalMiss}`,
+      );
 
       if (
-        searchBudget.stage === "LOCAL_EXACT" &&
-        searchBudget.coverage.sufficient
+        (searchBudget.stage === "LOCAL_EXACT" &&
+          searchBudget.coverage.sufficient) ||
+        !searchBudget.allow_vector_retrieval
       ) {
         retrieval = {
           hits: searchBudget.hits,
@@ -629,6 +685,7 @@ export async function answerQuestion(params: {
         searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
       } else {
         // Stage 1: EXISTING_RETRIEVAL — hybrid over existing indexes (may embed query)
+        askPerfBegin("retrieval_search_vector");
         const full = await KnowledgeRetriever.search({
           project,
           query: question,
@@ -636,6 +693,7 @@ export async function answerQuestion(params: {
           searchProfile: capabilities.searchProfile,
           enableVector: true,
         });
+        askPerfEnd("retrieval_search_vector");
         if (full.query_embedding_tokens > 0) {
           openaiCalls += 1;
           estimatedInputTokens +=
@@ -696,6 +754,7 @@ export async function answerQuestion(params: {
 
   // Deterministic entity grounding — runs before answer synthesis, independent
   // of the LLM. Generic across customers/materials/plants/etc.
+  askPerfBegin("evidence_mapping");
   const queryEntities = extractQueryEntities(question, queryPlan);
   const groundingReport: GroundingReport = groundQueryEntities({
     queryEntities,
@@ -708,6 +767,7 @@ export async function answerQuestion(params: {
     grounding: groundingReport,
     domainProfile: capabilities.domainProfile,
   });
+  askPerfEnd("evidence_mapping");
 
   // Finalize SEARCH_BUDGET after retrieval + gate (no mass analysis).
   if (searchBudget) {
@@ -1130,31 +1190,44 @@ export async function answerQuestion(params: {
       evidenceContext.prompt_text,
     ].join("\n");
 
-    const completion = await client.chat.completions.parse({
-      model: AI_CONFIG.chatModel,
-      // Isolated single-turn ask — never append prior Q&A / history / cache.
-      messages: [
-        {
-          role: "system",
-          content: [
-            capabilities.answerPrompt.text,
-            ANSWER_SCHEMA_HINT,
-            searchMode === "full_analysis"
-              ? FULL_ANALYSIS_SYNTHESIS_ADDENDUM
-              : "",
-            `Domain Profile: ${capabilities.domainProfileId}@${capabilities.domainProfile.version}`,
-            `Suchmodus: ${searchMode}`,
-            "conversation_mode=false — beantworte nur die aktuelle Frage aus den aktuellen Quellen.",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: zodResponseFormat(llmAnswerSchema, "rag_structured_answer"),
-      temperature: 0,
-    });
+    const completion = await (async () => {
+      askPerfBegin("openai_synthesis");
+      const t0 = performance.now();
+      try {
+        return await client.chat.completions.parse({
+          model: AI_CONFIG.chatModel,
+          // Isolated single-turn ask — never append prior Q&A / history / cache.
+          messages: [
+            {
+              role: "system",
+              content: [
+                capabilities.answerPrompt.text,
+                ANSWER_SCHEMA_HINT,
+                searchMode === "full_analysis"
+                  ? FULL_ANALYSIS_SYNTHESIS_ADDENDUM
+                  : "",
+                `Domain Profile: ${capabilities.domainProfileId}@${capabilities.domainProfile.version}`,
+                `Suchmodus: ${searchMode}`,
+                "conversation_mode=false — beantworte nur die aktuelle Frage aus den aktuellen Quellen.",
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
+            },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: zodResponseFormat(
+            llmAnswerSchema,
+            "rag_structured_answer",
+          ),
+          temperature: 0,
+        });
+      } finally {
+        askPerfRecordOpenAi(performance.now() - t0);
+        askPerfEnd("openai_synthesis");
+      }
+    })();
 
+    askPerfBegin("answer_post_processing");
     const parsed = completion.choices[0]?.message?.parsed;
     if (!parsed) {
       throw new AIProviderError({
@@ -1479,6 +1552,7 @@ export async function answerQuestion(params: {
       topic_gate: topicGate,
       full_analysis_report: fullAnalysisReport,
       search_budget: searchBudget?.diagnostics ?? budgetDiag,
+      ask_perf: null,
     };
 
     if (params.userId) {
@@ -1510,6 +1584,7 @@ export async function answerQuestion(params: {
       }
     }
 
+    askPerfEnd("answer_post_processing");
     return result;
   } catch (error) {
     const message =

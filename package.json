@@ -25,6 +25,7 @@
     "index:sync-classes": "tsx scripts/sync-class-index.ts",
     "index:sync-master-fields": "tsx scripts/sync-master-fields.ts",
     "index:search": "tsx scripts/index-search.ts",
+    "index:portable": "tsx scripts/build-portable-index.ts",
     "index:tables": "tsx scripts/index-tables.ts",
     "search": "tsx scripts/search.ts",
     "search:multi": "tsx scripts/multi-source-search.ts",

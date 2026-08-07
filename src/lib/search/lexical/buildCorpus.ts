@@ -6,6 +6,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import path from "path";
 import { resolveProjectZonePath } from "@/lib/localData/paths";
 import type { LexicalDocument } from "@/lib/search/lexical/types";
+import { askPerfTrackedReadFile } from "@/lib/knowledge/askPerf";
+
+function readUtf8Tracked(absPath: string, kind: string): string {
+  const { raw } = askPerfTrackedReadFile(absPath, kind);
+  if (raw) return raw;
+  return readFileSync(absPath, "utf8");
+}
 
 function asString(v: unknown): string {
   return typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim();
@@ -51,7 +58,10 @@ function loadMasterFields(projectKey: string, out: LexicalDocument[]): void {
       const structurePath = path.join(domainDir, table, "structure.jsonl");
       if (!existsSync(structurePath)) continue;
       const rel = `canonical/master-data/${domain}/${table}/structure.jsonl`;
-      for (const line of readFileSync(structurePath, "utf8").split(/\r?\n/)) {
+      for (const line of readUtf8Tracked(
+        structurePath,
+        `lexical:${rel}`,
+      ).split(/\r?\n/)) {
         if (!line.trim()) continue;
         let rec: Record<string, unknown>;
         try {
@@ -157,7 +167,10 @@ function loadControlTables(projectKey: string, out: LexicalDocument[]): void {
     "table_definitions.jsonl",
   );
   if (existsSync(defPath)) {
-    for (const line of readFileSync(defPath, "utf8").split(/\r?\n/)) {
+    for (const line of readUtf8Tracked(
+      defPath,
+      "lexical:canonical/control-tables/table_definitions.jsonl",
+    ).split(/\r?\n/)) {
       if (!line.trim()) continue;
       let rec: Record<string, unknown>;
       try {
@@ -196,7 +209,10 @@ function loadControlTables(projectKey: string, out: LexicalDocument[]): void {
     "table_entities.jsonl",
   );
   if (existsSync(entitiesPath)) {
-    for (const line of readFileSync(entitiesPath, "utf8").split(/\r?\n/)) {
+    for (const line of readUtf8Tracked(
+      entitiesPath,
+      "lexical:canonical/control-tables/table_entities.jsonl",
+    ).split(/\r?\n/)) {
       if (!line.trim()) continue;
       let rec: Record<string, unknown>;
       try {
@@ -244,7 +260,9 @@ function loadCodeUnits(
   );
   if (!existsSync(unitsPath)) return;
   const rel = `canonical/${zone}/code_units.jsonl`;
-  for (const line of readFileSync(unitsPath, "utf8").split(/\r?\n/)) {
+  for (const line of readUtf8Tracked(unitsPath, `lexical:${rel}`).split(
+    /\r?\n/,
+  )) {
     if (!line.trim()) continue;
     let rec: Record<string, unknown>;
     try {
@@ -318,7 +336,9 @@ function loadMessageConfig(projectKey: string, out: LexicalDocument[]): void {
   if (!existsSync(objectsPath)) return;
   const rel = "canonical/message-idoc-config/objects.jsonl";
   let n = 0;
-  for (const line of readFileSync(objectsPath, "utf8").split(/\r?\n/)) {
+  for (const line of readUtf8Tracked(objectsPath, `lexical:${rel}`).split(
+    /\r?\n/,
+  )) {
     if (!line.trim()) continue;
     let rec: Record<string, unknown>;
     try {
@@ -359,7 +379,10 @@ function loadTableProfiles(projectKey: string, out: LexicalDocument[]): void {
     "table_classifications.jsonl",
   );
   if (!existsSync(classPath)) return;
-  for (const line of readFileSync(classPath, "utf8").split(/\r?\n/)) {
+  for (const line of readUtf8Tracked(
+    classPath,
+    "lexical:canonical/control-tables/table_classifications.jsonl",
+  ).split(/\r?\n/)) {
     if (!line.trim()) continue;
     let rec: Record<string, unknown>;
     try {

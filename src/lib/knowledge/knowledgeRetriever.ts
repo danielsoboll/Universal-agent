@@ -1,15 +1,7 @@
-import { existsSync, readFileSync, statSync } from "fs";
-import path from "path";
-import { getLocalDataRoot } from "@/lib/localData/root";
 import type { LocalProject } from "@/lib/localAuth/types";
 import type { DomainSearchProfile } from "@/lib/domain/types";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
-import { parseSearchDocumentsJsonl } from "@/lib/search/buildSearchDocuments";
-import type { LocalSearchIndex } from "@/lib/search/buildLocalSearchIndex";
-import {
-  parseEmbeddingsJsonl,
-  type SearchEmbeddingRecord,
-} from "@/lib/search/embedSearchDocuments";
+import type { SearchEmbeddingRecord } from "@/lib/search/embedSearchDocuments";
 import type { KnowledgeHit } from "@/lib/knowledge/types";
 import { hybridSearch, type HybridSearchHit } from "@/lib/search/hybridSearch";
 import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
@@ -21,6 +13,18 @@ import { normalizeLexicalQuery } from "@/lib/search/lexical/normalizeQuery";
 import { selectUsefulHits } from "@/lib/knowledge/richEvidence";
 import type { LexicalSearchDiagnosis } from "@/lib/search/lexical/types";
 import { BOUND_DATA_PROJECT_KEY } from "@/lib/localData/boundProject";
+import { askPerfNote } from "@/lib/knowledge/askPerf";
+import {
+  getProjectEmbeddings,
+  getProjectSearchBundle,
+} from "@/lib/knowledge/projectKnowledgeCache";
+import {
+  isPortableIndexReady,
+  loadPortableManifest,
+} from "@/lib/portableIndex/indexLoader";
+import { searchViaAccessIndexes } from "@/lib/portableIndex/accessIndexSearch";
+import { namedEntityTechnicalAnchors } from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
+import { existsSync } from "fs";
 
 export type { KnowledgeHit } from "@/lib/knowledge/types";
 
@@ -37,57 +41,15 @@ export type KnowledgeSearchResult = {
   lexical_diagnosis?: LexicalSearchDiagnosis;
   /** Tokens from lexical primary anchors for relation expansion. */
   lexical_expansion_tokens?: string[];
-};
-
-function projectDataRoot(project: LocalProject): string {
-  const override = project.local_data_root?.trim();
-  if (override) return path.resolve(override);
-  return path.join(getLocalDataRoot(), project.customer_id);
-}
-
-function resolveIndexDir(project: LocalProject): string {
-  const root = projectDataRoot(project);
-  const rel = project.active_index_path.replace(/^\/+/, "") || "indexes/search";
-  return path.join(root, rel);
-}
-
-function loadLocalIndex(indexDir: string): LocalSearchIndex {
-  const readJson = (name: string) =>
-    JSON.parse(readFileSync(path.join(indexDir, name), "utf8"));
-  const vectorPath = path.join(indexDir, "vector_index.jsonl");
-  const vector_index = existsSync(vectorPath)
-    ? readFileSync(vectorPath, "utf8")
-        .split(/\r?\n/)
-        .filter((l) => l.trim())
-        .map((l) => JSON.parse(l))
-    : [];
-  return {
-    exact_index: existsSync(path.join(indexDir, "exact_index.json"))
-      ? readJson("exact_index.json")
-      : {},
-    fulltext_index: existsSync(path.join(indexDir, "fulltext_index.json"))
-      ? readJson("fulltext_index.json")
-      : {},
-    metadata_index: existsSync(path.join(indexDir, "metadata_index.json"))
-      ? readJson("metadata_index.json")
-      : {},
-    relation_index: existsSync(path.join(indexDir, "relation_index.json"))
-      ? readJson("relation_index.json")
-      : {},
-    vector_index,
-    manifest: existsSync(path.join(indexDir, "index_manifest.json"))
-      ? readJson("index_manifest.json")
-      : {
-          at: "",
-          document_count: 0,
-          embedding_count: 0,
-          embedding_model: "",
-          embedding_version: "",
-          dimensions: 0,
-          content_fingerprint: "",
-        },
+  /** Access-index path diagnostics (when used). */
+  access_index?: {
+    primary_path: string;
+    indexes_used: string[];
+    literal_miss: boolean;
+    graph_used: boolean;
+    legacy_used: boolean;
   };
-}
+};
 
 export function inspectProjectKnowledge(project: LocalProject): {
   ok: boolean;
@@ -99,65 +61,98 @@ export function inspectProjectKnowledge(project: LocalProject): {
   vector_index_entries: number;
   message: string;
 } {
-  const data_root = projectDataRoot(project);
-  const index_dir = resolveIndexDir(project);
-  const docs_path = path.join(index_dir, "search_documents.jsonl");
-  if (!existsSync(data_root)) {
+  try {
+    const bundle = getProjectSearchBundle(project);
+    if (!existsSync(bundle.data_root)) {
+      console.error(
+        "[KnowledgeRetriever.inspect] Datenverzeichnis fehlt:",
+        bundle.data_root,
+      );
+      return {
+        ok: false,
+        data_root: bundle.data_root,
+        index_dir: bundle.index_dir,
+        docs_path: bundle.docs_path,
+        document_count: 0,
+        has_embeddings: false,
+        vector_index_entries: 0,
+        message: "Projekt nicht konfiguriert",
+      };
+    }
+
+    const projectKey = project.customer_id?.trim() || BOUND_DATA_PROJECT_KEY || "P01";
+    if (bundle.access_index_mode || isPortableIndexReady(projectKey)) {
+      const manifest = loadPortableManifest(projectKey);
+      const count =
+        manifest?.counts.evidence_documents ??
+        manifest?.counts.symbols ??
+        0;
+      askPerfNote(
+        `inspectProjectKnowledge: ACCESS_INDEX mode (${count} evidence refs, portable ready)`,
+      );
+      return {
+        ok: count > 0,
+        data_root: bundle.data_root,
+        index_dir: bundle.index_dir,
+        docs_path: bundle.docs_path,
+        document_count: count,
+        has_embeddings: bundle.has_embeddings_file,
+        vector_index_entries: 0,
+        message:
+          count > 0
+            ? `Access Indices bereit (${count} Evidence-Refs), Embeddings: ${bundle.has_embeddings_file ? "ja (lazy)" : "nein"}`
+            : "Access Indices leer",
+      };
+    }
+
+    if (!existsSync(bundle.docs_path)) {
+      console.error(
+        "[KnowledgeRetriever.inspect] SearchDocuments fehlen:",
+        bundle.docs_path,
+      );
+      return {
+        ok: false,
+        data_root: bundle.data_root,
+        index_dir: bundle.index_dir,
+        docs_path: bundle.docs_path,
+        document_count: 0,
+        has_embeddings: bundle.has_embeddings_file,
+        vector_index_entries: bundle.index.vector_index.length,
+        message: "Wissensindex fehlt",
+      };
+    }
+    askPerfNote(
+      `inspectProjectKnowledge: bundle ${bundle.from_cache ? "cache HIT" : "loaded"} (${bundle.documents.length} docs)`,
+    );
+    return {
+      ok: bundle.documents.length > 0,
+      data_root: bundle.data_root,
+      index_dir: bundle.index_dir,
+      docs_path: bundle.docs_path,
+      document_count: bundle.documents.length,
+      has_embeddings: bundle.has_embeddings_file,
+      vector_index_entries: bundle.index.vector_index.length,
+      message:
+        bundle.documents.length > 0
+          ? `${bundle.documents.length} SearchDocuments, Embeddings: ${bundle.has_embeddings_file ? "ja" : "nein"}`
+          : "Wissensindex leer",
+    };
+  } catch (error) {
     console.error(
-      "[KnowledgeRetriever.inspect] Datenverzeichnis fehlt:",
-      data_root,
+      "[KnowledgeRetriever.inspect] fehlgeschlagen:",
+      error instanceof Error ? error.message : error,
     );
     return {
       ok: false,
-      data_root,
-      index_dir,
-      docs_path,
+      data_root: "",
+      index_dir: "",
+      docs_path: "",
       document_count: 0,
       has_embeddings: false,
       vector_index_entries: 0,
       message: "Projekt nicht konfiguriert",
     };
   }
-  if (!existsSync(docs_path)) {
-    console.error(
-      "[KnowledgeRetriever.inspect] SearchDocuments fehlen:",
-      docs_path,
-    );
-    return {
-      ok: false,
-      data_root,
-      index_dir,
-      docs_path,
-      document_count: 0,
-      has_embeddings: false,
-      vector_index_entries: 0,
-      message: "Wissensindex fehlt",
-    };
-  }
-  const documents = [
-    ...parseSearchDocumentsJsonl(readFileSync(docs_path, "utf8")).values(),
-  ];
-  const embPath = path.join(
-    data_root,
-    "embeddings",
-    "search",
-    "search_embeddings.jsonl",
-  );
-  const has_embeddings = existsSync(embPath) && statSync(embPath).size > 0;
-  const index = loadLocalIndex(index_dir);
-  return {
-    ok: documents.length > 0,
-    data_root,
-    index_dir,
-    docs_path,
-    document_count: documents.length,
-    has_embeddings,
-    vector_index_entries: index.vector_index.length,
-    message:
-      documents.length > 0
-        ? `${documents.length} SearchDocuments, Embeddings: ${has_embeddings ? "ja" : "nein"}`
-        : "Wissensindex leer",
-  };
 }
 
 function enrichHits(
@@ -207,33 +202,173 @@ export async function knowledgeSearch(params: {
   searchProfile?: DomainSearchProfile;
 }): Promise<KnowledgeSearchResult> {
   const warnings: string[] = [];
-  const status = inspectProjectKnowledge(params.project);
-  if (!status.ok) {
-    throw new Error(status.message);
+  const bundle = getProjectSearchBundle(params.project);
+  const limit = params.limit ?? 40;
+
+  // --- Primary: portable Access Indices (no legacy full load) ---
+  if (bundle.access_index_mode) {
+    const access = searchViaAccessIndexes({
+      project: params.project,
+      query: params.query,
+      limit,
+    });
+    if (access) {
+      if (access.literal_miss) {
+        return {
+          query: params.query,
+          hits: [],
+          document_count: access.document_count,
+          vector_search_active: false,
+          index_path: bundle.index_dir,
+          query_embedding_tokens: 0,
+          query_embedding_cost: 0,
+          warnings: [
+            ...access.warnings,
+            "SEARCH_BUDGET: Vector Search übersprungen (Literal-Index ohne Treffer).",
+          ],
+          access_index: {
+            primary_path: access.primary_path,
+            indexes_used: access.indexes_used,
+            literal_miss: true,
+            graph_used: false,
+            legacy_used: false,
+          },
+          lexical_diagnosis: access.lexical_diagnosis,
+          lexical_expansion_tokens: access.lexical_expansion_tokens,
+        };
+      }
+
+      const vectorRequested = params.enableVector === true;
+      const hasTechnicalAnchor = namedEntityTechnicalAnchors(
+        params.query,
+      ).length > 0;
+      const strongExact =
+        hasTechnicalAnchor &&
+        access.hits.some(
+          (h) =>
+            h.knowledge_unit_type === "message_idoc_object" ||
+            h.knowledge_unit_type === "master_field" ||
+            h.exact_score >= 3 ||
+            (h.matched_terms ?? []).some((t) => String(t).startsWith("sym:")),
+        );
+
+      // Exact/literal/relation with technical anchors: return access hits.
+      // Semantic Stage-1 (no technical anchor): allow vector even if soft lexical hits exist.
+      if (!vectorRequested || (access.hits.length > 0 && strongExact)) {
+        if (!vectorRequested) {
+          warnings.push(
+            "SEARCH_BUDGET: Vector Search übersprungen (ACCESS_INDEX / LOCAL_EXACT).",
+          );
+          askPerfNote("embeddings skipped (enableVector=false, access-index)");
+        } else {
+          askPerfNote(
+            "embeddings skipped (strong access exact hits — no vector needed)",
+          );
+        }
+        return {
+          query: params.query,
+          hits: access.hits,
+          document_count: Math.max(
+            access.document_count,
+            access.evidence_fetched,
+          ),
+          vector_search_active: false,
+          index_path: bundle.index_dir,
+          query_embedding_tokens: 0,
+          query_embedding_cost: 0,
+          warnings: [...warnings, ...access.warnings],
+          access_index: {
+            primary_path: access.primary_path,
+            indexes_used: access.indexes_used,
+            literal_miss: false,
+            graph_used: access.graph_used,
+            legacy_used: false,
+          },
+          lexical_diagnosis: access.lexical_diagnosis,
+          lexical_expansion_tokens: access.lexical_expansion_tokens,
+        };
+      }
+
+      if (vectorRequested) {
+        askPerfNote(
+          hasTechnicalAnchor
+            ? "access indexes weak — semantic vector path (lazy embeddings)"
+            : "semantic query without technical anchor — vector path (lazy embeddings)",
+        );
+        warnings.push(...access.warnings);
+        // fall through to vector below
+      }
+    }
+  }
+
+  if (bundle.documents.length === 0 && !bundle.access_index_mode) {
+    throw new Error(
+      existsSync(bundle.docs_path) ? "Wissensindex leer" : "Wissensindex fehlt",
+    );
+  }
+
+  // Access mode with semantic vector request and no exact hits: need documents for vector
+  // → lazy-load portable evidence maps only when vector is truly needed
+  let documents = bundle.documents;
+  let documentsById = bundle.documentsById;
+  let index = bundle.index;
+
+  if (bundle.access_index_mode && documents.length === 0) {
+    const projectKey =
+      params.project.customer_id?.trim() ||
+      BOUND_DATA_PROJECT_KEY ||
+      "P01";
+    if (params.enableVector === true && bundle.has_embeddings_file) {
+      const { loadPortableEvidenceMaps } = await import(
+        "@/lib/portableIndex/indexLoader"
+      );
+      const maps = loadPortableEvidenceMaps(projectKey);
+      if (maps) {
+        documents = [...maps.byId.values()];
+        documentsById = maps.byId;
+        askPerfNote(
+          `semantic fallback: loaded portable evidence for vector (${documents.length})`,
+        );
+        // Still no legacy fulltext — vector uses vector_index from embeddings path
+        // Load thin vector_index from legacy only if needed for id list
+        warnings.push(
+          "ACCESS_INDEX: semantischer Fallback — Evidence für Vector geladen (kein Legacy-Fulltext).",
+        );
+      }
+    }
+    if (documents.length === 0) {
+      return {
+        query: params.query,
+        hits: [],
+        document_count: 0,
+        vector_search_active: false,
+        index_path: bundle.index_dir,
+        query_embedding_tokens: 0,
+        query_embedding_cost: 0,
+        warnings: [
+          ...warnings,
+          "ACCESS_INDEX: keine Treffer und kein Vector-Korpus.",
+        ],
+      };
+    }
   }
 
   const capabilities = resolveProjectCapabilities(params.project);
   const searchProfile = params.searchProfile ?? capabilities.searchProfile;
 
-  const documents = [
-    ...parseSearchDocumentsJsonl(readFileSync(status.docs_path, "utf8")).values(),
-  ];
-  const documentsById = new Map(
-    documents.map((d) => [d.search_document_id, d]),
-  );
-  const index = loadLocalIndex(status.index_dir);
-
+  // Embeddings: only load when vector mode is actually requested
   let embeddingsById = new Map<string, SearchEmbeddingRecord>();
-  const embPath = path.join(
-    status.data_root,
-    "embeddings",
-    "search",
-    "search_embeddings.jsonl",
-  );
-  if (existsSync(embPath)) {
-    embeddingsById = parseEmbeddingsJsonl(readFileSync(embPath, "utf8"));
-  } else {
+  const vectorRequested = params.enableVector === true;
+  if (!vectorRequested) {
+    warnings.push("SEARCH_BUDGET: Vector Search übersprungen (LOCAL_EXACT).");
+    askPerfNote("embeddings skipped (enableVector=false)");
+  } else if (!bundle.has_embeddings_file) {
     warnings.push("Embeddings fehlen — nur exakte/Volltext-/Metadatensuche.");
+  } else {
+    embeddingsById = getProjectEmbeddings(params.project);
+    if (embeddingsById.size === 0) {
+      warnings.push("Embeddings fehlen — nur exakte/Volltext-/Metadatensuche.");
+    }
   }
 
   const types =
@@ -245,11 +380,8 @@ export async function knowledgeSearch(params: {
 
   const canVector =
     embeddingsById.size > 0 && Boolean(process.env.OPENAI_API_KEY?.trim());
-  const enableVector =
-    params.enableVector === false ? false : canVector;
-  if (params.enableVector === false) {
-    warnings.push("SEARCH_BUDGET: Vector Search übersprungen (LOCAL_EXACT).");
-  } else if (!enableVector && embeddingsById.size > 0) {
+  const enableVector = vectorRequested ? canVector : false;
+  if (vectorRequested && !enableVector && embeddingsById.size > 0) {
     warnings.push("OPENAI_API_KEY fehlt — Vector Search deaktiviert.");
   }
 
@@ -259,14 +391,28 @@ export async function knowledgeSearch(params: {
       ? params.enableRelationExpansion
       : relationDefault;
 
-  const limit = params.limit ?? 40;
+  // For vector-only semantic fallback without legacy index, synthesize vector_index from embeddings keys
+  if (enableVector && index.vector_index.length === 0 && embeddingsById.size > 0) {
+    index = {
+      ...index,
+      vector_index: [...embeddingsById.keys()].map((search_document_id) => {
+        const emb = embeddingsById.get(search_document_id);
+        return {
+          search_document_id,
+          source_key: emb?.source_key ?? search_document_id,
+          content_hash: emb?.content_hash ?? "",
+          dimensions: emb?.dimensions ?? 0,
+        };
+      }),
+    };
+  }
+
   const result = await hybridSearch({
     query: params.query,
     documents,
     index,
     embeddingsById,
     options: {
-      // Fetch extra hybrid hits so lexical merge can prepend without starving diversity
       limit: Math.max(limit * 2, 48),
       knowledge_unit_types: types,
       enableVector,
@@ -278,7 +424,6 @@ export async function knowledgeSearch(params: {
 
   const hybridHits = enrichHits(result.hits, documentsById);
 
-  // Same lexical DDIC/object service as multi-source — Direct Search must use it too
   const projectKey =
     params.project.customer_id?.trim() ||
     BOUND_DATA_PROJECT_KEY ||
@@ -303,7 +448,6 @@ export async function knowledgeSearch(params: {
     hits = merged.hits;
     lexical_expansion_tokens = merged.expansion_tokens;
 
-    // Canonical code-usage expansion from primary field/table tokens
     if (merged.expansion_tokens.length > 0) {
       const seen = new Set(hits.map((h) => h.source_key).filter(Boolean));
       const stems = normalizeLexicalQuery(params.query).stems;
@@ -315,7 +459,6 @@ export async function knowledgeSearch(params: {
         alreadySeen: seen,
       });
       if (codeHits.length > 0) {
-        // Keep lexical primary field/profile hits first; then best code; then rest
         const primary = hits.filter(
           (h) =>
             h.knowledge_unit_type === "master_field" ||
@@ -338,7 +481,6 @@ export async function knowledgeSearch(params: {
       }
     }
 
-    // Drop low-usefulness noise (IDOCs etc.) when strong lexical anchors exist
     if ((lexical_diagnosis?.selected_primary_anchors?.length ?? 0) > 0) {
       hits = selectUsefulHits(hits, Math.max(limit, 40));
     }
@@ -361,12 +503,27 @@ export async function knowledgeSearch(params: {
     hits,
     document_count: documents.length,
     vector_search_active: enableVector,
-    index_path: status.index_dir,
+    index_path: bundle.index_dir,
     query_embedding_tokens: result.query_embedding_tokens,
     query_embedding_cost: result.query_embedding_cost,
     warnings,
     lexical_diagnosis,
     lexical_expansion_tokens,
+    access_index: bundle.access_index_mode
+      ? {
+          primary_path: "semantic-vector-fallback",
+          indexes_used: ["lexical-index", "vector/embeddings"],
+          literal_miss: false,
+          graph_used: false,
+          legacy_used: false,
+        }
+      : {
+          primary_path: "legacy-hybrid",
+          indexes_used: ["legacy-search-shards"],
+          literal_miss: false,
+          graph_used: false,
+          legacy_used: true,
+        },
   };
 }
 

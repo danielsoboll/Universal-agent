@@ -6,6 +6,11 @@ import {
   SEARCH_EMBEDDING_VERSION,
 } from "@/lib/search/embeddingConfig";
 import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
+import {
+  askPerfBegin,
+  askPerfEnd,
+  askPerfRecordOpenAi,
+} from "@/lib/knowledge/askPerf";
 
 export type SearchEmbeddingRecord = {
   search_document_id: string;
@@ -262,12 +267,17 @@ export async function embedQueryText(query: string): Promise<{
   input_tokens: number;
   estimated_cost: number;
 }> {
+  askPerfBegin("openai_embedding");
+  const t0 = performance.now();
   const cfg = getEmbeddingRuntimeConfig();
   const { vectors, input_tokens } = await embedBatch({
     texts: [query],
     model: cfg.model,
     dimensions: cfg.dimensions,
   });
+  const ms = performance.now() - t0;
+  askPerfRecordOpenAi(ms);
+  askPerfEnd("openai_embedding");
   return {
     vector: vectors[0]!,
     model: cfg.model,

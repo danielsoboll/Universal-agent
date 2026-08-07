@@ -41,6 +41,10 @@ Env: `.env.local` (lokal, nicht committen). Vorlage: `.env.example`.
 - Kundenprofile: `customers/<customer_id>.json` (Vorlage `_template.json`)
 - Orchestrierung: `npm run pipeline -- --customer P01 --list-steps`
 - Architektur: `docs/PRODUCTIZATION.md`, Migration P01: `docs/P01_MIGRATION.md`
+- **Access Indices** (Ask-Performance, Exact/Literal/Symbol): `docs/ACCESS_INDICES.md`
+  - Build: `npm run index:portable -- --customer P01`
+  - Schicht nur „ACCESS INDICES“ — ersetzt weder Canonical noch Knowledge Graph
+  - Vertrag: `src/lib/portableIndex/knowledgeRecord.ts`
 
 ## Konventionen
 

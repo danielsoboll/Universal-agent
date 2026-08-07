@@ -3,9 +3,15 @@
  * in Canonical-code_units.source_code finden und als Evidence-Hits liefern.
  * Kein Index-Rebuild, keine Analyse-Wiederholung.
  */
-import { existsSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import { resolveProjectZonePath } from "@/lib/localData/paths";
 import type { KnowledgeHit } from "@/lib/knowledge/types";
+import { getCachedUtf8File } from "@/lib/knowledge/projectKnowledgeCache";
+import {
+  isPortableIndexReady,
+  lookupPortableCodeUsage,
+} from "@/lib/portableIndex/indexLoader";
+import { askPerfNote } from "@/lib/knowledge/askPerf";
 
 function asString(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -144,12 +150,6 @@ export function expandCodeUsagesFromCanonical(params: {
     .map((s) => s.toLowerCase())
     .filter((s) => s.length >= 5);
 
-  const zones = ["classes", "programs", "function-modules"] as const;
-  const seen = new Set(params.alreadySeen ?? []);
-  const scored: Array<{ hit: KnowledgeHit; score: number; object: string }> = [];
-  /** Full records of process-relevant classes for sibling expansion */
-  const classRecords = new Map<string, Array<Record<string, unknown>>>();
-
   const scoreHit = (hit: KnowledgeHit, matched: string): number => {
     let score = matched.length;
     const snip = hit.snippet;
@@ -175,6 +175,51 @@ export function expandCodeUsagesFromCanonical(params: {
     return score;
   };
 
+  // Prefer portable code_usage_postings (no canonical scan)
+  if (isPortableIndexReady(params.projectKey)) {
+    const postingMap = lookupPortableCodeUsage(params.projectKey, needles);
+    if (postingMap.size > 0) {
+      const seen = new Set(params.alreadySeen ?? []);
+      const scored: Array<{ hit: KnowledgeHit; score: number; object: string }> =
+        [];
+      let rank = 1;
+      for (const [token, hits] of postingMap) {
+        for (const h of hits) {
+          if (seen.has(h.source_key)) continue;
+          seen.add(h.source_key);
+          const hit = hitFromCodeRec({
+            sourceKey: h.source_key,
+            rec: {
+              object_name: h.object_name,
+              method_name: h.method_or_routine,
+              source_code: h.snippet,
+            },
+            token,
+            zone: h.zone,
+            rank: rank++,
+          });
+          scored.push({
+            hit,
+            score: scoreHit(hit, token),
+            object: h.object_name,
+          });
+        }
+      }
+      scored.sort((a, b) => b.score - a.score);
+      askPerfNote(
+        `expandCodeUsages via portable postings (${scored.length} hits)`,
+      );
+      return scored.slice(0, limit).map((s, i) => ({ ...s.hit, rank: i + 1 }));
+    }
+  }
+
+  const zones = ["classes", "programs", "function-modules"] as const;
+  const seen = new Set(params.alreadySeen ?? []);
+  const scored: Array<{ hit: KnowledgeHit; score: number; object: string }> = [];
+  /** Full records of process-relevant classes for sibling expansion */
+  const classRecords = new Map<string, Array<Record<string, unknown>>>();
+
+  askPerfNote("expandCodeUsages fallback: canonical code_units scan");
   for (const zone of zones) {
     let path: string;
     try {
@@ -189,7 +234,10 @@ export function expandCodeUsagesFromCanonical(params: {
     }
     if (!existsSync(path)) continue;
 
-    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    for (const line of getCachedUtf8File(
+      path,
+      `expand:canonical/${zone}/code_units.jsonl`,
+    ).split(/\r?\n/)) {
       if (!line.trim()) continue;
       let rec: Record<string, unknown>;
       try {

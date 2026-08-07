@@ -90,4 +90,13 @@ export type AskQuestionResult = {
   fullAnalysisReport?: FullAnalysisReport | null;
   /** SEARCH_BUDGET_GATE diagnostics. */
   searchBudget?: import("@/lib/knowledge/searchBudget").SearchBudgetDiagnostics | null;
+  /** Client + server ask performance timings (measurement). */
+  askPerf?: import("@/lib/knowledge/askPerf").AskPerfReport | null;
+  clientPerf?: {
+    button_click_to_request_sent_ms: number;
+    request_sent_to_response_received_ms: number;
+    response_received_to_react_render_ms: number;
+    total_click_to_render_ms: number;
+    server_timing_header?: string | null;
+  };
 };

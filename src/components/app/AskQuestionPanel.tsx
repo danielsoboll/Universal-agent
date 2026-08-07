@@ -1205,6 +1205,7 @@ export function AskQuestionPanel({
   async function runAsk(
     searchMode: SearchMode,
     q: string,
+    clickAtMs?: number,
   ): Promise<AskQuestionResult> {
     // Isolated request body — never previous answers, sources, plans, or cache.
     const requestBody = {
@@ -1213,12 +1214,16 @@ export function AskQuestionPanel({
       searchMode,
       conversationMode: false as const,
     };
+    const tClick = clickAtMs ?? performance.now();
     try {
+      const tRequestSent = performance.now();
       const res = await fetch("/api/app/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
+      const tReceived = performance.now();
+      const serverTiming = res.headers.get("server-timing");
       const data = (await res.json()) as {
         status?: string;
         answer?: string | null;
@@ -1276,6 +1281,8 @@ export function AskQuestionPanel({
         searchProfileId?: string;
         relevanceGate?: AskQuestionResult["relevanceGate"];
         fullAnalysisReport?: FullAnalysisReport | null;
+        searchBudget?: AskQuestionResult["searchBudget"];
+        askPerf?: AskQuestionResult["askPerf"];
       };
 
       const evidence =
@@ -1365,6 +1372,17 @@ export function AskQuestionPanel({
         promptVersion: data.promptVersion,
         searchProfileId: data.searchProfileId,
         fullAnalysisReport: data.fullAnalysisReport ?? null,
+        searchBudget: data.searchBudget ?? null,
+        askPerf: data.askPerf ?? null,
+        clientPerf: {
+          button_click_to_request_sent_ms:
+            Math.round((tRequestSent - tClick) * 10) / 10,
+          request_sent_to_response_received_ms:
+            Math.round((tReceived - tRequestSent) * 10) / 10,
+          response_received_to_react_render_ms: 0,
+          total_click_to_render_ms: Math.round((tReceived - tClick) * 10) / 10,
+          server_timing_header: serverTiming,
+        },
       };
     } catch {
       return askQuestionAction({ question: q, customerId, searchMode });
@@ -1385,11 +1403,13 @@ export function AskQuestionPanel({
     clearActiveAnswerContext();
 
     startTransition(async () => {
+      const tClick = performance.now();
       try {
         // Always a fresh isolated server run — never hydrate from session cache.
-        const r = await runAsk(submittedMode, q);
+        const r = await runAsk(submittedMode, q, tClick);
         if (seq !== requestSeqRef.current) return; // stale response ignored
 
+        const tBeforeSetState = performance.now();
         putCachedAskResult({
           key: cacheKeyFromAskResult({
             projectId,
@@ -1402,6 +1422,47 @@ export function AskQuestionPanel({
         });
         refreshCachedModesFor(q);
         setResult(r);
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const tRender = performance.now();
+            const clientPerf = {
+              button_click_to_request_sent_ms:
+                r.clientPerf?.button_click_to_request_sent_ms ?? 0,
+              request_sent_to_response_received_ms:
+                r.clientPerf?.request_sent_to_response_received_ms ?? 0,
+              response_received_to_react_render_ms:
+                Math.round((tRender - tBeforeSetState) * 10) / 10,
+              total_click_to_render_ms: Math.round((tRender - tClick) * 10) / 10,
+              server_timing_header: r.clientPerf?.server_timing_header ?? null,
+            };
+            console.info(
+              "[askPerf:client]",
+              JSON.stringify({
+                question: q,
+                clientPerf,
+                askPerf: r.askPerf
+                  ? {
+                      cold_or_warm: r.askPerf.cold_or_warm,
+                      total_ms: r.askPerf.total_ms,
+                      phases: r.askPerf.phases,
+                      openai_calls: r.askPerf.openai_calls,
+                      fs_bytes_total: r.askPerf.fs_bytes_total,
+                      fs_read_ms_total: r.askPerf.fs_read_ms_total,
+                      fs_parse_ms_total: r.askPerf.fs_parse_ms_total,
+                      lexical_corpus_cache_hit:
+                        r.askPerf.lexical_corpus_cache_hit,
+                      index_rebuilt: r.askPerf.index_rebuilt,
+                      index_loaded_from_disk: r.askPerf.index_loaded_from_disk,
+                    }
+                  : null,
+              }),
+            );
+            setResult((prev) =>
+              prev && prev === r ? { ...prev, clientPerf } : prev,
+            );
+          });
+        });
       } catch (err) {
         if (seq !== requestSeqRef.current) return;
         setApiError(
