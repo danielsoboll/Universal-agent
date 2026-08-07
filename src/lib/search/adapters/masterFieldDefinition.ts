@@ -8,8 +8,12 @@ export type MasterFieldDefinitionInput = {
   table_name: string;
   field_name: string;
   description?: string;
+  /** Alias for description when present in source. */
+  field_text?: string;
   data_element?: string;
+  data_element_text?: string;
   domain?: string;
+  domain_text?: string;
   data_type?: string;
   length?: number | string;
   position?: number;
@@ -42,29 +46,58 @@ export function draftFromMasterFieldDefinition(params: {
   const field = String(f.field_name ?? "").trim().toUpperCase();
   if (!table || !field) return null;
 
-  const description = String(f.description ?? "").trim();
+  const fieldText = String(f.field_text ?? f.description ?? "").trim();
+  const description = fieldText;
   const dataElement = String(f.data_element ?? "").trim();
+  const dataElementText = String(f.data_element_text ?? "").trim();
   const domain = String(f.domain ?? "").trim();
+  const domainText = String(f.domain_text ?? "").trim();
   const dataType = String(f.data_type ?? "").trim();
   const length = f.length != null ? String(f.length) : "";
   const isZ =
     f._is_z_field === true ||
     isZOrAppendField(field) ||
     isZOrAppendField(dataElement);
+  const appendInfo = f._is_append_include
+    ? "Append-/Include-Feld"
+    : null;
 
   const title = `${table}-${field}`;
+  const technical_name = title;
   const source_system =
     params.sourceSystem?.trim() ||
     String(f.system_id ?? "").trim() ||
     "unknown";
+  const source_path =
+    String(f._source_file ?? "").trim() ||
+    `canonical/master-data/.../${table}/structure.jsonl`;
+
+  const search_text = [
+    technical_name,
+    table,
+    field,
+    fieldText,
+    dataElement,
+    dataElementText,
+    domain,
+    domainText,
+    appendInfo,
+    source_path,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const facts = [
-    description ? `Feldtext: ${description}` : null,
+    fieldText ? `Feldtext: ${fieldText}` : null,
     dataElement ? `Datenelement: ${dataElement}` : null,
+    dataElementText ? `Datenelement-Text: ${dataElementText}` : null,
     domain ? `Domäne: ${domain}` : null,
+    domainText ? `Domänen-Text: ${domainText}` : null,
     dataType ? `Datentyp: ${dataType}${length ? `(${length})` : ""}` : null,
-    f._is_append_include ? "Append-/Include-Feld" : null,
+    appendInfo,
     isZ ? "Custom Z/Y/Append-Feld" : null,
+    `Technischer Name: ${technical_name}`,
+    `source_path: ${source_path}`,
   ].filter(Boolean) as string[];
 
   return {
@@ -77,14 +110,16 @@ export function draftFromMasterFieldDefinition(params: {
     subobject_name: field,
     title,
     technical_summary: [
-      `Stammdatenfeld ${table}-${field}`,
-      description || null,
+      `Stammdatenfeld ${technical_name}`,
+      fieldText || null,
       dataElement ? `DE=${dataElement}` : null,
+      dataElementText || null,
       domain ? `DOM=${domain}` : null,
+      domainText || null,
     ]
       .filter(Boolean)
       .join(" · "),
-    business_purpose: description || undefined,
+    business_purpose: fieldText || undefined,
     facts,
     inferences: [],
     entities: [
@@ -99,6 +134,9 @@ export function draftFromMasterFieldDefinition(params: {
             },
           ]
         : []),
+      ...(domain
+        ? [{ kind: "domain", name: domain, normalized: domain.toUpperCase() }]
+        : []),
     ],
     relations: [],
     tables_read: [table],
@@ -109,23 +147,28 @@ export function draftFromMasterFieldDefinition(params: {
     hardcoded_values: [],
     external_interfaces: [],
     risks: [],
-    evidence: description
+    evidence: fieldText
       ? [
           {
             statement_type: "fact" as const,
-            text: `${table}-${field}: ${description}`,
+            text: `${technical_name}: ${fieldText}`,
             lines: [],
           },
         ]
       : [],
     confidence: isZ ? 0.95 : 0.75,
-    analysis_version: "master-field-v1",
+    analysis_version: "master-field-v2",
     metadata: {
       table_name: table,
       field_name: field,
-      description,
+      technical_name,
+      field_text: fieldText,
+      description: fieldText,
       data_element: dataElement,
+      data_element_text: dataElementText,
       domain,
+      domain_text: domainText,
+      append_include: Boolean(f._is_append_include),
       data_type: dataType,
       length,
       position: f.position ?? null,
@@ -134,6 +177,8 @@ export function draftFromMasterFieldDefinition(params: {
       is_append_include: Boolean(f._is_append_include),
       canonical_key: f._canonical_key ?? null,
       source_file: f._source_file ?? null,
+      source_path,
+      search_text,
       evidence_class: isZ
         ? "MASTER_DATA_BUSINESS_FIELD"
         : "MASTER_DATA_FIELD",

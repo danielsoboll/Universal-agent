@@ -87,28 +87,19 @@ function ensureReady(
   manifest: DatenbasisManifest,
   stepId: DatenbasisStepId,
 ): string | null {
-  if (!manifest.unlocked) return "Exporttyp ist gesperrt";
+  if (!manifest.unlocked) {
+    return "Exporttyp noch nicht gestartet (Stufe 2 / Freischaltung)";
+  }
   const st = manifest.steps[stepId]?.status;
   if (st !== "ready" && st !== "awaiting" && st !== "error" && st !== "open") {
     if (st === "done") return "Schritt bereits erledigt";
+    if (st === "locked") {
+      // Legacy manifests — treat as independently runnable
+      return null;
+    }
     return `Schritt nicht bereit (Status: ${st})`;
   }
-  // Prior steps must be done
-  const order = [
-    "A_sap_export",
-    "B_raw_detect",
-    "C_validate",
-    "D_convert",
-    "E_test_questions",
-    "F_rag_test",
-    "G_approve",
-  ] as const;
-  const idx = order.indexOf(stepId);
-  for (let i = 0; i < idx; i++) {
-    if (manifest.steps[order[i]!].status !== "done") {
-      return `Vorheriger Schritt ${order[i]} muss erledigt sein`;
-    }
-  }
+  // Steps are independent per area — no sequential lock gate.
   return null;
 }
 

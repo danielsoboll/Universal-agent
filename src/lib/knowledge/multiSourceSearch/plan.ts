@@ -15,6 +15,7 @@ import {
 
 const DEFAULT_SOURCE_ORDER: MultiSourceId[] = [
   "exact_symbol",
+  "lexical",
   "master_data",
   "control_tables",
   "classes",
@@ -25,6 +26,7 @@ const DEFAULT_SOURCE_ORDER: MultiSourceId[] = [
 
 const DEFAULT_BUDGETS: Record<MultiSourceId, number> = {
   exact_symbol: 20,
+  lexical: 16,
   master_data: 8,
   control_tables: 14,
   classes: 10,

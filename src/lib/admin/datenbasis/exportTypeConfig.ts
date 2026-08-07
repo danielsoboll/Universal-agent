@@ -368,37 +368,11 @@ export const EXPORT_TYPE_CONFIGS: readonly ExportTypeConfig[] = [
     ],
   },
   {
-    id: "master-data",
-    title: "Stammdaten (Rahmen)",
-    description:
-      "Rahmen-Ordner; konkrete Pipelines: materials / customers / vendors",
-    orderIndex: 7,
-    implementation: "locked",
-    certainty: "unknown",
-    sapReport: null,
-    sapObjectHint: null,
-    rawFolder: "raw/master-data",
-    rawFolderParts: ["master-data"],
-    minFiles: null,
-    maxFiles: null,
-    extensions: null,
-    filenamePattern: null,
-    filenamePatternCertainty: "unknown",
-    observedFilenameExample: null,
-    headerExportType: null,
-    headerRules: null,
-    canonicalOutputs: null,
-    evidenceNotes: [
-      "Rahmen — materials|customers|vendors = eigene Exporttypen",
-      "Keine erfundenen MARA/STRUCTURE/CONTENT/MAX/LIMITED-Regeln",
-    ],
-  },
-  {
     id: "materials",
     title: "Materialstammdaten",
     description:
       "RAW erkennen → streaming validieren → Canonical unter canonical/master-data/materials (ohne OpenAI)",
-    orderIndex: 8,
+    orderIndex: 7,
     implementation: "full",
     certainty: "inferred_from_raw",
     unlockIndependent: true,
@@ -474,7 +448,7 @@ export const EXPORT_TYPE_CONFIGS: readonly ExportTypeConfig[] = [
     title: "Kundenstammdaten",
     description:
       "RAW erkennen → validieren → Canonical unter canonical/master-data/customers (ohne OpenAI)",
-    orderIndex: 9,
+    orderIndex: 8,
     implementation: "full",
     certainty: "inferred_from_raw",
     unlockIndependent: true,
@@ -548,7 +522,7 @@ export const EXPORT_TYPE_CONFIGS: readonly ExportTypeConfig[] = [
     title: "Lieferantenstammdaten",
     description:
       "RAW erkennen → validieren → Canonical unter canonical/master-data/vendors (ohne OpenAI)",
-    orderIndex: 10,
+    orderIndex: 9,
     implementation: "full",
     certainty: "inferred_from_raw",
     unlockIndependent: true,
@@ -609,6 +583,64 @@ export const EXPORT_TYPE_CONFIGS: readonly ExportTypeConfig[] = [
       "P01 Sample 2026-08-04: system_id=Q01, profile=VENDOR, schema 2.3",
       "Relationen: LFA1 zentral; LFA1→LFM1; Keys LIFNR, EKORG",
       "Pipeline parallel (unlockIndependent); kein OpenAI / Index",
+    ],
+  },
+  {
+    id: "repository-relations",
+    title: "Repository-Beziehungen",
+    description:
+      "RAW erkennen → Pass-1 Canonical unter canonical/repository-relations (ohne OpenAI/Index)",
+    orderIndex: 10,
+    implementation: "full",
+    certainty: "inferred_from_raw",
+    unlockIndependent: true,
+    sapReport: "Z_AI_REPOSITORY_EXPORT",
+    sapObjectHint: "Repository-Objektbeziehungen",
+    rawFolder: "raw/repository-relations",
+    rawFolderParts: ["repository-relations"],
+    minFiles: 1,
+    maxFiles: 1,
+    extensions: [".jsonl"],
+    filenamePattern: /.+_SAP_REPOSITORY_RELATIONS_CONTENT\.jsonl$/i,
+    filenamePatternCertainty: "inferred_from_raw",
+    observedFilenameExample:
+      "Q01_20260806_224055_SAP_REPOSITORY_RELATIONS_CONTENT.jsonl",
+    headerExportType: "SAP_REPOSITORY_RELATIONS",
+    headerRules: {
+      record_type: {
+        required: true,
+        exact: "header",
+        certainty: "inferred_from_raw",
+      },
+      export_type: {
+        required: true,
+        exact: "SAP_REPOSITORY_RELATIONS",
+        certainty: "inferred_from_raw",
+      },
+      system_id: {
+        required: true,
+        exact: null,
+        certainty: "inferred_from_raw",
+      },
+      schema_version: {
+        required: true,
+        exact: null,
+        certainty: "inferred_from_raw",
+        note: "Beobachtet: 3.1",
+      },
+    },
+    canonicalOutputs: [
+      "canonical/repository-relations/objects.jsonl",
+      "canonical/repository-relations/relations.jsonl",
+      "canonical/repository-relations/unresolved.jsonl",
+      "canonical/repository-relations/manifest.json",
+    ],
+    evidenceNotes: [
+      "P01 Sample 2026-08-06: schema 3.1, object_count 4115, relation_count 174601",
+      "record_types: header|source_object|relation",
+      "Pass 1: edge-dedupe + occurrence_count + contexts; UNRESOLVED_* → unresolved.jsonl",
+      "Dateimuster *_SAP_REPOSITORY_RELATIONS_CONTENT.jsonl — genau 1 Treffer",
+      "Kein OpenAI / Index; andere Domains unberührt",
     ],
   },
   {
@@ -700,6 +732,7 @@ export function listScaffoldRawFolderParts(): string[][] {
     ["master-data", "customers"],
     ["master-data", "vendors"],
     ["message-idoc-config"],
+    ["repository-relations"],
   ];
 }
 
@@ -739,10 +772,11 @@ export const DATENBASIS_STEP_META: Record<
     actionLabel: "Fragen prüfen",
   },
   F_rag_test: {
-    title: "RAG-Test",
-    shortTitle: "RAG",
-    description: "Direct-RAG-Smoke gegen Index/Wissen",
-    actionLabel: "RAG testen",
+    title: "Index / Vektoren",
+    shortTitle: "Index",
+    description:
+      "Suchindex und Vektoren aufbauen (RAG-Probe) — großer Fortschrittsblock nach Canonical",
+    actionLabel: "Index/Vektoren",
   },
   G_approve: {
     title: "Freigabe",

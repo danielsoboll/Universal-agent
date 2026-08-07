@@ -1,0 +1,75 @@
+{
+  "iteration": 1,
+  "pass": true,
+  "retrieval_recall": 0.6364,
+  "evidence_recall": 0.6364,
+  "critical_entities_missing": 4,
+  "unsupported_answer_claims": 0,
+  "classified_gaps": [
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "FORM_ROUTINE:ZSD_ZECD_NACHVERARBEITUNG.PROCESS_ZECD",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG_TOP",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZZ_PROCESS_V1_ZECD_JOB",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZSD_ZECD_NACHVERARBEITUNG|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "PROCESS_ZECD|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZZ_PROCESS_V1_ZECD_JOB|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "OUTPUT_TYPE_TEXT:B|V1|ZECD|DE",
+      "cause": "OPENAI_IGNORED_EVIDENCE",
+      "detail": "Critical entity in evidence but not reflected in answer"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZEXECUTE_FAULTY_ZECD",
+      "cause": "OPENAI_IGNORED_EVIDENCE",
+      "detail": "Critical entity in evidence but not reflected in answer"
+    }
+  ],
+  "duration_ms": 15843,
+  "docs_scanned": 32,
+  "tokens_in": 2800,
+  "answer_preview": "Die Nachricht ZECD ist eine Outputart mit der Bezeichnung \"Lieferrückmeldung\". Sie gehört zum Anwendungsbereich V1 und hat den Nachrichtenart-Code ZECD mit dem Verarbeitungsmedium NACHA=8, welches die Bedeutung \"Spezialfunktion\" trägt. Die Verarbeitung dieser Nachricht erfolgt durch das Programm Z_PROCESS_MESSAGE_ZECD, wobei die Formroutine ENTRY_V1 in diesem Programm verwendet wird. Zudem ruft de",
+  "paths": {
+    "ground_truth": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/ground-truth.json",
+    "retrieval": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/retrieval-run.json",
+    "openai_input": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-input.json",
+    "openai_output": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-output.json",
+    "report": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/evaluation-report.json"
+  }
+}

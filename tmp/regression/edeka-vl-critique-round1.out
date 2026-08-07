@@ -1,0 +1,343 @@
+{
+  "question": "Wie funktioniert das Edeka virtuelle Lager?",
+  "retrieval_mode": "hybrid (exact + fulltext + vector)",
+  "duration_ms": 24743,
+  "warnings": [
+    "Lexikalische DDIC-Suche: 9 Phrase-/Feldtreffer priorisiert"
+  ],
+  "top_hits": [
+    {
+      "rank": 1,
+      "type": "master_field",
+      "key": "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+      "score": 391
+    },
+    {
+      "rank": 2,
+      "type": "table_profile",
+      "key": "table_profile:ZVLAGER_AUART",
+      "score": 366
+    },
+    {
+      "rank": 3,
+      "type": "table_profile",
+      "key": "table_profile:ZZTVAG",
+      "score": 331
+    },
+    {
+      "rank": 4,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+      "score": 79
+    },
+    {
+      "rank": 5,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+      "score": 79
+    },
+    {
+      "rank": 6,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8",
+      "score": 79
+    },
+    {
+      "rank": 7,
+      "type": "table_row",
+      "key": "Q01|001|ZSD_LP_MONI_SUBM|MANDT=001|AUART=ZL2",
+      "score": 79
+    },
+    {
+      "rank": 8,
+      "type": "table_row",
+      "key": "Q01|001|ZSD_LP_MONI_SUBM|MANDT=001|AUART=ZLNP",
+      "score": 79
+    }
+  ],
+  "direct_answer": "Das Edeka virtuelle Lager ist ein technisches Konzept, das über ein Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER als virtuelles Lager gekennzeichnet wird. Es gibt definierte Auftragsarten, die im virtuellen Lager nicht erlaubt sind, sowie spezifische Absagegründe, die im Zusammenhang mit dem virtuellen Lager verwendet werden.",
+  "reasoning": "Sicher belegt: Das virtuelle Lager wird durch das Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER identifiziert. Es existiert eine Tabelle ZVLAGER_AUART, die nicht erlaubte Auftragsarten für das virtuelle Lager definiert. Die Tabelle ZZTVAG enthält Absagegründe, die im virtuellen Lager verwendet werden.\nOffen: Die genaue Funktionsweise und Prozesslogik des virtuellen Lagers bei Edeka ist nicht dokumentiert. Es ist unklar, wie das virtuelle Lager in den Gesamtprozess der Lagerverwaltung und Auftragsabwicklung eingebunden ist. Die fachlichen Ziele und Auswirkungen des virtuellen Lagers sind nicht belegt.",
+  "process_answer": {
+    "trigger": "",
+    "process_effect": "Das virtuelle Lager wird durch das Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER identifiziert.",
+    "special_process": "Das virtuelle Lager wird durch das Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER identifiziert. Es existiert eine Tabelle ZVLAGER_AUART, die nicht erlaubte Auftragsarten für das virtuelle Lager definiert.",
+    "confirmed": [
+      {
+        "text": "Das virtuelle Lager wird durch das Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER identifiziert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Es existiert eine Tabelle ZVLAGER_AUART, die nicht erlaubte Auftragsarten für das virtuelle Lager definiert.",
+        "level": "confirmed",
+        "source_ranks": [
+          2
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Die Tabelle ZZTVAG enthält Absagegründe, die im virtuellen Lager verwendet werden.",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Die genaue Funktionsweise und Prozesslogik des virtuellen Lagers bei Edeka ist nicht dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Es ist unklar, wie das virtuelle Lager in den Gesamtprozess der Lagerverwaltung und Auftragsabwicklung eingebunden ist.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Die fachlichen Ziele und Auswirkungen des virtuellen Lagers sind nicht belegt.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "technical_answer": {
+    "entry_point": [
+      {
+        "text": "Das virtuelle Lager wird über das Kennzeichen im Stammdatenfeld KNVV-ZZ_VLAGER definiert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      }
+    ],
+    "trigger": [],
+    "processing": [
+      {
+        "text": "Nicht erlaubte Auftragsarten für das virtuelle Lager sind in der Tabelle ZVLAGER_AUART hinterlegt.",
+        "level": "confirmed",
+        "source_ranks": [
+          2
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Absagegründe im virtuellen Lager sind in der Tabelle ZZTVAG definiert und werden für die Auftragsabsage verwendet.",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8"
+        ]
+      }
+    ],
+    "objects": [
+      {
+        "text": "Stammdatenfeld KNVV-ZZ_VLAGER als Kennzeichen für das virtuelle Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Tabelle ZVLAGER_AUART mit nicht erlaubten Auftragsarten für das virtuelle Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          2
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Tabelle ZZTVAG mit Absagegründen im virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "text": "Belegter Wert: 001",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Belegter Wert: X",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Belegter Wert: 01",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Belegter Wert: VM",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "text": "READ KNVV",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "READ ZVLAGER_AUART",
+        "level": "confirmed",
+        "source_ranks": [
+          2
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "READ ZZTVAG",
+        "level": "confirmed",
+        "source_ranks": [
+          3
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG"
+        ]
+      },
+      {
+        "text": "READ ZZTVAG",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Keine detaillierte Beschreibung der Prozesslogik oder der Integration des virtuellen Lagers in die Lagerverwaltung vorhanden.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "evidence_truncation": {
+    "input_hit_count": 12,
+    "detailed_count": 3,
+    "compact_count": 6,
+    "omitted_count": 3,
+    "previously_weak_fields_now_included": [
+      "relations",
+      "callers_callees",
+      "reads/writes",
+      "entity_grounding_status",
+      "typed facts/inferences",
+      "diversified code+table+rule set"
+    ],
+    "notes": [
+      "3 weitere Treffer nur als Rank-Liste weggelassen (Token-Budget)."
+    ]
+  },
+  "openai_critique": {
+    "score_faithfulness": 9,
+    "score_usefulness": 6,
+    "score_process_coverage": 3,
+    "hallucinations": [],
+    "unused_strong_evidence": [
+      "Details zu den konkreten Absagegründen aus Tabelle ZZTVAG (z.B. ABGRU=01, 88, P8) werden nicht erläutert",
+      "Konkrete Beispiele oder Erläuterungen zu den nicht erlaubten Auftragsarten aus ZVLAGER_AUART fehlen"
+    ],
+    "missing_in_evidence": [
+      "Eine Beschreibung, wie das virtuelle Lager technisch oder prozessual funktioniert (z.B. Ablauf, Integration in Auftragsabwicklung)",
+      "Fachliche Ziele und Nutzen des virtuellen Lagers",
+      "Konkrete Prozessschritte oder Auswirkungen auf die Lagerverwaltung"
+    ],
+    "evidence_quality_issues": [
+      "Die Quellen liefern nur Metadaten, Feldbeschreibungen und Tabellenprofile, aber keine erklärenden Texte oder Prozessbeschreibungen",
+      "Keine dokumentierten Zusammenhänge oder Abläufe im Evidence-Paket"
+    ],
+    "concrete_retrieval_fixes": [
+      "Suche nach Dokumentationen oder Prozessbeschreibungen zum virtuellen Lager bei Edeka ergänzen",
+      "Ergänzung um Fachtexte, Handbücher oder Prozessdiagramme, die Funktionsweise und Einsatz des virtuellen Lagers erklären",
+      "Mehr erklärende Textquellen statt nur Tabellenprofile und Feldbeschreibungen abrufen"
+    ],
+    "verdict": "iterate",
+    "one_line": "Antwort ist korrekt, aber nur oberflächlich und nutzt das Evidence-Paket nicht vollständig; für eine Prozessantwort fehlen erklärende Quellen."
+  },
+  "critique_tokens": {
+    "input": 2352,
+    "output": 365
+  }
+}

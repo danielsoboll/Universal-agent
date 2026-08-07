@@ -1,0 +1,141 @@
+{
+  "iteration": 1,
+  "pass": true,
+  "retrieval_recall": 0.6364,
+  "evidence_recall": 0.6364,
+  "critical_entities_missing": 4,
+  "unsupported_answer_claims": 0,
+  "classified_gaps": [
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "FORM_ROUTINE:ZSD_ZECD_NACHVERARBEITUNG.PROCESS_ZECD",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG_TOP",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZZ_PROCESS_V1_ZECD_JOB",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZAUSLIEFERUNGSMONITOR|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "RETRY_NAST|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "DOUBLE_CLICK|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "LCL_EVENTHANDLER|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|CALL_ALV",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|READ_ALV_VARIANT",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|SIMULATE",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|CHECK_ITEMS",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|CL_SALV_TABLE",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|FACTORY",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|GET_COLUMNS",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|GET_DISPLAY_SETTINGS",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|GET_MESSAGE_TEXT",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|SET_LIST_HEADER",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|SET_OPTIMIZE",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|CALLS_METHOD|SET_SCREEN_POPUP",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    }
+  ],
+  "duration_ms": 10235,
+  "docs_scanned": 32,
+  "tokens_in": 2800,
+  "answer_preview": "Die Nachricht ZECD ist eine Outputart mit der Bezeichnung \"Lieferrückmeldung\". Sie gehört zum Anwendungsbereich V1 und hat den Nachrichtenartcode ZECD mit dem Verarbeitungsmedium NACHA=8, welches die Bedeutung \"Spezialfunktion\" trägt. Die Verarbeitung der Nachricht erfolgt durch das Programm Z_PROCESS_MESSAGE_ZECD, das die Formularroutine ENTRY_V1 nutzt. Im Code wird die Funktion ZZ_PROCESS_V1_ZEC",
+  "paths": {
+    "ground_truth": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/ground-truth.json",
+    "retrieval": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/retrieval-run.json",
+    "openai_input": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-input.json",
+    "openai_output": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-output.json",
+    "report": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/evaluation-report.json"
+  }
+}

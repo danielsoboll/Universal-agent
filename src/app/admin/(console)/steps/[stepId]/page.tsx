@@ -22,11 +22,7 @@ import {
   reconcileSetupStage2,
 } from "@/lib/admin/datenbasis";
 import { getLocalDataRoot } from "@/lib/localData/root";
-
-function resolveProjectKey(slug: string | null | undefined): string {
-  const s = (slug ?? "").trim();
-  return s || "P01";
-}
+import { resolveBoundProjectKey } from "@/lib/localData/resolveDataProjectKey";
 
 const ACTION_BTN =
   "btn btn-secondary btn-quiet flex min-h-12 w-full items-center justify-center";
@@ -49,12 +45,16 @@ export default async function AdminSetupStepPage({
 
   let customersQuery = supabase
     .from("customers")
-    .select("id, name, slug, status, product_module")
+    .select("id, name, slug, status, product_module, landscape_label")
     .order("created_at", { ascending: false });
   customersQuery = applyCustomerScopeFilter(customersQuery, ctx);
 
   let { data: customers, error: customersError } = await customersQuery;
-  if (customersError && /product_module/i.test(customersError.message)) {
+  if (
+    customersError &&
+    (/product_module/i.test(customersError.message) ||
+      /landscape_label/i.test(customersError.message))
+  ) {
     let fallbackQuery = supabase
       .from("customers")
       .select("id, name, slug, status")
@@ -64,6 +64,7 @@ export default async function AdminSetupStepPage({
     customers = (retry.data ?? []).map((c) => ({
       ...c,
       product_module: null as string | null,
+      landscape_label: null as string | null,
     }));
     customersError = retry.error;
   }
@@ -81,8 +82,13 @@ export default async function AdminSetupStepPage({
   }
 
   const selectedCustomer = customers?.find((c) => c.id === customerId) ?? null;
-  const projectKey =
-    (sp.project ?? "").trim() || resolveProjectKey(selectedCustomer?.slug);
+  const projectKey = resolveBoundProjectKey({
+    slug: selectedCustomer?.slug,
+    landscapeLabel: (selectedCustomer as { landscape_label?: string | null } | null)
+      ?.landscape_label,
+    customerId,
+    hint: (sp.project ?? "").trim() || null,
+  });
 
   let hasGoals = false;
   let membershipCount = 0;

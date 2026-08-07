@@ -1,0 +1,141 @@
+{
+  "iteration": 1,
+  "pass": false,
+  "retrieval_recall": 0.2857,
+  "evidence_recall": 0.0714,
+  "critical_entities_missing": 13,
+  "unsupported_answer_claims": 2,
+  "classified_gaps": [
+    {
+      "kind": "entity",
+      "id": "OUTPUT_TYPE:B|V1|ZECD",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "OUTPUT_TYPE_TEXT:B|V1|ZECD|DE",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "OUTPUT_PROCESSING:V1|ZECD|8",
+      "cause": "EVIDENCE_FILTERED_OUT",
+      "detail": "In retrieval inventory but not in evidence package"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZEXECUTE_FAULTY_ZECD.ZEXECUTE_FAULTY_ZECD",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "FORM_ROUTINE:ZEXECUTE_FAULTY_ZECD.GET_DATA",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG.ZSD_ZECD_NACHVERARBEITUNG",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "FORM_ROUTINE:ZSD_ZECD_NACHVERARBEITUNG.SET_ALV_TITLE",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZZ_PROCESS_V1_ZECD_JOB.ZZ_PROCESS_V1_ZECD_JOB",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "FUNCTION_MODULE:ZZ_PROCESS_V1_ZECD.ZZ_PROCESS_V1_ZECD",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "METHOD:ZCL_AUMO_ATP.CHECK_ZECD_CAN_BE_SENT",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "METHOD:ZCL_AUMO_ATP.SEND_ZECD",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZSD_ZECD_NACHVERARBEITUNG",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "entity",
+      "id": "PROGRAM:ZZ_PROCESS_V1_ZECD_JOB",
+      "cause": "TOKEN_LIMIT_TRUNCATION",
+      "detail": "Present in ground truth but not retrieved into inventory/graph"
+    },
+    {
+      "kind": "relation",
+      "id": "ZAUSLIEFERUNGSMONITOR|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "RETRY_NAST|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "DOUBLE_CLICK|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "LCL_EVENTHANDLER|CALLS_FUNCTION|ZZ_PROCESS_V1_ZECD",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|CALL_ALV",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|READ_ALV_VARIANT",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    },
+    {
+      "kind": "relation",
+      "id": "ZEXECUTE_FAULTY_ZECD|PERFORMS|SIMULATE",
+      "cause": "RELATION_MISSING",
+      "detail": "Critical relation not represented in evidence package"
+    }
+  ],
+  "duration_ms": 14198,
+  "docs_scanned": 21,
+  "tokens_in": 2800,
+  "answer_preview": "Die Nachricht ZECD ist eine Outputart mit der Bezeichnung \"Lieferrückmeldung\". Sie gehört zum Anwendungsbereich V1 und hat den Nachrichtenartcode ZECD mit dem Verarbeitungsmedium NACHA=8, welches die Bedeutung \"Spezialfunktion\" trägt. Die Verarbeitung der Nachricht erfolgt durch das Programm Z_PROCESS_MESSAGE_ZECD, wobei die Formroutine ENTRY_V1 in diesem Programm für die Verarbeitung genutzt wird",
+  "paths": {
+    "ground_truth": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/ground-truth.json",
+    "retrieval": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/retrieval-run.json",
+    "openai_input": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-input.json",
+    "openai_output": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/openai-output.json",
+    "report": "/Users/DanielSon/SAP_AI_Exports/P01/logs/evaluation/zecd/evaluation-report.json"
+  }
+}

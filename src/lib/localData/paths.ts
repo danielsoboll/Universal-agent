@@ -95,7 +95,7 @@ export function resolveProjectZonePath(
   if (!isDataZone(zone)) {
     throw new LocalDataError(
       "INVALID_ZONE",
-      `Unbekannte Daten-Zone "${zone}". Erlaubt: raw, canonical, analyses, embeddings, indexes, logs.`,
+      `Unbekannte Daten-Zone "${zone}". Erlaubt: raw, canonical, analyses, embeddings, indexes, logs, requests.`,
     );
   }
 
@@ -126,7 +126,7 @@ export function resolveWritablePath(
   if (!isWritableZone(zone)) {
     throw new LocalDataError(
       "INVALID_ZONE",
-      `Zone "${zone}" ist nicht beschreibbar. Schreiben nur unter: canonical, analyses, embeddings, indexes, logs.`,
+      `Zone "${zone}" ist nicht beschreibbar. Schreiben nur unter: canonical, analyses, embeddings, indexes, logs, requests.`,
     );
   }
   return resolveProjectZonePath(projectKey, zone, ...relativeParts);
@@ -190,7 +190,7 @@ export function assertWritablePath(absolutePath: string): string {
   if (!isWritableZone(located.zone)) {
     throw new LocalDataError(
       "RAW_WRITE_FORBIDDEN",
-      `Schreiben unter "${READ_ONLY_ZONE}/" ist verboten. Erlaubt: canonical, analyses, embeddings, indexes, logs.\n  Pfad: ${located.relativeFromRoot}`,
+      `Schreiben unter "${READ_ONLY_ZONE}/" ist verboten. Erlaubt: canonical, analyses, embeddings, indexes, logs, requests.\n  Pfad: ${located.relativeFromRoot}`,
     );
   }
   return located.absolutePath;

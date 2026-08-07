@@ -1,0 +1,115 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+Repairing /Users/DanielSon/SAP_AI_Exports/P01/canonical/message-idoc-config/objects.jsonl
+objects kept/removed 45429 1968
+sample removed [
+  {
+    "object_type": "output_type",
+    "object_id": "A|CS|A-B1",
+    "display_name": "A-B1",
+    "source": {
+      "raw_file": "Q01_20260805_170742_MESSAGE_IDOC_01_OUTPUT_TYPES_CONTENT.jsonl",
+      "config_group": "MESSAGE_IDOC_01_OUTPUT_TYPES",
+      "source_table": "T685",
+      "system_id": "Q01",
+      "client": "001"
+    },
+    "attributes": {
+      "KVEWE": "A",
+      "KAPPL": "CS",
+      "KSCHL": "A-B1"
+    },
+    "_canonical_key": "459d864690d2387be1027f8b"
+  },
+  {
+    "object_type": "output_type",
+    "object_id": "A|CS|A-B2",
+    "display_name": "A-B2",
+    "source": {
+      "raw_file": "Q01_20260805_170742_MESSAGE_IDOC_01_OUTPUT_TYPES_CONTENT.jsonl",
+      "config_group": "MESSAGE_IDOC_01_OUTPUT_TYPES",
+      "source_table": "T685",
+      "system_id": "Q01",
+      "client": "001"
+    },
+    "attributes": {
+      "KVEWE": "A",
+      "KAPPL": "CS",
+      "KSCHL": "A-B2"
+    },
+    "_canonical_key": "ec7487e1bd6dbd44f7e80abf"
+  },
+  {
+    "object_type": "output_type",
+    "object_id": "A|CS|A-Z1",
+    "display_name": "A-Z1",
+    "source": {
+      "raw_file": "Q01_20260805_170742_MESSAGE_IDOC_01_OUTPUT_TYPES_CONTENT.jsonl",
+      "config_group": "MESSAGE_IDOC_01_OUTPUT_TYPES",
+      "source_table": "T685",
+      "system_id": "Q01",
+      "client": "001"
+    },
+    "attributes": {
+      "KVEWE": "A",
+      "KAPPL": "CS",
+      "KSCHL": "A-Z1",
+      "KOZGF": "KRS1"
+    },
+    "_canonical_key": "96a191bd11337ec9a333d5a5"
+  }
+]
+Repairing /Users/DanielSon/SAP_AI_Exports/P01/canonical/message-idoc-config/object_ids.jsonl
+object_ids kept/removed 45429 1968
+Repairing /Users/DanielSon/SAP_AI_Exports/P01/canonical/message-idoc-config/relations.jsonl
+relations kept/removed 7545 0
+Repairing hybrid search_documents for dropped keys 1968
+search_documents kept/removed 31181 1968
+{
+  "ZRAH_still_output_type": false,
+  "ZECD_still_output_type": true,
+  "dropped_canonical_keys": [
+    "459d864690d2387be1027f8b",
+    "ec7487e1bd6dbd44f7e80abf",
+    "96a191bd11337ec9a333d5a5",
+    "823b44a04415bfb9cca99f37",
+    "e974046c194a977387d8c5cf",
+    "b7dc63dac4427aced9930209",
+    "d2f2ee5db2fe0ee03e44a999",
+    "4e115d6c3ccbd125562bb559",
+    "015354a403003aaf62503e1a",
+    "c966653ee298fd50b129fe4a",
+    "8575c58387eb8e19b62d7ae7",
+    "5db266d6fb10c0b4f2e609e0",
+    "3508832fda7e408c7a3aee0c",
+    "8c12ff871da2725d915c8aa9",
+    "cb05d107156d7af0228e23f1",
+    "26e91994e4db13b444e5b458",
+    "82b7cff40907445351aaeb40",
+    "1faf5d2b96456d427243aee1",
+    "ff5af168c6731f04a6604b96",
+    "15a213056601529c334b94b4"
+  ],
+  "dropped_ids_sample": [
+    "A|CS|A-B1",
+    "A|CS|A-B2",
+    "A|CS|A-Z1",
+    "A|CS|A-Z2",
+    "A|CS|A-Z3",
+    "A|CS|SAPB",
+    "A|CS|SAPZ",
+    "A|KA|B000",
+    "A|KA|B001",
+    "A|KA|B002",
+    "A|KA|B010",
+    "A|KA|C000",
+    "A|KA|C001",
+    "A|KA|C002",
+    "A|KA|C003",
+    "A|KA|C010",
+    "A|KA|C011",
+    "A|KA|C012",
+    "A|KA|C013",
+    "A|KA|C020"
+  ],
+  "dropped_id_count": 1968
+}

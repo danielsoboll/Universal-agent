@@ -5,8 +5,13 @@ import {
 } from "../../src/lib/admin/datenbasis/exportTypeConfig";
 import {
   createInitialManifest,
+  DATENBASIS_PROGRESS,
+  DATENBASIS_STEP_WEIGHTS,
+  isCanonicalReady,
+  nextActionLabel,
   progressPercent,
 } from "../../src/lib/admin/datenbasis/manifestStore";
+import { DATENBASIS_STEP_IDS } from "../../src/lib/admin/datenbasis/types";
 import {
   canonicalizeMaterialsExport,
   materialsValidationOk,
@@ -37,13 +42,6 @@ function main() {
       classes!.certainty === "verified",
   );
 
-  const master = getExportTypeConfig("master-data");
-  assert.ok(master);
-  assert.equal(master!.certainty, "unknown");
-  assert.equal(master!.filenamePattern, null);
-  assert.equal(master!.headerExportType, null);
-  assert.equal(master!.implementation, "locked");
-
   const materials = getExportTypeConfig("materials");
   assert.ok(materials);
   assert.equal(materials!.implementation, "full");
@@ -61,6 +59,11 @@ function main() {
       p.includes("canonical/master-data/materials"),
     ),
   );
+
+  // No Stammdaten-Rahmen scaffold; unique display order indices
+  assert.equal(getExportTypeConfig("master-data"), null);
+  const orderIndexes = configs.map((c) => c.orderIndex);
+  assert.equal(new Set(orderIndexes).size, orderIndexes.length);
 
   const messageIdoc = getExportTypeConfig("message-idoc-config");
   assert.ok(messageIdoc);
@@ -93,10 +96,74 @@ function main() {
   assert.equal(fms!.rawFolder, "raw/programs");
   assert.ok(fms!.unlockIndependent);
 
+  // Feste Fortschritts-Logik: Gewichte + Meilensteine
+  const weightSum = DATENBASIS_STEP_IDS.reduce(
+    (s, id) => s + DATENBASIS_STEP_WEIGHTS[id],
+    0,
+  );
+  assert.equal(weightSum, 100);
+  assert.equal(DATENBASIS_PROGRESS.CANONICAL_READY_PERCENT, 40);
+  assert.equal(DATENBASIS_PROGRESS.AFTER_TESTS_PERCENT, 55);
+  assert.equal(DATENBASIS_PROGRESS.AFTER_INDEX_PERCENT, 85);
+
   const m = createInitialManifest("P01", classes!, true);
   assert.equal(m.steps.A_sap_export.status, "ready");
-  assert.equal(m.steps.B_raw_detect.status, "locked");
+  assert.equal(m.steps.B_raw_detect.status, "open");
   assert.equal(progressPercent(m), 0);
+
+  // A–D done = 40 % (Canonical bereit, Index ausstehend)
+  const weighted = createInitialManifest("P01", materials!, true);
+  for (const id of [
+    "A_sap_export",
+    "B_raw_detect",
+    "C_validate",
+    "D_convert",
+  ] as const) {
+    weighted.steps[id] = { ...weighted.steps[id], status: "done" };
+  }
+  weighted.overall = "in_progress";
+  assert.equal(isCanonicalReady(weighted), true);
+  assert.equal(
+    progressPercent(weighted),
+    DATENBASIS_PROGRESS.CANONICAL_READY_PERCENT,
+  );
+  assert.equal(
+    nextActionLabel(weighted).label,
+    DATENBASIS_PROGRESS.LABEL_CANONICAL_READY,
+  );
+
+  weighted.steps.E_test_questions = {
+    ...weighted.steps.E_test_questions,
+    status: "done",
+  };
+  assert.equal(
+    progressPercent(weighted),
+    DATENBASIS_PROGRESS.AFTER_TESTS_PERCENT,
+  );
+  assert.equal(
+    nextActionLabel(weighted).label,
+    DATENBASIS_PROGRESS.LABEL_INDEX_PENDING,
+  );
+
+  weighted.steps.F_rag_test = {
+    ...weighted.steps.F_rag_test,
+    status: "done",
+  };
+  assert.equal(
+    progressPercent(weighted),
+    DATENBASIS_PROGRESS.AFTER_INDEX_PERCENT,
+  );
+  assert.equal(
+    nextActionLabel(weighted).label,
+    DATENBASIS_PROGRESS.LABEL_APPROVAL_PENDING,
+  );
+
+  weighted.steps.G_approve = {
+    ...weighted.steps.G_approve,
+    status: "done",
+  };
+  weighted.overall = "approved";
+  assert.equal(progressPercent(weighted), 100);
 
   const mm = createInitialManifest("P01", materials!, true);
   assert.equal(mm.steps.A_sap_export.status, "ready");

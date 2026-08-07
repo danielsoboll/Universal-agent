@@ -1,0 +1,737 @@
+{
+  "status": "ok",
+  "question": "Wie funktioniert das Edeka virtuelle Lager genau?",
+  "direct_answer": "Das Edeka virtuelle Lager ist ein technisches Konzept, das über spezifische Tabellen gesteuert wird, insbesondere zur Kontrolle von Auftragsarten und Absagegründen. Es handelt sich um ein System, das Aufträge und deren Bearbeitung im virtuellen Lager regelt, wobei bestimmte Auftragsarten nicht erlaubt sind und Absagegründe dokumentiert werden.",
+  "reasoning": "Sicher belegt: Das virtuelle Lager von Edeka wird durch spezifische Tabellen gesteuert, darunter ZVLAGER_AUART für nicht erlaubte Auftragsarten und ZZTVAG für Absagegründe im virtuellen Lager. Die Tabelle ZVLAGER_AUART enthält Informationen über nicht erlaubte Auftragsarten im Dialog mit dem virtuellen Lager. Die Tabelle ZZTVAG dokumentiert Absagegründe im virtuellen Lager und ist eine kundeneigene Customizing-/Steuertabelle.\nOffen: Die genaue Prozesslogik und Abläufe im virtuellen Lager sind nicht dokumentiert. Die fachlichen Hintergründe und Ziele des virtuellen Lagers bei Edeka sind nicht belegt. Details zur Integration des virtuellen Lagers in die Gesamtlogistik oder IT-Systeme von Edeka fehlen.",
+  "technical_objects": [],
+  "uncertainties": [
+    "Die genaue Prozesslogik und Abläufe im virtuellen Lager sind nicht dokumentiert.",
+    "Die fachlichen Hintergründe und Ziele des virtuellen Lagers bei Edeka sind nicht belegt.",
+    "Details zur Integration des virtuellen Lagers in die Gesamtlogistik oder IT-Systeme von Edeka fehlen."
+  ],
+  "process_answer": {
+    "direct_answer": "Das Edeka virtuelle Lager ist ein technisches Konzept, das über spezifische Tabellen gesteuert wird, insbesondere zur Kontrolle von Auftragsarten und Absagegründen. Es handelt sich um ein System, das Aufträge und deren Bearbeitung im virtuellen Lager regelt, wobei bestimmte Auftragsarten nicht erlaubt sind und Absagegründe dokumentiert werden.",
+    "special_process": "Das virtuelle Lager von Edeka wird durch spezifische Tabellen gesteuert, darunter ZVLAGER_AUART für nicht erlaubte Auftragsarten und ZZTVAG für Absagegründe im virtuellen Lager. Die Tabelle ZVLAGER_AUART enthält Informationen über nicht erlaubte Auftragsarten im Dialog mit dem virtuellen Lager.",
+    "trigger": "",
+    "process_effect": "",
+    "business_interpretation": "",
+    "open_validation_questions": [
+      "Die genaue Prozesslogik und Abläufe im virtuellen Lager sind nicht dokumentiert.",
+      "Die fachlichen Hintergründe und Ziele des virtuellen Lagers bei Edeka sind nicht belegt.",
+      "Details zur Integration des virtuellen Lagers in die Gesamtlogistik oder IT-Systeme von Edeka fehlen."
+    ],
+    "confirmed": [
+      {
+        "text": "Das virtuelle Lager von Edeka wird durch spezifische Tabellen gesteuert, darunter ZVLAGER_AUART für nicht erlaubte Auftragsarten und ZZTVAG für Absagegründe im virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          9,
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART",
+          "table_profile:ZZTVAG"
+        ]
+      },
+      {
+        "text": "Die Tabelle ZVLAGER_AUART enthält Informationen über nicht erlaubte Auftragsarten im Dialog mit dem virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Die Tabelle ZZTVAG dokumentiert Absagegründe im virtuellen Lager und ist eine kundeneigene Customizing-/Steuertabelle.",
+        "level": "confirmed",
+        "source_ranks": [
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "inferred": [],
+    "open": [
+      {
+        "text": "Die genaue Prozesslogik und Abläufe im virtuellen Lager sind nicht dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Die fachlichen Hintergründe und Ziele des virtuellen Lagers bei Edeka sind nicht belegt.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Details zur Integration des virtuellen Lagers in die Gesamtlogistik oder IT-Systeme von Edeka fehlen.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ],
+    "has_safe_process_claim": true,
+    "no_process_claim_message": ""
+  },
+  "technical_answer": {
+    "entry_point": [
+      {
+        "text": "Das virtuelle Lager wird über Tabellen wie ZVLAGER_AUART und ZZTVAG verwaltet.",
+        "level": "confirmed",
+        "source_ranks": [
+          9,
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART",
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "trigger": [
+      {
+        "text": "Aufträge, die im virtuellen Lager verarbeitet werden, lösen Prüfungen auf erlaubte Auftragsarten aus.",
+        "level": "inferred",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      }
+    ],
+    "processing": [
+      {
+        "text": "Die Tabelle ZVLAGER_AUART definiert, welche Auftragsarten im virtuellen Lager nicht erlaubt sind, um die Auftragsverarbeitung zu steuern.",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Die Tabelle ZZTVAG enthält Absagegründe, die bei der Bearbeitung von Aufträgen im virtuellen Lager verwendet werden können.",
+        "level": "confirmed",
+        "source_ranks": [
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "objects": [
+      {
+        "text": "ZVLAGER_AUART: Tabelle mit nicht erlaubten Auftragsarten im virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "ZZTVAG: Tabelle mit Absagegründen im virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "text": "Steuerung der Auftragsarten und Dokumentation von Absagegründen im virtuellen Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          9,
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART",
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "text": "READ ZVLAGER_AUART",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "READ ZZTVAG",
+        "level": "confirmed",
+        "source_ranks": [
+          10
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Details zur genauen Funktionsweise und Prozessabläufen des virtuellen Lagers sind nicht dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "technical_details": {
+    "sources": [
+      {
+        "object_kind": "TABLE",
+        "class_or_program": "ZVLAGER_AUART",
+        "method_or_routine": "",
+        "source_key": "table_profile:ZVLAGER_AUART",
+        "title": "Tabellenprofil ZVLAGER_AUART",
+        "knowledge_unit_type": "table_profile",
+        "rank": 9,
+        "score": 29.2103767583968
+      },
+      {
+        "object_kind": "TABLE",
+        "class_or_program": "ZZTVAG",
+        "method_or_routine": "",
+        "source_key": "table_profile:ZZTVAG",
+        "title": "Tabellenprofil ZZTVAG",
+        "knowledge_unit_type": "table_profile",
+        "rank": 10,
+        "score": 28.884401391887437
+      }
+    ],
+    "callers": [],
+    "called_objects": [],
+    "conditions": [],
+    "table_accesses": [
+      "READ ZVLAGER_AUART",
+      "READ ZZTVAG"
+    ],
+    "hardcoded_values": [],
+    "changed_fields": [],
+    "evidence": [
+      "CanonicalTableDefinition:Q01|001|ZVLAGER_AUART",
+      "CanonicalTableClassification:Q01|001|ZVLAGER_AUART",
+      "CanonicalTableDefinition:Q01|001|ZZTVAG",
+      "CanonicalTableClassification:Q01|001|ZZTVAG",
+      "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+      "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+      "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=91",
+      "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=92",
+      "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P1"
+    ],
+    "facts": [
+      "Tabelle ZVLAGER_AUART",
+      "Beschreibung: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)",
+      "Delivery Class A",
+      "Klassifikation NON_CONTROL_TABLE (Score 20)",
+      "Export-Klassifikation: keine Steuertabelle",
+      "Zeilen im Abzug: 0",
+      "Schlüsselfelder: MANDT, ZZ_VLAGER, AUART",
+      "Keine bekannten Code-Referenzen",
+      "Tabelle ZZTVAG",
+      "Beschreibung: Absagegründe im Virtuellen Lager",
+      "Delivery Class C",
+      "Klassifikation CUSTOMIZING_CONTROL_TABLE (Score 100)",
+      "Export-Klassifikation: kundeneigene Customizing-/Steuertabelle",
+      "Zeilen im Abzug: 17",
+      "Schlüsselfelder: MANDT, ZZ_VLAGER, ABGRU"
+    ],
+    "inferences": [
+      "Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15; LOG_OR_TECHNICAL_NAME:-20",
+      "Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)",
+      "Klassifikationshinweise (exportiert): DELIVERY_CLASS_C:+40; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15",
+      "Abgeleitete Grobkategorie customizing_like aus Delivery Class/Klassifikation (nicht fachlich verifiziert)"
+    ],
+    "confidence": 0.875,
+    "retrieval_mode": "hybrid (exact + fulltext + vector)",
+    "retrieval_scores": [
+      {
+        "rank": 9,
+        "title": "Tabellenprofil ZVLAGER_AUART",
+        "combined": 29.2103767583968,
+        "exact": 1,
+        "fulltext": 19.344457914352546,
+        "vector": 0.3740090870579158
+      },
+      {
+        "rank": 10,
+        "title": "Tabellenprofil ZZTVAG",
+        "combined": 28.884401391887437,
+        "exact": 1,
+        "fulltext": 19.344457914352546,
+        "vector": 0.3903506315547952
+      }
+    ]
+  },
+  "compact_technical_details": {
+    "quelle": [
+      "TABLE ZVLAGER_AUART (table_profile:ZVLAGER_AUART)",
+      "TABLE ZZTVAG (table_profile:ZZTVAG)"
+    ],
+    "ausloeser": [
+      "Tabelle (gelesen): ZVLAGER_AUART",
+      "Tabelle (gelesen): ZZTVAG"
+    ],
+    "systemaktion": [],
+    "beleg": [
+      "#9 Tabelle ZVLAGER_AUART",
+      "#10 Tabelle ZZTVAG"
+    ],
+    "unsicherheit": [],
+    "hidden_hardcodings": []
+  },
+  "question_intent": "entity_specific",
+  "evidence_context_report": {
+    "input_hit_count": 12,
+    "detailed_count": 3,
+    "compact_count": 6,
+    "omitted_count": 3,
+    "previously_weak_fields_now_included": [
+      "relations",
+      "callers_callees",
+      "reads/writes",
+      "entity_grounding_status",
+      "typed facts/inferences",
+      "diversified code+table+rule set"
+    ],
+    "notes": [
+      "3 weitere Treffer nur als Rank-Liste weggelassen (Token-Budget)."
+    ]
+  },
+  "entity_grounding": [],
+  "relevance_gate": {
+    "answerability": "answerable",
+    "query_concepts": [
+      "Edeka",
+      "virtuelle",
+      "Lager",
+      "genau"
+    ],
+    "matched_concepts": [
+      "Edeka",
+      "virtuelle",
+      "Lager"
+    ],
+    "missing_concepts": [
+      "genau"
+    ],
+    "supporting_source_ids": [
+      "sd_3d2edcf8aea934bceb699da16b058929",
+      "sd_fa0190d6daa973a9c5fe8e6504d95ab6",
+      "sd_6e1ec42f055c7b93826b719c8bdda734",
+      "sd_922ffbaa5ea3c7d49fca12a8cb452761",
+      "sd_44e30200544e88ac582a637296bf6823",
+      "sd_e9f7924927c8a8a24edec97663fa80b6",
+      "sd_5ff8dd4fb69a79c087d5aa9de286e6fd",
+      "sd_063f99a16d51d2fca0a9f858e2bfa9a4",
+      "sd_b9d380a74d5c5eb45ee234e98cba7e2a",
+      "sd_9d2c93c5f1d4a13bcf0c8a5a791888f8",
+      "sd_ef38a84273242293721fc67c3a33aad6",
+      "sd_a3d49a4c578875d6932ce0e8b0b58588"
+    ],
+    "contradicting_source_ids": [],
+    "similar_but_insufficient_source_ids": [],
+    "reason": "Zentrale Query-Konzepte sind in den Quellen belegt."
+  },
+  "sources": [
+    {
+      "rank": 9,
+      "search_document_id": "sd_b9d380a74d5c5eb45ee234e98cba7e2a",
+      "source_key": "table_profile:ZVLAGER_AUART",
+      "title": "Tabellenprofil ZVLAGER_AUART",
+      "knowledge_unit_type": "table_profile",
+      "combined_score": 29.2103767583968,
+      "exact_score": 1,
+      "fulltext_score": 19.344457914352546,
+      "vector_score": 0.3740090870579158,
+      "metadata_score": 0.5,
+      "confidence_bonus": 0.375,
+      "confidence": 0.75,
+      "matched_terms": [
+        "LAGER",
+        "lager"
+      ],
+      "snippet": "TITLE\nTabellenprofil ZVLAGER_AUART\ntable_profile | TABLE | ZVLAGER_AUART | table_profile:ZVLAGER_AUART\nTECHNICAL\nNicht erlaubte Auftragsarten virtuelles Lager (Dialog)\nFACTS\nFACT: Tabelle ZVLAGER_AUART\nFACT: Beschreibung: Nicht erlaubte Auf",
+      "evidence_refs": [
+        "CanonicalTableDefinition:Q01|001|ZVLAGER_AUART",
+        "CanonicalTableClassification:Q01|001|ZVLAGER_AUART"
+      ],
+      "facts": [
+        "Tabelle ZVLAGER_AUART",
+        "Beschreibung: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)",
+        "Delivery Class A",
+        "Klassifikation NON_CONTROL_TABLE (Score 20)",
+        "Export-Klassifikation: keine Steuertabelle",
+        "Zeilen im Abzug: 0",
+        "Schlüsselfelder: MANDT, ZZ_VLAGER, AUART",
+        "Keine bekannten Code-Referenzen"
+      ],
+      "inferences": [
+        "Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15; LOG_OR_TECHNICAL_NAME:-20",
+        "Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)"
+      ],
+      "metadata": {
+        "search_document_version": "search-document-v1",
+        "evidence_refs": [
+          "CanonicalTableDefinition:Q01|001|ZVLAGER_AUART",
+          "CanonicalTableClassification:Q01|001|ZVLAGER_AUART"
+        ],
+        "business_terms": [
+          "ZVLAGER_AUART",
+          "Nicht",
+          "erlaubte",
+          "Auftragsarten",
+          "virtuelles",
+          "Lager",
+          "Mandant",
+          "Kennzeichen",
+          "Verkaufsbelegart"
+        ],
+        "category": "transaction_data",
+        "row_count": 0,
+        "knowledge_unit_id": "tku:26dc7c725486d7f5:ZVLAGER_AUART",
+        "fields": [
+          "MANDT",
+          "ZZ_VLAGER",
+          "AUART"
+        ],
+        "key_values": [
+          "MANDT",
+          "ZZ_VLAGER",
+          "AUART"
+        ],
+        "code_references": [],
+        "raw_source_files": [
+          "control-tables/definitions/sap_z_control_tables_Q01.jsonl",
+          "control-tables/contents/sap_z_control_tables_Q01_cont.jsonl"
+        ]
+      },
+      "object_name": "ZVLAGER_AUART",
+      "object_type": "TABLE",
+      "subobject_name": "",
+      "technical_summary": "Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)",
+      "business_purpose": "",
+      "tables_read": [
+        "ZVLAGER_AUART"
+      ],
+      "tables_written": [],
+      "called_methods": [],
+      "called_functions": [],
+      "hardcoded_values": [],
+      "entities": [
+        {
+          "kind": "category",
+          "name": "transaction_data",
+          "normalized": "TRANSACTION_DATA"
+        },
+        {
+          "kind": "classification",
+          "name": "NON_CONTROL_TABLE",
+          "normalized": "NON_CONTROL_TABLE"
+        },
+        {
+          "kind": "key_field",
+          "name": "AUART",
+          "normalized": "AUART"
+        },
+        {
+          "kind": "key_field",
+          "name": "MANDT",
+          "normalized": "MANDT"
+        },
+        {
+          "kind": "key_field",
+          "name": "ZZ_VLAGER",
+          "normalized": "ZZ_VLAGER"
+        },
+        {
+          "kind": "table",
+          "name": "ZVLAGER_AUART",
+          "normalized": "ZVLAGER_AUART"
+        },
+        {
+          "kind": "term",
+          "name": "Auftragsarten",
+          "normalized": "AUFTRAGSARTEN"
+        },
+        {
+          "kind": "term",
+          "name": "erlaubte",
+          "normalized": "ERLAUBTE"
+        },
+        {
+          "kind": "term",
+          "name": "Kennzeichen",
+          "normalized": "KENNZEICHEN"
+        },
+        {
+          "kind": "term",
+          "name": "Lager",
+          "normalized": "LAGER"
+        },
+        {
+          "kind": "term",
+          "name": "Mandant",
+          "normalized": "MANDANT"
+        },
+        {
+          "kind": "term",
+          "name": "Nicht",
+          "normalized": "NICHT"
+        },
+        {
+          "kind": "term",
+          "name": "Verkaufsbelegart",
+          "normalized": "VERKAUFSBELEGART"
+        },
+        {
+          "kind": "term",
+          "name": "virtuelles",
+          "normalized": "VIRTUELLES"
+        },
+        {
+          "kind": "term",
+          "name": "ZVLAGER_AUART",
+          "normalized": "ZVLAGER_AUART"
+        }
+      ],
+      "relations": [],
+      "evidence": [],
+      "doc_confidence": 0.75
+    },
+    {
+      "rank": 10,
+      "search_document_id": "sd_9d2c93c5f1d4a13bcf0c8a5a791888f8",
+      "source_key": "table_profile:ZZTVAG",
+      "title": "Tabellenprofil ZZTVAG",
+      "knowledge_unit_type": "table_profile",
+      "combined_score": 28.884401391887437,
+      "exact_score": 1,
+      "fulltext_score": 19.344457914352546,
+      "vector_score": 0.3903506315547952,
+      "metadata_score": 0,
+      "confidence_bonus": 0.5,
+      "confidence": 1,
+      "matched_terms": [
+        "LAGER",
+        "lager"
+      ],
+      "snippet": "| table_profile:ZZTVAG\nTECHNICAL\nAbsagegründe im Virtuellen Lager\nFACTS\nFACT: Tabelle ZZTVAG\nFACT: Beschreibung: Absagegründe im Virtuellen Lager\nFACT: Delivery Class C\nFACT: Klassifikation CUSTOMIZING_CONTROL_TABLE (Score 100)\nFACT: Export",
+      "evidence_refs": [
+        "CanonicalTableDefinition:Q01|001|ZZTVAG",
+        "CanonicalTableClassification:Q01|001|ZZTVAG",
+        "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+        "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+        "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=91",
+        "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=92",
+        "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P1"
+      ],
+      "facts": [
+        "Tabelle ZZTVAG",
+        "Beschreibung: Absagegründe im Virtuellen Lager",
+        "Delivery Class C",
+        "Klassifikation CUSTOMIZING_CONTROL_TABLE (Score 100)",
+        "Export-Klassifikation: kundeneigene Customizing-/Steuertabelle",
+        "Zeilen im Abzug: 17",
+        "Schlüsselfelder: MANDT, ZZ_VLAGER, ABGRU",
+        "Keine bekannten Code-Referenzen"
+      ],
+      "inferences": [
+        "Klassifikationshinweise (exportiert): DELIVERY_CLASS_C:+40; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15",
+        "Abgeleitete Grobkategorie customizing_like aus Delivery Class/Klassifikation (nicht fachlich verifiziert)"
+      ],
+      "metadata": {
+        "search_document_version": "search-document-v1",
+        "evidence_refs": [
+          "CanonicalTableDefinition:Q01|001|ZZTVAG",
+          "CanonicalTableClassification:Q01|001|ZZTVAG",
+          "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+          "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+          "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=91",
+          "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=92",
+          "CanonicalTableRow:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P1"
+        ],
+        "business_terms": [
+          "ZZTVAG",
+          "Absagegründe",
+          "Virtuellen",
+          "Lager",
+          "Mandant",
+          "Kennzeichen",
+          "virtuelles",
+          "Absagegrund",
+          "Teilmengen",
+          "Angebote",
+          "Aufträge"
+        ],
+        "category": "customizing_like",
+        "row_count": 17,
+        "knowledge_unit_id": "tku:6e365dc728d685ba:ZZTVAG",
+        "fields": [
+          "MANDT",
+          "ZZ_VLAGER",
+          "ABGRU",
+          "ABWGRUND"
+        ],
+        "key_values": [
+          "MANDT",
+          "ZZ_VLAGER",
+          "ABGRU"
+        ],
+        "code_references": [],
+        "raw_source_files": [
+          "control-tables/definitions/sap_z_control_tables_Q01.jsonl",
+          "control-tables/contents/sap_z_control_tables_Q01_cont.jsonl"
+        ]
+      },
+      "object_name": "ZZTVAG",
+      "object_type": "TABLE",
+      "subobject_name": "",
+      "technical_summary": "Absagegründe im Virtuellen Lager",
+      "business_purpose": "",
+      "tables_read": [
+        "ZZTVAG"
+      ],
+      "tables_written": [],
+      "called_methods": [],
+      "called_functions": [],
+      "hardcoded_values": [],
+      "entities": [
+        {
+          "kind": "category",
+          "name": "customizing_like",
+          "normalized": "CUSTOMIZING_LIKE"
+        },
+        {
+          "kind": "classification",
+          "name": "CUSTOMIZING_CONTROL_TABLE",
+          "normalized": "CUSTOMIZING_CONTROL_TABLE"
+        },
+        {
+          "kind": "key_field",
+          "name": "ABGRU",
+          "normalized": "ABGRU"
+        },
+        {
+          "kind": "key_field",
+          "name": "MANDT",
+          "normalized": "MANDT"
+        },
+        {
+          "kind": "key_field",
+          "name": "ZZ_VLAGER",
+          "normalized": "ZZ_VLAGER"
+        },
+        {
+          "kind": "table",
+          "name": "ZZTVAG",
+          "normalized": "ZZTVAG"
+        },
+        {
+          "kind": "term",
+          "name": "Absagegrund",
+          "normalized": "ABSAGEGRUND"
+        },
+        {
+          "kind": "term",
+          "name": "Absagegründe",
+          "normalized": "ABSAGEGRÜNDE"
+        },
+        {
+          "kind": "term",
+          "name": "Angebote",
+          "normalized": "ANGEBOTE"
+        },
+        {
+          "kind": "term",
+          "name": "Aufträge",
+          "normalized": "AUFTRÄGE"
+        },
+        {
+          "kind": "term",
+          "name": "Kennzeichen",
+          "normalized": "KENNZEICHEN"
+        },
+        {
+          "kind": "term",
+          "name": "Lager",
+          "normalized": "LAGER"
+        },
+        {
+          "kind": "term",
+          "name": "Mandant",
+          "normalized": "MANDANT"
+        },
+        {
+          "kind": "term",
+          "name": "Teilmengen",
+          "normalized": "TEILMENGEN"
+        },
+        {
+          "kind": "term",
+          "name": "Virtuellen",
+          "normalized": "VIRTUELLEN"
+        },
+        {
+          "kind": "term",
+          "name": "virtuelles",
+          "normalized": "VIRTUELLES"
+        },
+        {
+          "kind": "term",
+          "name": "ZZTVAG",
+          "normalized": "ZZTVAG"
+        }
+      ],
+      "relations": [],
+      "evidence": [],
+      "doc_confidence": 1
+    }
+  ],
+  "model": "gpt-4.1-mini",
+  "token_usage": {
+    "input": 3129,
+    "output": 635,
+    "embedding": 12
+  },
+  "estimated_cost": 0.002268,
+  "retrieval_summary": "12 Treffer aus 33149 Dokumenten",
+  "retrieval_mode": "hybrid (exact + fulltext + vector)",
+  "searched_document_count": 33149,
+  "top_score": 37.62292480957587,
+  "index_path": "indexes/search",
+  "vector_search_active": true,
+  "search_mode": "direct_rag",
+  "requested_search_mode": "direct_rag",
+  "query_plan": null,
+  "subquery_count": 1,
+  "planner_fallback": false,
+  "warnings": [],
+  "duration_ms": 32893,
+  "domain_profile_id": "generic_documents",
+  "prompt_key": "answer_synthesizer.base.v2+answer_synthesizer.generic_documents.v1",
+  "prompt_version": "v2+v1",
+  "search_profile_id": "search.generic_documents.v1",
+  "workflow_template_id": null,
+  "conversation_mode": false,
+  "planned_run_id": null,
+  "topic_gate": null
+}

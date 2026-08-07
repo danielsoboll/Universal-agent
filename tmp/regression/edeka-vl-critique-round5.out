@@ -1,0 +1,318 @@
+{
+  "question": "Wie funktioniert das Edeka virtuelle Lager?",
+  "retrieval_mode": "hybrid (exact + fulltext + vector)",
+  "duration_ms": 43619,
+  "warnings": [
+    "Code-Expansion: 10 Canonical-Treffer zu [ZZ_VLAGER, KNVV-ZZ_VLAGER, ZVLAGER_AUART, ZZTVAG]",
+    "Lexikalische DDIC-Suche: 9 Phrase-/Feldtreffer priorisiert"
+  ],
+  "top_hits": [
+    {
+      "rank": 1,
+      "type": "master_field",
+      "key": "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+      "score": 391
+    },
+    {
+      "rank": 2,
+      "type": "table_profile",
+      "key": "table_profile:ZVLAGER_AUART",
+      "score": 366
+    },
+    {
+      "rank": 3,
+      "type": "table_profile",
+      "key": "table_profile:ZZTVAG",
+      "score": 331
+    },
+    {
+      "rank": 4,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+      "score": 64
+    },
+    {
+      "rank": 5,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK",
+      "score": 64
+    },
+    {
+      "rank": 6,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+      "score": 64
+    },
+    {
+      "rank": 7,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER",
+      "score": 64
+    },
+    {
+      "rank": 8,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_ABSAGE20",
+      "score": 64
+    }
+  ],
+  "direct_answer": "Das Edeka virtuelle Lager wird durch das Kennzeichen ZZ_VLAGER in den Stammdaten gesteuert und beeinflusst die Verarbeitung von Lieferungen, insbesondere die Änderung von Verpackungsinformationen nach Versand der Confirm-Nachricht sowie die Behandlung von Absagegründen und Lieferpositionen.",
+  "reasoning": "Sicher belegt: Das Feld KNVV-ZZ_VLAGER ist ein Kennzeichen für das virtuelle Lager in den Stammdaten. Im Prozess werden nach dem Versand der Confirm-Nachricht keine Verpackungsinformationen mehr für Positionen mit ZZ_VLAGER='X' geändert. Nur bei Änderungen an virtuellen Lagern wird der Lieferschein (LF) angepasst, erkennbar an ZZ_VLAGER='X' und bestimmten Transporttypen (B oder V). Absagegründe im virtuellen Lager werden in der Tabelle ZZTVAG mit Bezug auf ZZ_VLAGER verwaltet. Es gibt Prüfungen und Logiken, die auf das Kennzeichen ZZ_VLAGER referenzieren, z.B. bei der Prüfung von Lieferpositionen, Änderung von Lieferpositionen und beim Lesen von Lieferungen.\nOffen: Der vollständige fachliche Zweck und die organisatorischen Ziele des virtuellen Lagers sind nicht dokumentiert. Details zur genauen Prozesswirkung auf die Lagerhaltung und Bestandsführung sind nicht belegt.",
+  "process_answer": {
+    "trigger": "Änderungen an Lieferungen mit dem Kennzeichen ZZ_VLAGER und bestimmten Transporttypen (B oder V) lösen spezielle Prüfungen und Anpassungen aus.",
+    "process_effect": "Das Feld KNVV-ZZ_VLAGER ist ein Kennzeichen für das virtuelle Lager in den Stammdaten. Im Prozess werden nach dem Versand der Confirm-Nachricht keine Verpackungsinformationen mehr für Positionen mit ZZ_VLAGER='X' geändert.",
+    "special_process": "Das Feld KNVV-ZZ_VLAGER ist ein Kennzeichen für das virtuelle Lager in den Stammdaten. Im Prozess werden nach dem Versand der Confirm-Nachricht keine Verpackungsinformationen mehr für Positionen mit ZZ_VLAGER='X' geändert.",
+    "confirmed": [
+      {
+        "text": "Das Feld KNVV-ZZ_VLAGER ist ein Kennzeichen für das virtuelle Lager in den Stammdaten.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Im Prozess werden nach dem Versand der Confirm-Nachricht keine Verpackungsinformationen mehr für Positionen mit ZZ_VLAGER='X' geändert.",
+        "level": "confirmed",
+        "source_ranks": [
+          5
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      },
+      {
+        "text": "Nur bei Änderungen an virtuellen Lagern wird der Lieferschein (LF) angepasst, erkennbar an ZZ_VLAGER='X' und bestimmten Transporttypen (B oder V).",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES"
+        ]
+      },
+      {
+        "text": "Absagegründe im virtuellen Lager werden in der Tabelle ZZTVAG mit Bezug auf ZZ_VLAGER verwaltet.",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          14
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Es gibt Prüfungen und Logiken, die auf das Kennzeichen ZZ_VLAGER referenzieren, z.B. bei der Prüfung von Lieferpositionen, Änderung von Lieferpositionen und beim Lesen von Lieferungen.",
+        "level": "confirmed",
+        "source_ranks": [
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Der vollständige fachliche Zweck und die organisatorischen Ziele des virtuellen Lagers sind nicht dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Details zur genauen Prozesswirkung auf die Lagerhaltung und Bestandsführung sind nicht belegt.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "technical_answer": {
+    "entry_point": [
+      {
+        "text": "Das virtuelle Lager wird über das Stammdatenfeld KNVV-ZZ_VLAGER als Kennzeichen gesteuert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      }
+    ],
+    "trigger": [
+      {
+        "text": "Änderungen an Lieferungen mit dem Kennzeichen ZZ_VLAGER und bestimmten Transporttypen (B oder V) lösen spezielle Prüfungen und Anpassungen aus.",
+        "level": "confirmed",
+        "source_ranks": [
+          4,
+          9,
+          10
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM"
+        ]
+      }
+    ],
+    "processing": [
+      {
+        "text": "Nach Versand der Confirm-Nachricht werden keine Verpackungsinformationen mehr für Positionen mit ZZ_VLAGER='X' geändert.",
+        "level": "confirmed",
+        "source_ranks": [
+          5
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "objects": [
+      {
+        "text": "Stammdatenfeld KNVV-ZZ_VLAGER als Kennzeichen für das virtuelle Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Tabelle ZZTVAG mit Absagegründen für das virtuelle Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          14
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "text": "Verpackungsinformationen bleiben nach Versand der Confirm-Nachricht unverändert.",
+        "level": "confirmed",
+        "source_ranks": [
+          5
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          5
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "text": "Die Logik bezieht sich auf Lieferpositionen, Lieferscheine und Absagegründe, die mit dem virtuellen Lagerkennzeichen ZZ_VLAGER verknüpft sind.",
+        "level": "confirmed",
+        "source_ranks": [
+          5,
+          6,
+          9,
+          11,
+          14
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Keine detaillierten technischen Abläufe zur Bestandsführung oder Lagerverwaltung im virtuellen Lager dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "evidence_truncation": {
+    "input_hit_count": 14,
+    "detailed_count": 10,
+    "compact_count": 4,
+    "omitted_count": 0,
+    "previously_weak_fields_now_included": [
+      "relations",
+      "callers_callees",
+      "reads/writes",
+      "entity_grounding_status",
+      "typed facts/inferences",
+      "diversified code+table+rule set"
+    ],
+    "notes": []
+  },
+  "openai_critique": {
+    "score_faithfulness": 8,
+    "score_usefulness": 6,
+    "score_process_coverage": 5,
+    "hallucinations": [],
+    "unused_strong_evidence": [
+      "Details zu den Methoden wie IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM, CHECK_LFPOS_FOR_VLAGER, IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION, die weitere Prozesslogiken enthalten",
+      "Tabelle ZVLAGER_AUART mit nicht erlaubten Auftragsarten für das virtuelle Lager"
+    ],
+    "missing_in_evidence": [
+      "Eine klare Beschreibung, wie das virtuelle Lager organisatorisch und fachlich im Edeka-Prozess eingebunden ist",
+      "Konkrete Abläufe oder Beispiele, wie das virtuelle Lager die Lagerhaltung oder Bestandsführung beeinflusst",
+      "Erklärung, was genau das virtuelle Lager technisch oder prozessual vom physischen Lager unterscheidet"
+    ],
+    "evidence_quality_issues": [
+      "Viele Code-Snippets ohne erklärenden Kommentartext oder Zusammenfassung",
+      "Fehlende direkte Prozessbeschreibungen, nur technische Prüfungen und Kennzeichen",
+      "Keine zusammenhängende Dokumentation, sondern verstreute Hinweise"
+    ],
+    "concrete_retrieval_fixes": [
+      "Mehr erklärende Dokumentation oder Prozessbeschreibungen zum virtuellen Lager abrufen",
+      "Zusammenfassungen oder Kommentare aus dem Code extrahieren, die den Zweck und Ablauf des virtuellen Lagers erläutern",
+      "Beispiele oder Prozessdiagramme zum virtuellen Lager ergänzen"
+    ],
+    "verdict": "iterate",
+    "one_line": "Antwort ist technisch korrekt und belegt, aber zu oberflächlich und nutzt nicht alle relevanten Evidenzen für eine umfassende Prozessbeschreibung."
+  },
+  "critique_tokens": {
+    "input": 5924,
+    "output": 383
+  }
+}

@@ -8,18 +8,21 @@ import { PressNavigateLink } from "@/components/ui/PressNavigateLink";
 function overallTone(
   card: DatenbasisTypeCard,
 ): FahrplanStepStatus {
-  if (!card.unlocked || card.overall === "locked") return "not_available";
+  if (card.implementation === "locked") return "ready";
+  if (!card.unlocked && card.progressPercent === 0) return "ready";
   if (card.overall === "approved") return "success";
   if (card.overall === "failed") return "failed";
   if (card.overall === "in_progress" || card.overall === "awaiting_approval") {
     return "running";
   }
+  if (card.progressPercent > 0) return "running";
   if (card.implementation === "prepared") return "ready";
   return "ready";
 }
 
 function overallLabel(card: DatenbasisTypeCard): string {
-  if (!card.unlocked || card.overall === "locked") return "Gesperrt";
+  if (card.implementation === "locked") return "Scaffold";
+  if (!card.unlocked && card.progressPercent === 0) return "Offen";
   switch (card.overall) {
     case "approved":
       return "Freigegeben";
@@ -30,9 +33,11 @@ function overallLabel(card: DatenbasisTypeCard): string {
     case "in_progress":
       return "In Arbeit";
     case "not_started":
-      return "Bereit";
+      return "Offen";
+    case "locked":
+      return "Offen";
     default:
-      return "Gesperrt";
+      return "Offen";
   }
 }
 
@@ -44,10 +49,10 @@ export function DatenbasisPanel({
   return (
     <div className="space-y-2">
       <p className="text-[0.875rem] font-medium text-[var(--muted)]">
-        Exporttypen (Reihenfolge verbindlich)
+        Exporttypen (pro Bereich unabhängig)
       </p>
       <ul className="space-y-2">
-        {types.map((t) => (
+        {types.map((t, index) => (
           <li key={t.id}>
             <PressNavigateLink
               href={t.href}
@@ -56,7 +61,7 @@ export function DatenbasisPanel({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[1.0625rem] font-medium leading-snug break-words">
-                    {t.orderIndex + 1}. {t.title}
+                    {index + 1}. {t.title}
                   </p>
                   <p className="mt-0.5 text-[0.8125rem] leading-snug text-[var(--muted)] break-words">
                     {t.description}

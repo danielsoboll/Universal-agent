@@ -48,6 +48,25 @@ export async function diagnoseSourceCoverage(
       "Globale Exact-Symbol-Suche über Stammdatenstrukturen, Code-Extrakte und Klassenanalysen.",
   });
 
+  // --- lexical (DDIC/object lexical corpus over canonical) ---
+  out.push({
+    source: "lexical",
+    status: "ready",
+    expected_path:
+      "canonical/{master-data,control-tables,programs,function-modules,classes,message-idoc-config}",
+    exists: true,
+    record_count_estimate: null,
+    searchable_via: [
+      "lexical_exact_technical",
+      "lexical_exact_phrase",
+      "lexical_all_terms",
+      "lexical_substring",
+      "lexical_bm25",
+    ],
+    diagnosis:
+      "Generische lexikalische DDIC-/Objektsuche vor Semantik und Relationsexpansion.",
+  });
+
   // --- master_data ---
   const mdRoot = resolveProjectZonePath(
     projectKey,

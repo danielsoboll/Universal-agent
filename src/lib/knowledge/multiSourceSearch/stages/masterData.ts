@@ -127,12 +127,11 @@ export async function runMasterDataStage(params: {
         const conceptHits = params.plan.concepts.filter(
           (c) => c.length >= 4 && descLower.includes(c.toLowerCase()),
         ).length;
-        // Prefer custom Z/Y fields. Standard fields only if description matches ≥2 concepts
-        // or an intensifier concept such as virtuell*/virtual* (avoids flooding LGORT from bare "lager").
+        // Prefer custom Z/Y fields. Standard fields only when ≥2 content terms
+        // hit the description (avoids flooding generic single-token matches).
         if (!isZLikeField(field_name)) {
-          const hasVirt = /virtuell|virtual/.test(descLower);
-          if (!hasVirt && conceptHits < 2) continue;
-          if (!hasVirt && matched.length < 5) continue;
+          if (conceptHits < 2) continue;
+          if (matched.length < 5) continue;
         }
         fieldHits.push({
           domain,

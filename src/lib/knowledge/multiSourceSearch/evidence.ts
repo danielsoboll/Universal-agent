@@ -1,8 +1,12 @@
 /**
  * Evidence budgets + ranking: evidence_type > rank_tier > confidence.
+ * Category-reserved budgets so configuration is not crowded out by code.
  */
 import {
+  CATEGORY_BUDGETS,
   compareEvidenceItems,
+  evidenceCategory,
+  type EvidenceCategory,
   rankTierToEvidenceType,
   scoreEvidenceItem,
 } from "@/lib/knowledge/multiSourceSearch/evidenceScoring";
@@ -22,6 +26,7 @@ export function bundleEvidence(params: {
 }): MultiSourceEvidenceBundle {
   const bySource: Record<MultiSourceId, StageEvidenceItem[]> = {
     exact_symbol: [],
+    lexical: [],
     master_data: [],
     control_tables: [],
     classes: [],
@@ -30,7 +35,6 @@ export function bundleEvidence(params: {
     relations: [],
   };
 
-  const selected: StageEvidenceItem[] = [];
   const ranking_notes: string[] = [];
   let omitted = 0;
 
@@ -48,6 +52,7 @@ export function bundleEvidence(params: {
   const allowAbapgit = /abapgit|\bgit\b/.test(q);
   const seen = new Set<string>();
   const discarded: string[] = [];
+  const pool: StageEvidenceItem[] = [];
 
   for (const item of params.items) {
     if (seen.has(item.id)) continue;
@@ -65,7 +70,6 @@ export function bundleEvidence(params: {
         omitted += 1;
         continue;
       }
-      // Unrelated control_tables / master_data without symbol mention
       if (
         (item.source === "control_tables" || item.source === "master_data") &&
         item.rank_tier !== "exact"
@@ -88,6 +92,7 @@ export function bundleEvidence(params: {
       score: scoreEvidenceItem(item),
     };
     bySource[item.source].push(enriched);
+    pool.push(enriched);
   }
 
   if (discarded.length) {
@@ -96,29 +101,117 @@ export function bundleEvidence(params: {
     );
   }
 
+  // --- Category-reserved selection (configuration cannot be starved) ---
+  const byCat: Record<EvidenceCategory, StageEvidenceItem[]> = {
+    configuration: [],
+    code: [],
+    relations: [],
+    control: [],
+    partner_master: [],
+    other: [],
+  };
+  for (const item of pool) {
+    byCat[evidenceCategory(item)].push(item);
+  }
+  for (const cat of Object.keys(byCat) as EvidenceCategory[]) {
+    byCat[cat].sort(compareEvidenceItems);
+  }
+
+  const selected: StageEvidenceItem[] = [];
+  const selectedIds = new Set<string>();
+
+  const takeFrom = (cat: EvidenceCategory, n: number) => {
+    let taken = 0;
+    for (const item of byCat[cat]) {
+      if (taken >= n) break;
+      if (selectedIds.has(item.id)) continue;
+      selectedIds.add(item.id);
+      selected.push(item);
+      taken += 1;
+    }
+    return taken;
+  };
+
+  // 1) mins
+  for (const cat of Object.keys(CATEGORY_BUDGETS) as EvidenceCategory[]) {
+    const got = takeFrom(cat, CATEGORY_BUDGETS[cat].min);
+    ranking_notes.push(
+      `category:${cat} min ${got}/${CATEGORY_BUDGETS[cat].min} (pool ${byCat[cat].length})`,
+    );
+  }
+  // 2) fill up to max by global priority order
+  const fillOrder: EvidenceCategory[] = [
+    "configuration",
+    "code",
+    "relations",
+    "partner_master",
+    "control",
+    "other",
+  ];
+  for (const cat of fillOrder) {
+    const current = selected.filter((i) => evidenceCategory(i) === cat).length;
+    const room = CATEGORY_BUDGETS[cat].max - current;
+    if (room > 0) takeFrom(cat, room);
+  }
+
+  // Also respect classic per-source budgets as a soft secondary pass
   for (const source of params.plan.source_order) {
     const budget = params.plan.budgets[source] ?? 8;
     const sorted = [...bySource[source]].sort(compareEvidenceItems);
-    const take = sorted.slice(0, budget);
-    omitted += Math.max(0, sorted.length - take.length);
-    selected.push(...take);
+    let taken = selected.filter((i) => i.source === source).length;
+    for (const item of sorted) {
+      if (taken >= budget) break;
+      if (selectedIds.has(item.id)) continue;
+      // Don't let semantic noise displace reserved categories beyond max
+      const cat = evidenceCategory(item);
+      const catCount = selected.filter((i) => evidenceCategory(i) === cat).length;
+      if (catCount >= CATEGORY_BUDGETS[cat].max) continue;
+      selectedIds.add(item.id);
+      selected.push(item);
+      taken += 1;
+    }
     ranking_notes.push(
-      `${source}: ${sorted.length} → ${take.length} (Budget ${budget}; Tiers ${summarizeTiers(take)})`,
+      `${source}: pool ${sorted.length}, selected≈${taken} (Budget ${budget}; Tiers ${summarizeTiers(selected.filter((i) => i.source === source))})`,
     );
   }
 
-  // Global soft cap — keep per-source picks; trim weak tiers first
+  omitted += Math.max(0, pool.length - selected.length);
+
   const GLOBAL_CAP = 56;
   if (selected.length > GLOBAL_CAP) {
+    // Trim from "other" / semantic first, never drop configuration below min
     selected.sort(compareEvidenceItems);
-    omitted += selected.length - GLOBAL_CAP;
-    selected.length = GLOBAL_CAP;
-    ranking_notes.push(`Global cap ${GLOBAL_CAP} angewendet (schwache Tiers zuerst gekürzt).`);
+    const kept: StageEvidenceItem[] = [];
+    const catCount: Record<string, number> = {};
+    for (const item of selected) {
+      const cat = evidenceCategory(item);
+      const n = catCount[cat] ?? 0;
+      if (kept.length >= GLOBAL_CAP) {
+        // still keep configuration mins
+        if (
+          cat === "configuration" &&
+          n < CATEGORY_BUDGETS.configuration.min
+        ) {
+          kept.push(item);
+          catCount[cat] = n + 1;
+        }
+        continue;
+      }
+      kept.push(item);
+      catCount[cat] = n + 1;
+    }
+    omitted += selected.length - kept.length;
+    selected.length = 0;
+    selected.push(...kept);
+    ranking_notes.push(`Global cap ${GLOBAL_CAP} (Kategorien geschützt).`);
   }
 
-  // Prefer exact_symbol first in final order for TECHNICAL_SYMBOL plans
   if (techMode) {
     selected.sort((a, b) => {
+      const ca = evidenceCategory(a);
+      const cb = evidenceCategory(b);
+      if (ca === "configuration" && cb !== "configuration") return -1;
+      if (cb === "configuration" && ca !== "configuration") return 1;
       if (a.source === "exact_symbol" && b.source !== "exact_symbol") return -1;
       if (b.source === "exact_symbol" && a.source !== "exact_symbol") return 1;
       return compareEvidenceItems(a, b);
@@ -127,6 +220,7 @@ export function bundleEvidence(params: {
 
   const counts = {
     exact_symbol: 0,
+    lexical: 0,
     master_data: 0,
     control_tables: 0,
     classes: 0,
@@ -160,10 +254,7 @@ export function buildFinalContext(params: {
   structured?: StructuredSearchContext;
   specialized?: SpecializedSearchPlan;
 }): string {
-  const lines: string[] = [
-    `Frage: ${params.question}`,
-    "",
-  ];
+  const lines: string[] = [`Frage: ${params.question}`, ""];
 
   if (params.specialized?.primary_anchor) {
     const a = params.specialized.primary_anchor;
@@ -171,9 +262,19 @@ export function buildFinalContext(params: {
       lines.push(
         `Primäranker (TECHNICAL_SYMBOL): Token=${a.symbol ?? a.table}`,
       );
-      if (a.user_object_type_guess) {
+      const hasConfigEvidence = params.evidence.items.some(
+        (i) =>
+          evidenceCategory(i) === "configuration" &&
+          (i.rank_tier === "exact" || i.related_to_symbol),
+      );
+      if (a.user_object_type_guess && !hasConfigEvidence) {
         lines.push(
-          `Hinweis: Benutzer nannte Objekttyp „${a.user_object_type_guess}“ — kein belegtes Objekt dieses Typs für ${a.symbol ?? a.table} gefunden; technische Namens-Treffer haben Vorrang.`,
+          `Hinweis: Benutzer nannte Objekttyp „${a.user_object_type_guess}“ — falls kein Config-Objekt vorliegt, technische Namens-Treffer haben Vorrang.`,
+        );
+      }
+      if (hasConfigEvidence) {
+        lines.push(
+          `Config-Evidenz vorhanden: Output-/Nachrichtenkonfiguration zum Symbol priorisieren (Typ, Text, Medium, Programm, Routine).`,
         );
       }
       if (a.objects?.length) {
@@ -182,9 +283,15 @@ export function buildFinalContext(params: {
           lines.push(`  - ${o}`);
         }
       }
-      lines.push(
-        `Antwortvorgabe: „Ein eindeutiges Objekt vom Typ ${a.user_object_type_guess ?? "genannt"} ${a.symbol} wurde nicht gefunden. Es existieren jedoch folgende technische Objekte mit ${a.symbol} im Namen: ${(a.objects ?? []).slice(0, 6).join(", ")}.“ Dann Caller/Callees/Tabellen aus Evidenz erklären. Keine generischen MESSAGE-Tabellen ohne Relation.`,
-      );
+      if (hasConfigEvidence) {
+        lines.push(
+          `Antwortvorgabe: Objekttyp und Konfiguration aus Evidenz nennen (Outputart, Beschreibung, Anwendung, Medium, Programm, Routine). Offene Lücken (IDoc/Partner) explizit markieren.`,
+        );
+      } else {
+        lines.push(
+          `Antwortvorgabe: Technische Objekte mit ${a.symbol} im Namen aus Evidenz erklären (Caller/Callees/Tabellen). Keine generischen MESSAGE-Tabellen ohne Relation.`,
+        );
+      }
     } else {
       lines.push(
         `Primäranker (${params.specialized.plan_type}): ${a.table}-${a.field ?? "—"}`,
@@ -215,7 +322,7 @@ export function buildFinalContext(params: {
   let i = 1;
   for (const item of params.evidence.items) {
     lines.push(
-      `[${i}] (${item.source}/${item.evidence_type ?? item.rank_tier}/score=${item.score ?? 0}/c=${item.confidence.toFixed(2)}) ${item.title}`,
+      `[${i}] (${item.source}/${item.evidence_type ?? item.rank_tier}/cat=${evidenceCategory(item)}/score=${item.score ?? 0}/c=${item.confidence.toFixed(2)}) ${item.title}`,
     );
     lines.push(`    ${item.summary}`);
     if (item.table_name) lines.push(`    table=${item.table_name}`);
@@ -234,9 +341,7 @@ export function buildFinalContext(params: {
       lines.push(`    evidence_lines=${item.evidence_lines.join(" | ")}`);
     }
     if (item.values) {
-      lines.push(
-        `    values=${JSON.stringify(item.values).slice(0, 200)}`,
-      );
+      lines.push(`    values=${JSON.stringify(item.values).slice(0, 200)}`);
     }
     if (item.anchors_matched.length) {
       lines.push(`    anchors=${item.anchors_matched.join(", ")}`);

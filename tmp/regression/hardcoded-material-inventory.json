@@ -1,0 +1,1013 @@
+{
+  "status": "ok",
+  "intent": "HARDCODED_VALUE_INVENTORY",
+  "classification": {
+    "intent": "HARDCODED_VALUE_INVENTORY",
+    "confidence": 0.92,
+    "signals": [
+      "hardcoded_value_classifier",
+      "hardcoded_cue",
+      "list_cue",
+      "value:material",
+      "process_cue"
+    ],
+    "technical_symbols": [],
+    "lexical_seeds": [
+      "Materialnummern",
+      "Materi",
+      "Material",
+      "hart",
+      "codiert",
+      "codier",
+      "Geschäftsprozesse",
+      "Geschä",
+      "Geschäft",
+      "damit",
+      "gesteuert",
+      "gesteu",
+      "gesteuer"
+    ],
+    "hardcoded_value": {
+      "intent": "HARDCODED_VALUE_INVENTORY",
+      "requested_value_type": "MATERIAL_NUMBER",
+      "requested_context": "BUSINESS_PROCESS",
+      "matched_cues": [
+        "hardcoded_cue",
+        "list_cue",
+        "value:material",
+        "process_cue"
+      ]
+    }
+  },
+  "diagnostics": {
+    "classification": {
+      "intent": "HARDCODED_VALUE_INVENTORY",
+      "requested_value_type": "MATERIAL_NUMBER",
+      "requested_context": "BUSINESS_PROCESS",
+      "matched_cues": [
+        "hardcoded_cue",
+        "list_cue",
+        "value:material",
+        "process_cue"
+      ]
+    },
+    "units_scanned": 8754,
+    "units_with_matnr_context": 1156,
+    "literals_seen": 74150,
+    "accepted_candidates": 147,
+    "excluded_candidates": 80,
+    "unique_materials": [
+      "000000000000000993",
+      "000000000000000991",
+      "000000000000001199",
+      "000000000000000000",
+      "000000000000009999",
+      "000000000000001040",
+      "000000000000001041",
+      "000000000000001042",
+      "000000000000001080",
+      "000000000000009001",
+      "000000000000087999",
+      "000000000000000905",
+      "000000000000001200",
+      "000000000000009000",
+      "000000000000009992",
+      "000000000000099200",
+      "9000",
+      "9999",
+      "00000",
+      "000000000000000890",
+      "000000000000001143",
+      "000000000000001145",
+      "000000000000001990",
+      "000000000000009819",
+      "000000000000009820",
+      "000000000000009821",
+      "000000000000009989",
+      "000000000000029996",
+      "000000000000041603",
+      "000000000000082725",
+      "000000000000084020",
+      "000000000000084023",
+      "000000000000085030",
+      "000000000000085031",
+      "000000000000085044",
+      "000000000000085600",
+      "000000000000085601",
+      "000000000000085602",
+      "000000000000085604",
+      "000000000000085605",
+      "000000000000085606",
+      "000000000000085607",
+      "000000000000085608",
+      "000000000000085609",
+      "000000000000085610",
+      "000000000000085611",
+      "000000000000085999",
+      "000000000000090001",
+      "000000000000090002",
+      "000000000000099911",
+      "000000000000099942",
+      "000000000000099962",
+      "05146",
+      "1200",
+      "840411",
+      "888000",
+      "888999",
+      "9001",
+      "9995",
+      "GRUP1",
+      "GRUP2",
+      "GRUP3"
+    ],
+    "duration_ms": 5971
+  },
+  "summary": {
+    "text": "Im ausgewerteten kundeneigenen Code wurden 62 eindeutige hart codierte Materialnummern in 147 aktiven Fundstellen erkannt.",
+    "unique_material_count": 62,
+    "active_occurrence_count": 147,
+    "comment_only_count": 29,
+    "excluded_literal_count": 80,
+    "units_scanned": 8754,
+    "units_with_matnr_context": 1156
+  },
+  "unique_materials": [
+    {
+      "material_number": "000000000000000993",
+      "occurrence_count": 32,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": "Vergleich / Verzweigung mit Materialliteral",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_CCEAG_INVOIC_OUT->PROCESS_E1EDP01",
+        "ZCL_ORDERS_OUT->CHANGE_SEGMENT_E1EDP01",
+        "ZCL_UI5_LG_VERLADUNG->GET_BEST_KOPF",
+        "ZKNAPP_CHECK_LEERGUT",
+        "ZLES_TOURENUEBERSICHT_SONSTIGE",
+        "ZLIEFBERECHNUNG",
+        "ZVADLL01_TD",
+        "ZXM06U01"
+      ]
+    },
+    {
+      "material_number": "000000000000000991",
+      "occurrence_count": 23,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_ORDERS_OUT->CHANGE_SEGMENT_E1EDP01",
+        "ZCL_UI5_LG_VERLADUNG->GET_BEST_KOPF",
+        "ZLES_TOURENUEBERSICHT_SONSTIGE",
+        "ZLIEFBERECHNUNG",
+        "ZVADLL01_TD",
+        "ZXM06U01",
+        "ZXM06U02",
+        "ZZBSTLIE_LVS_3"
+      ]
+    },
+    {
+      "material_number": "000000000000001199",
+      "occurrence_count": 14,
+      "process_label": "Lager-/Bestandsprozess",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_EXT_TOURANLAGE->BUILD_ORDER_DATA",
+        "ZCL_EXT_TOURANLAGE->BUILD_ORDER_DATA_NEW",
+        "ZCL_EXT_TOURANLAGE_OT->BUILD_ORDER_DATA",
+        "ZCL_EXT_TOURANLAGE_OT->BUILD_ORDER_DATA_NEW",
+        "ZCL_LADEPLAN->PREPARE_ALV_TABLE",
+        "ZCL_VIRTUELLES_LAGER->IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM",
+        "ZAUSLIEFERUNGSMONITOR",
+        "ZTVVAWFNC"
+      ]
+    },
+    {
+      "material_number": "000000000000000000",
+      "occurrence_count": 7,
+      "process_label": null,
+      "condition": null,
+      "effect": "Default-/Konstantenwert für MATNR",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZZ_AUSGABE_KONDITIONEN",
+        "ZZ_AUSGABE_KONDITIONEN_VRS2",
+        "ZZ_AUSGABE_KONDITIONEN_VRS3",
+        "ZZ_AUSGABE_KONDITIONEN_VRS4",
+        "ZZ_FAKT_VORR_NETTO",
+        "Z_TAGESABSATZ_WGH",
+        "Z_TAGESABSATZ_ZENTRALE"
+      ]
+    },
+    {
+      "material_number": "000000000000009999",
+      "occurrence_count": 7,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_EDIMAP_OUT_DESADV->MAP_E1EDL44",
+        "ZCL_EDI_ORDRSP_OUT->ZIF_ORDRSP_OUT_SD~EXIT_SAPLVEDC_004",
+        "ZCL_ORDERS_IN->SEND_MAIL_AT_ERROR",
+        "ZCL_ORDERS_IN->AUFTRAGSART_ZV_ITEMS",
+        "ZCL_ORDRSP_OUT->PROCESS_E1EDK01",
+        "ZPROCESS_MESSSAGE_ZA01",
+        "Z_MV45AFZB"
+      ]
+    },
+    {
+      "material_number": "000000000000001040",
+      "occurrence_count": 6,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXM06U01"
+      ]
+    },
+    {
+      "material_number": "000000000000001041",
+      "occurrence_count": 6,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXM06U01"
+      ]
+    },
+    {
+      "material_number": "000000000000001042",
+      "occurrence_count": 6,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXM06U01"
+      ]
+    },
+    {
+      "material_number": "000000000000001080",
+      "occurrence_count": 6,
+      "process_label": "Lieferprozess",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZLIEFBERECHNUNG"
+      ]
+    },
+    {
+      "material_number": "000000000000009001",
+      "occurrence_count": 3,
+      "process_label": "Lager-/Bestandsprozess",
+      "condition": "Vergleich / Verzweigung mit Materialliteral",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZINVLISTE",
+        "ZMMBESTAND"
+      ]
+    },
+    {
+      "material_number": "000000000000087999",
+      "occurrence_count": 3,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Filter in SELECT-Bedingung",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZKOMO_ALV_FORM_LOGISTIK",
+        "ZKOMO_FORM"
+      ]
+    },
+    {
+      "material_number": "000000000000000905",
+      "occurrence_count": 2,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_BKSB_ORDERS_IN->CONVERT_MATERIAL",
+        "ZCL_VIRTUELLES_LAGER->CHECK_LFPOS_FOR_VLAGER"
+      ]
+    },
+    {
+      "material_number": "000000000000001200",
+      "occurrence_count": 2,
+      "process_label": null,
+      "condition": "Vergleich / Verzweigung mit Materialliteral",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZKOMO_FORM"
+      ]
+    },
+    {
+      "material_number": "000000000000009000",
+      "occurrence_count": 2,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_EDI_ORDERS_IN->CHECK_MATERIAL",
+        "ZXVEDU05"
+      ]
+    },
+    {
+      "material_number": "000000000000009992",
+      "occurrence_count": 2,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_CHECK_FRACHTVERGUETUNG",
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000099200",
+      "occurrence_count": 2,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW",
+        "ZFZ_LEERGUT_IMPORT"
+      ]
+    },
+    {
+      "material_number": "9000",
+      "occurrence_count": 2,
+      "process_label": null,
+      "condition": "Vergleich / Verzweigung mit Materialliteral",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXVEDU09",
+        "ZXVEDU11"
+      ]
+    },
+    {
+      "material_number": "9999",
+      "occurrence_count": 2,
+      "process_label": null,
+      "condition": null,
+      "effect": "Filter in SELECT-Bedingung",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZVLQU004",
+        "ZXVEDU09"
+      ]
+    },
+    {
+      "material_number": "00000",
+      "occurrence_count": 1,
+      "process_label": "EDI-/Belegverarbeitung",
+      "condition": null,
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZZEDI_KUNDE_MAT"
+      ]
+    },
+    {
+      "material_number": "000000000000000890",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000001143",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000001145",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000001990",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Vergleich / Verzweigung mit Materialliteral",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXEDFU02"
+      ]
+    },
+    {
+      "material_number": "000000000000009819",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZINVLISTE"
+      ]
+    },
+    {
+      "material_number": "000000000000009820",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZINVLISTE"
+      ]
+    },
+    {
+      "material_number": "000000000000009821",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZINVLISTE"
+      ]
+    },
+    {
+      "material_number": "000000000000009989",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZINVLISTE"
+      ]
+    },
+    {
+      "material_number": "000000000000029996",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000041603",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZXEDFU02"
+      ]
+    },
+    {
+      "material_number": "000000000000082725",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000084020",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000084023",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085030",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085031",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085044",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085600",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085601",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085602",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085604",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085605",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085606",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085607",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085608",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085609",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085610",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085611",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000085999",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_RVADDN01W"
+      ]
+    },
+    {
+      "material_number": "000000000000090001",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000090002",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000099911",
+      "occurrence_count": 1,
+      "process_label": "Lager-/Bestandsprozess",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Aufnahme in Materialliste / Range",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_VIRTUELLES_LAGER->CHECK_LFPOS_FOR_VLAGER"
+      ]
+    },
+    {
+      "material_number": "000000000000099942",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "Z_SD_ITEM_FLOW"
+      ]
+    },
+    {
+      "material_number": "000000000000099962",
+      "occurrence_count": 1,
+      "process_label": "Lager-/Bestandsprozess",
+      "condition": "Literalvergleich gegen MATNR",
+      "effect": "Aufnahme in Materialliste / Range",
+      "evidence_status": "Im Code belegt / Prozess aus Code abgeleitet",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCL_VIRTUELLES_LAGER->CHECK_LFPOS_FOR_VLAGER"
+      ]
+    },
+    {
+      "material_number": "05146",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZMKON001"
+      ]
+    },
+    {
+      "material_number": "1200",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Default-/Konstantenwert für MATNR",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZVKAB001"
+      ]
+    },
+    {
+      "material_number": "840411",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Default-/Konstantenwert für MATNR",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZBKSB_DISTR"
+      ]
+    },
+    {
+      "material_number": "888000",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Default-/Konstantenwert für MATNR",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZVVA0103"
+      ]
+    },
+    {
+      "material_number": "888999",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Default-/Konstantenwert für MATNR",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZVVA0103"
+      ]
+    },
+    {
+      "material_number": "9001",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Filter in SELECT-Bedingung",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZMMGLASGEW"
+      ]
+    },
+    {
+      "material_number": "9995",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Filter in SELECT-Bedingung",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZCTKA007"
+      ]
+    },
+    {
+      "material_number": "GRUP1",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZZKLST03"
+      ]
+    },
+    {
+      "material_number": "GRUP2",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZZKLST03"
+      ]
+    },
+    {
+      "material_number": "GRUP3",
+      "occurrence_count": 1,
+      "process_label": null,
+      "condition": null,
+      "effect": "Verwendung im MATNR-Kontext",
+      "evidence_status": "Im Code belegt",
+      "claim_status": "AUTHORITATIVE",
+      "locations": [
+        "ZZKLST03"
+      ]
+    }
+  ],
+  "multi_use_count": 18,
+  "comment_or_unclear_count": 4,
+  "excluded_sample": [
+    {
+      "literal": "ZLGT",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "X",
+      "reason": "boolean"
+    },
+    {
+      "literal": "WM",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "MLGN_SINGLE_READ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "E",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "ZZ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "W",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "ZZ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "S",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "ZZ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "I",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "EQ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "I",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "EQ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "I",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "EQ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "I",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "EQ",
+      "reason": "not_material_shaped"
+    },
+    {
+      "literal": "X",
+      "reason": "boolean"
+    },
+    {
+      "literal": "X",
+      "reason": "boolean"
+    }
+  ],
+  "missing_information": [
+    "Für einzelne Fundstellen liegt keine gecachte Methodenanalyse vor — Prozesswirkung nur aus Codekontext abgeleitet."
+  ],
+  "structured_summary": "Im ausgewerteten kundeneigenen Code wurden 62 eindeutige hart codierte Materialnummern in 147 aktiven Fundstellen erkannt.",
+  "structured_entity_count": 62,
+  "answer_preview": "Im ausgewerteten kundeneigenen Code wurden 62 eindeutige hart codierte Materialnummern in 147 aktiven Fundstellen erkannt.",
+  "duration_ms": 8623,
+  "retrieval_mode": "ask_orchestration"
+}

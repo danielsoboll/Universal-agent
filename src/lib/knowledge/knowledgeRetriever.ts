@@ -13,6 +13,14 @@ import {
 import type { KnowledgeHit } from "@/lib/knowledge/types";
 import { hybridSearch, type HybridSearchHit } from "@/lib/search/hybridSearch";
 import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
+import { getLexicalCorpusCached } from "@/lib/search/lexical/corpusCache";
+import { runLexicalSearch } from "@/lib/search/lexical/runLexicalSearch";
+import { mergeLexicalIntoHybridHits } from "@/lib/search/lexical/mergeLexicalIntoHybrid";
+import { expandCodeUsagesFromCanonical } from "@/lib/search/lexical/expandCodeUsages";
+import { normalizeLexicalQuery } from "@/lib/search/lexical/normalizeQuery";
+import { selectUsefulHits } from "@/lib/knowledge/richEvidence";
+import type { LexicalSearchDiagnosis } from "@/lib/search/lexical/types";
+import { BOUND_DATA_PROJECT_KEY } from "@/lib/localData/boundProject";
 
 export type { KnowledgeHit } from "@/lib/knowledge/types";
 
@@ -25,6 +33,10 @@ export type KnowledgeSearchResult = {
   query_embedding_tokens: number;
   query_embedding_cost: number;
   warnings: string[];
+  /** Lexical DDIC/object diagnosis (same service as multi-source stage). */
+  lexical_diagnosis?: LexicalSearchDiagnosis;
+  /** Tokens from lexical primary anchors for relation expansion. */
+  lexical_expansion_tokens?: string[];
 };
 
 function projectDataRoot(project: LocalProject): string {
@@ -238,13 +250,15 @@ export async function knowledgeSearch(params: {
       ? params.enableRelationExpansion
       : relationDefault;
 
+  const limit = params.limit ?? 40;
   const result = await hybridSearch({
     query: params.query,
     documents,
     index,
     embeddingsById,
     options: {
-      limit: params.limit ?? 8,
+      // Fetch extra hybrid hits so lexical merge can prepend without starving diversity
+      limit: Math.max(limit * 2, 48),
       knowledge_unit_types: types,
       enableVector,
       enableRelationExpansion,
@@ -253,15 +267,97 @@ export async function knowledgeSearch(params: {
     },
   });
 
+  const hybridHits = enrichHits(result.hits, documentsById);
+
+  // Same lexical DDIC/object service as multi-source — Direct Search must use it too
+  const projectKey =
+    params.project.customer_id?.trim() ||
+    BOUND_DATA_PROJECT_KEY ||
+    "P01";
+  let lexical_diagnosis: LexicalSearchDiagnosis | undefined;
+  let lexical_expansion_tokens: string[] | undefined;
+  let hits = hybridHits;
+  try {
+    const corpus = getLexicalCorpusCached(projectKey);
+    const lex = runLexicalSearch({
+      question: params.query,
+      documents: corpus,
+      limit: 60,
+    });
+    lexical_diagnosis = lex.diagnosis;
+    const merged = mergeLexicalIntoHybridHits({
+      hybridHits,
+      lexicalHits: lex.hits,
+      documents,
+      limit: Math.max(limit, 36),
+    });
+    hits = merged.hits;
+    lexical_expansion_tokens = merged.expansion_tokens;
+
+    // Canonical code-usage expansion from primary field/table tokens
+    if (merged.expansion_tokens.length > 0) {
+      const seen = new Set(hits.map((h) => h.source_key).filter(Boolean));
+      const stems = normalizeLexicalQuery(params.query).stems;
+      const codeHits = expandCodeUsagesFromCanonical({
+        projectKey,
+        tokens: merged.expansion_tokens,
+        contentStems: stems,
+        limit: 24,
+        alreadySeen: seen,
+      });
+      if (codeHits.length > 0) {
+        // Keep lexical primary field/profile hits first; then best code; then rest
+        const primary = hits.filter(
+          (h) =>
+            h.knowledge_unit_type === "master_field" ||
+            ((h.matched_terms ?? []).some(
+              (t) =>
+                String(t).startsWith("phrase:") ||
+                String(t).startsWith("lexical:exact_phrase"),
+            ) &&
+              (h.knowledge_unit_type === "table_profile" ||
+                h.knowledge_unit_type === "control_table")),
+        );
+        const primaryIds = new Set(primary.map((h) => h.search_document_id));
+        const rest = hits.filter((h) => !primaryIds.has(h.search_document_id));
+        hits = [...primary, ...codeHits, ...rest]
+          .slice(0, Math.max(limit, 48))
+          .map((h, i) => ({ ...h, rank: i + 1 }));
+        warnings.push(
+          `Code-Expansion: ${codeHits.length} Canonical-Treffer zu [${merged.expansion_tokens.slice(0, 4).join(", ")}]`,
+        );
+      }
+    }
+
+    // Drop low-usefulness noise (IDOCs etc.) when strong lexical anchors exist
+    if ((lexical_diagnosis?.selected_primary_anchors?.length ?? 0) > 0) {
+      hits = selectUsefulHits(hits, Math.max(limit, 40));
+    }
+
+    if (merged.promoted > 0) {
+      warnings.push(
+        `Lexikalische DDIC-Suche: ${merged.promoted} Phrase-/Feldtreffer priorisiert`,
+      );
+    }
+  } catch (err) {
+    warnings.push(
+      `Lexikalische Suche übersprungen: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
   return {
     query: result.query,
-    hits: enrichHits(result.hits, documentsById),
+    hits,
     document_count: documents.length,
-    vector_search_active: enableVector && result.hits.some((h) => h.vector_score > 0),
+    vector_search_active: enableVector,
     index_path: status.index_dir,
     query_embedding_tokens: result.query_embedding_tokens,
     query_embedding_cost: result.query_embedding_cost,
     warnings,
+    lexical_diagnosis,
+    lexical_expansion_tokens,
   };
 }
 

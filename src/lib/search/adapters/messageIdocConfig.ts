@@ -3,6 +3,7 @@
  */
 import type { CanonicalObject } from "@/lib/ingest/messageIdocCanonical";
 import type { SearchDocumentDraft } from "@/lib/search/buildSearchDocuments";
+import { messageIdocObjectIsAuthoritativeOutputType } from "@/lib/domain/typeAuthority";
 
 export function draftFromMessageIdocObject(params: {
   object: CanonicalObject;
@@ -11,6 +12,17 @@ export function draftFromMessageIdocObject(params: {
   const o = params.object;
   const name = o.display_name || o.object_id;
   if (!o.object_type || !o.object_id) return null;
+
+  // Never index non-authoritative "output_type" rows (e.g. T685 KVEWE=A pricing)
+  if (
+    (o.object_type === "output_type" || o.object_type === "output_type_text") &&
+    !messageIdocObjectIsAuthoritativeOutputType({
+      object_type: o.object_type,
+      attributes: o.attributes,
+    })
+  ) {
+    return null;
+  }
 
   const attrParts = Object.entries(o.attributes)
     .filter(([k]) => !k.startsWith("_"))

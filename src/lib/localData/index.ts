@@ -16,6 +16,15 @@ export {
   type LocatedLocalPath,
 } from "@/lib/localData/paths";
 export {
+  resolveBoundProjectKey,
+  resolveDataProjectKey,
+  type DataProjectKeyResolution,
+} from "@/lib/localData/resolveDataProjectKey";
+export {
+  BOUND_DATA_PROJECT_KEY,
+  type BoundDataProjectKey,
+} from "@/lib/localData/boundProject";
+export {
   appendLogLine,
   deleteGeneratedPath,
   ensureWritableDir,

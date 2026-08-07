@@ -6,6 +6,7 @@ import type { EvidenceType } from "@/lib/knowledge/multiSourceSearch/evidenceSco
 
 export type MultiSourceId =
   | "exact_symbol"
+  | "lexical"
   | "master_data"
   | "control_tables"
   | "classes"
@@ -27,7 +28,7 @@ export type SearchAnchor = {
   value: string;
   /** Normalized uppercase for matching. */
   norm: string;
-  source: MultiSourceId | "question" | "plan";
+  source: MultiSourceId | "question" | "plan" | "lexical";
   confidence: number;
   note?: string;
 };

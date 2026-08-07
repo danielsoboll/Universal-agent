@@ -17,6 +17,7 @@ import {
   type MessageIdocRelationKind,
 } from "@/lib/admin/datenbasis/messageIdocConfig/constants";
 import { detectMessageIdocRawFiles } from "@/lib/admin/datenbasis/messageIdocConfig/detectRaw";
+import { isAuthoritativeOutputTypeKvewe } from "@/lib/domain/typeAuthority";
 import {
   ensureWritableDir,
   writeGeneratedText,
@@ -182,7 +183,13 @@ function mapRow(
 
   switch (t) {
     case "T685": {
-      const id = keyOf(str(v.KVEWE), str(v.KAPPL), str(v.KSCHL));
+      const kvewe = str(v.KVEWE);
+      // T685 holds many condition usages. Only KVEWE=B is Nachrichten/OUTPUT_TYPE.
+      // KVEWE=A (Pricing) etc. must not become output_type nodes.
+      if (!isAuthoritativeOutputTypeKvewe(kvewe)) {
+        break;
+      }
+      const id = keyOf(kvewe, str(v.KAPPL), str(v.KSCHL));
       if (!id) break;
       emitObject(objects, {
         object_type: "output_type",
@@ -201,8 +208,12 @@ function mapRow(
       break;
     }
     case "T685T": {
-      const id = keyOf(str(v.KVEWE), str(v.KAPPL), str(v.KSCHL), str(v.SPRAS));
-      const parent = keyOf(str(v.KVEWE), str(v.KAPPL), str(v.KSCHL));
+      const kvewe = str(v.KVEWE);
+      if (!isAuthoritativeOutputTypeKvewe(kvewe)) {
+        break;
+      }
+      const id = keyOf(kvewe, str(v.KAPPL), str(v.KSCHL), str(v.SPRAS));
+      const parent = keyOf(kvewe, str(v.KAPPL), str(v.KSCHL));
       if (!id) break;
       emitObject(objects, {
         object_type: "output_type_text",

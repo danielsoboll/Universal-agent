@@ -1,6 +1,7 @@
 /**
  * KI-Tiefensuche orchestrator:
- * Query Understanding → Search Plan → Multi-Source → Synthesis
+ * Query Understanding → Anchor RAG (sweep + expansion + evidence package)
+ * → Multi-Source → Synthesis
  * Does not alter direct_rag.
  */
 import { ensureWritableDir, writeGeneratedText } from "@/lib/localData/fs";
@@ -10,6 +11,7 @@ import type {
   ModeRunMetrics,
   QueryUnderstanding,
 } from "@/lib/knowledge/deepSearch/types";
+import { runAnchorRag } from "@/lib/knowledge/anchorRag/runAnchorRag";
 import { mapMultiSourceToAnswerResult } from "@/lib/knowledge/mapMultiSourceToAnswer";
 import { runMultiSourceSearch } from "@/lib/knowledge/multiSourceSearch";
 import type { MultiSourceRunResult } from "@/lib/knowledge/multiSourceSearch/types";
@@ -45,7 +47,6 @@ function estimateCost(tokens: {
   output: number;
   embedding: number;
 }): number {
-  // Rough USD estimate — same ballpark as ask cost reporting
   return (
     (tokens.input / 1_000_000) * 0.15 +
     (tokens.output / 1_000_000) * 0.6 +
@@ -87,6 +88,8 @@ export async function runDeepSearch(params: {
   started: number;
   maxRounds?: number;
   synthesize?: boolean;
+  /** Enable second KI planning round inside Anchor RAG (default true for deep_search). */
+  enablePlanningRound?: boolean;
   domainMeta: {
     domain_profile_id: string;
     prompt_key: string;
@@ -99,6 +102,34 @@ export async function runDeepSearch(params: {
   const qu = await runQueryUnderstanding(question);
   const selected = selectSearchPlan(qu);
 
+  // Deterministic Global Anchor Sweep + Relation Expansion + Evidence Package
+  // (planning round optional; uses OpenAI only when enabled)
+  const projectKey =
+    params.project.customer_id?.trim() ||
+    params.project.id?.trim() ||
+    "P01";
+
+  let evidencePackageBlock: string | undefined;
+  let planningTokens = { input: 0, output: 0 };
+  let anchorRunId: string | undefined;
+  try {
+    const anchor = await runAnchorRag({
+      projectKey,
+      question,
+      queryUnderstanding: qu,
+      enablePlanningRound: params.enablePlanningRound !== false,
+      maxHops: 2,
+    });
+    evidencePackageBlock = anchor.evidence_prompt_block;
+    planningTokens = anchor.metrics.planning_tokens;
+    anchorRunId = anchor.run_id;
+  } catch (e) {
+    console.warn(
+      "[runDeepSearch] anchor RAG failed, continuing with multi-source only:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   const ms = await runMultiSourceSearch({
     projectId: params.projectId,
     project: params.project,
@@ -106,16 +137,17 @@ export async function runDeepSearch(params: {
     maxRounds: params.maxRounds ?? 2,
     synthesize: params.synthesize !== false,
     enrichPlanWithLlm: false,
+    evidencePackageBlock,
     planSeeds: {
       concepts: selected.seed_concepts,
       synonyms: [
         ...selected.seed_synonyms,
         ...qu.technical_tokens,
-        // business_concepts already filtered; do not re-add assumed object types
         ...qu.business_concepts,
       ],
       notes: [
         "KI-Tiefensuche / Query-Understanding",
+        "Anchor-RAG Evidence Package aktiv",
         ...selected.notes,
         ...qu.warnings,
       ],
@@ -124,11 +156,16 @@ export async function runDeepSearch(params: {
     },
   });
 
-  const logDir = persistQueryUnderstanding(
-    ms.project_key,
-    ms.run_id,
-    qu,
-  );
+  // Persist QU into the multi-source run dir (and copy note if anchor used own id)
+  const logDir = persistQueryUnderstanding(ms.project_key, ms.run_id, qu);
+  if (anchorRunId && evidencePackageBlock) {
+    writeGeneratedText(
+      ms.project_key,
+      "logs",
+      `search-runs/${ms.run_id}/anchor-rag-ref.json`,
+      `${JSON.stringify({ anchor_run_id: anchorRunId }, null, 2)}\n`,
+    );
+  }
 
   const answer = mapMultiSourceToAnswerResult({
     run: ms,
@@ -142,7 +179,6 @@ export async function runDeepSearch(params: {
     },
   });
 
-  // Align contract fields for mode comparison
   answer.search_mode = "deep_search";
   answer.requested_search_mode = "deep_search";
   answer.retrieval_mode = "deep_search_multi_source";
@@ -150,9 +186,13 @@ export async function runDeepSearch(params: {
   answer.duration_ms = Date.now() - params.started;
   answer.token_usage = {
     input:
-      (ms.metrics.synthesis_tokens?.input ?? 0) + qu.token_usage.input,
+      (ms.metrics.synthesis_tokens?.input ?? 0) +
+      qu.token_usage.input +
+      planningTokens.input,
     output:
-      (ms.metrics.synthesis_tokens?.output ?? 0) + qu.token_usage.output,
+      (ms.metrics.synthesis_tokens?.output ?? 0) +
+      qu.token_usage.output +
+      planningTokens.output,
     embedding: 0,
   };
   answer.estimated_cost = estimateCost(answer.token_usage);
@@ -164,6 +204,9 @@ export async function runDeepSearch(params: {
     ...answer.warnings,
     `Query-Understanding intent=${qu.intent} plan=${qu.preferred_search_plan}`,
     `query-understanding.json → ${logDir}/query-understanding.json`,
+    ...(anchorRunId
+      ? [`anchor-rag → logs/search-runs/${anchorRunId}/evidence-graph.json`]
+      : []),
     ...qu.warnings.slice(0, 4),
   ];
   if (answer.evidence_context_report) {
@@ -175,7 +218,10 @@ export async function runDeepSearch(params: {
     ];
   }
 
-  const metrics = multiSourceToModeMetrics(ms, qu.token_usage);
+  const metrics = multiSourceToModeMetrics(ms, {
+    input: qu.token_usage.input + planningTokens.input,
+    output: qu.token_usage.output + planningTokens.output,
+  });
   metrics.runtime_ms = answer.duration_ms;
   metrics.cost = answer.estimated_cost;
   metrics.tokens = answer.token_usage;

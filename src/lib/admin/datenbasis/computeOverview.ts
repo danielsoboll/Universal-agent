@@ -1,7 +1,4 @@
-import {
-  DATENBASIS_STEP_META,
-  listExportTypeConfigs,
-} from "@/lib/admin/datenbasis/exportTypeConfig";
+import { listExportTypeConfigs } from "@/lib/admin/datenbasis/exportTypeConfig";
 import {
   computeUnlockMap,
   nextActionLabel,
@@ -50,31 +47,27 @@ export function computeDatenbasisOverview(params: {
       ? null
       : reconcileManifest(projectKey, cfg.id, unlocked);
 
-    const overall = manifest?.overall ?? "locked";
+    const overall = manifest?.overall ?? "not_started";
     const next = manifest
       ? nextActionLabel(manifest)
-      : { stepId: null, label: "Gesperrt" };
+      : { stepId: null, label: "Noch nicht gestartet" };
     const progress = manifest ? progressPercent(manifest) : 0;
 
+    // Prefer explainable next.label (e.g. "Canonical bereit …") whenever
+    // there is real pipeline progress — never overwrite with unlock fluff.
     let nextActionLabelText = next.label;
     if (cfg.implementation === "locked") {
       nextActionLabelText = "Scaffold — Regeln ausstehend";
+    } else if (progress > 0 || (next.label && next.label !== "—")) {
+      nextActionLabelText = next.label;
     } else if (cfg.implementation === "prepared" && unlocked) {
-      nextActionLabelText =
-        cfg.id === "message-idoc-config"
-          ? "RAW vorbereiten / Schema profilieren"
-          : cfg.id === "programs"
-            ? "Vorbereitet — Regeln noch nicht verifiziert"
-            : "Vorbereitet (CT-Fahrplan separat)";
+      nextActionLabelText = "Vorbereitet (CT-Fahrplan separat)";
     } else if (!unlocked) {
       nextActionLabelText = stage2Done
         ? cfg.unlockIndependent
-          ? "Gesperrt — Stufe 2 prüfen"
-          : "Gesperrt — vorherigen Typ freigeben"
-        : "Gesperrt — Stufe 2 abschließen";
-    } else if (next.stepId) {
-      const meta = DATENBASIS_STEP_META[next.stepId];
-      nextActionLabelText = meta?.actionLabel ?? next.label;
+          ? "Noch nicht gestartet — Stufe 2 prüfen"
+          : "Noch nicht gestartet — vorherigen Typ freigeben"
+        : "Noch nicht gestartet — Stufe 2 abschließen";
     }
 
     types.push({
@@ -95,11 +88,9 @@ export function computeDatenbasisOverview(params: {
     });
   }
 
-  // Progress: share of full/prepared types that are approved (or CT prepared counts when unlocked after classes)
   const tracked = types.filter(
     (t) => t.implementation === "full" || t.implementation === "prepared",
   );
-  // Phase 1 acceptance: classes approved unlocks programs scaffold — area3 done when classes approved
   const classes = types.find((t) => t.id === "classes");
   const area3Done = classes?.overall === "approved";
   const doneCount = types.filter((t) => t.overall === "approved").length;

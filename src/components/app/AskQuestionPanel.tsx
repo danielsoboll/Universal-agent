@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { askQuestionAction } from "@/actions/ask";
 import type { AskQuestionResult } from "@/lib/app/askTypes";
+import { InventoryAnswerPanel } from "@/components/app/InventoryAnswerPanel";
+import { EntityListAnswerPanel } from "@/components/app/EntityListAnswerPanel";
+import { HardcodedValueAnswerPanel } from "@/components/app/HardcodedValueAnswerPanel";
+import { isUsableHardcodedValueAnswer } from "@/lib/knowledge/hardcodedValueInventory/isUsableHardcodedValueAnswer";
+import { ProcessAnswerPanel } from "@/components/app/ProcessAnswerPanel";
+import { StructuredAnswerPanel } from "@/components/app/StructuredAnswerPanel";
 import type {
   ClassifiedStatement,
   CompactTechnicalDetails,
@@ -1276,6 +1282,11 @@ export function AskQuestionPanel({
         searchProfileId?: string;
         relevanceGate?: AskQuestionResult["relevanceGate"];
         fullAnalysisReport?: FullAnalysisReport | null;
+        inventoryAnswer?: AskQuestionResult["inventoryAnswer"];
+        entityListAnswer?: AskQuestionResult["entityListAnswer"];
+        hardcodedValueAnswer?: AskQuestionResult["hardcodedValueAnswer"];
+        processAnswerView?: AskQuestionResult["processAnswerView"];
+        structuredAnswer?: AskQuestionResult["structuredAnswer"];
       };
 
       const evidence =
@@ -1365,6 +1376,11 @@ export function AskQuestionPanel({
         promptVersion: data.promptVersion,
         searchProfileId: data.searchProfileId,
         fullAnalysisReport: data.fullAnalysisReport ?? null,
+        inventoryAnswer: data.inventoryAnswer ?? null,
+        entityListAnswer: data.entityListAnswer ?? null,
+        hardcodedValueAnswer: data.hardcodedValueAnswer ?? null,
+        processAnswerView: data.processAnswerView ?? null,
+        structuredAnswer: data.structuredAnswer ?? null,
       };
     } catch {
       return askQuestionAction({ question: q, customerId, searchMode });
@@ -1501,7 +1517,7 @@ export function AskQuestionPanel({
           <p className="muted text-xs">
             {mode === "full_analysis"
               ? "Vollanalyse — breite Evidenzsammlung und tiefere Auswertung, bitte etwas Geduld …"
-              : "Isolierte Anfrage — ohne Kontext vorheriger Fragen …"}
+              : "Isolierte Anfrage — Code-Scan und Aufbereitung können bis zu einer Minute dauern …"}
           </p>
         </div>
       ) : null}
@@ -1553,18 +1569,56 @@ export function AskQuestionPanel({
       {!pending &&
       (result?.status === "ok" || result?.status === "insufficient") ? (
         <section className="space-y-3 sm:space-y-4">
-          <ProcessAnswerBlock
-            process={result.processAnswer}
-            fallbackAnswer={result.answer}
-            relevanceGate={result.relevanceGate}
-            status={result.status}
-          />
+          {isUsableHardcodedValueAnswer(result.hardcodedValueAnswer) ? (
+            <>
+              <ProcessAnswerBlock
+                process={result.processAnswer}
+                fallbackAnswer={result.answer}
+                relevanceGate={result.relevanceGate}
+                status={result.status}
+              />
+              <TechnicalAnswerBlock technical={result.technicalAnswer} />
+              <HardcodedValueAnswerPanel
+                view={result.hardcodedValueAnswer}
+                showSummary={false}
+              />
+            </>
+          ) : result.structuredAnswer ? (
+            <StructuredAnswerPanel answer={result.structuredAnswer} />
+          ) : result.inventoryAnswer ? (
+            <InventoryAnswerPanel view={result.inventoryAnswer} />
+          ) : result.entityListAnswer ? (
+            <EntityListAnswerPanel view={result.entityListAnswer} />
+          ) : result.processAnswerView ? (
+            <ProcessAnswerPanel view={result.processAnswerView} />
+          ) : result.answer?.trim() ? (
+            <article className="panel compact space-y-2 p-4 sm:p-5">
+              <h2 className="text-base font-semibold tracking-tight">
+                Antwort
+              </h2>
+              <p className="text-sm leading-relaxed sm:text-[0.95rem]">
+                {result.answer}
+              </p>
+            </article>
+          ) : (
+            <ProcessAnswerBlock
+              process={result.processAnswer}
+              fallbackAnswer={result.answer}
+              relevanceGate={result.relevanceGate}
+              status={result.status}
+            />
+          )}
 
-          {result.status !== "insufficient" ||
-          (result.technicalAnswer &&
-            Object.values(result.technicalAnswer).some(
-              (v) => Array.isArray(v) && v.length > 0,
-            )) ? (
+          {!isUsableHardcodedValueAnswer(result.hardcodedValueAnswer) &&
+          !result.structuredAnswer &&
+          !result.inventoryAnswer &&
+          !result.entityListAnswer &&
+          !result.processAnswerView &&
+          (result.status !== "insufficient" ||
+            (result.technicalAnswer &&
+              Object.values(result.technicalAnswer).some(
+                (v) => Array.isArray(v) && v.length > 0,
+              ))) ? (
             <TechnicalAnswerBlock technical={result.technicalAnswer} />
           ) : null}
 

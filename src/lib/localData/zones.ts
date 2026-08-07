@@ -6,6 +6,7 @@ export const WRITABLE_ZONES = [
   "embeddings",
   "indexes",
   "logs",
+  "requests",
 ] as const;
 
 export type WritableZone = (typeof WRITABLE_ZONES)[number];

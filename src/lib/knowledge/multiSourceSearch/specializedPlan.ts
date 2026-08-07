@@ -80,6 +80,8 @@ export function buildSpecializedPlan(params: {
       steps: [...MASTER_FIELD_STEPS],
       focused_stage_order: [
         "exact_symbol",
+        "lexical",
+        "master_data",
         "control_tables",
         "classes",
         "programs",
@@ -89,7 +91,7 @@ export function buildSpecializedPlan(params: {
       abort_broad_search: true,
       notes: [
         `Primäranker: ${params.primaryAnchor.table}-${params.primaryAnchor.field}`,
-        "Breite Konzept-Suche deaktiviert — fokussierte Folgeabfragen.",
+        "Breite Konzept-Suche deaktiviert — fokussierte Folgeabfragen inkl. Relationsexpansion.",
       ],
     };
   }
@@ -200,7 +202,7 @@ export function evaluatePrimaryAnchorCoverage(
   const missing: string[] = [];
 
   const mdHits = stages
-    .filter((s) => s.stage === "master_data")
+    .filter((s) => s.stage === "master_data" || s.stage === "lexical")
     .flatMap((s) => s.hits);
   const hasFieldDef =
     mdHits.some(

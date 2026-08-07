@@ -54,6 +54,15 @@ function AdminBackNavInner() {
     );
   }
 
+  if (pathname.startsWith("/admin/pipeline-analyzer")) {
+    return (
+      <BackNavLink
+        href={withCustomer("/admin/dashboard", customer)}
+        label="Zum Dashboard"
+      />
+    );
+  }
+
   return (
     <BackNavLink
       href={withCustomer("/admin/dashboard", customer)}

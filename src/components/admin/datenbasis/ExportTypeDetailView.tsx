@@ -32,7 +32,6 @@ function stepTone(status: string): FahrplanStepStatus {
     case "running":
       return "running";
     case "locked":
-      return "not_available";
     case "ready":
     case "awaiting":
     case "open":
@@ -50,13 +49,15 @@ function stepLabel(status: string): string {
     case "running":
       return "Läuft";
     case "locked":
-      return "Gesperrt";
+      return "Offen";
     case "awaiting":
       return "Freigabe";
     case "ready":
-    case "open":
-    default:
       return "Bereit";
+    case "open":
+      return "Offen";
+    default:
+      return "Offen";
   }
 }
 
@@ -138,7 +139,7 @@ export function ExportTypeDetailView({
           Status:{" "}
           {manifest.unlocked
             ? "Vorbereitet / Scaffold — Pipeline noch nicht freigeschaltet"
-            : "Gesperrt"}
+            : "Offen — Scaffold"}
         </p>
         <p className="mt-1 text-[0.8125rem] text-[var(--muted)]">
           certainty: {config.certainty}
@@ -205,7 +206,9 @@ export function ExportTypeDetailView({
           const actionable =
             step.status === "ready" ||
             step.status === "awaiting" ||
-            step.status === "error";
+            step.status === "error" ||
+            step.status === "open" ||
+            step.status === "locked";
           const isManual = id === "A_sap_export" || id === "G_approve";
 
           return (
@@ -260,7 +263,7 @@ export function ExportTypeDetailView({
                     label={stepLabel(step.status)}
                     className="!min-h-0 !px-2 !py-1 !text-[0.8125rem]"
                   />
-                  {actionable && manifest.unlocked ? (
+                  {actionable && (manifest.unlocked || config.unlockIndependent) ? (
                     <StatusActionButton
                       status={
                         step.status === "error" ? "failed" : "ready"

@@ -37,6 +37,7 @@ import {
 import type { QueryPlan, SearchMode } from "@/lib/knowledge/queryPlanSchema";
 import { planQuery } from "@/lib/knowledge/queryPlanner";
 import { runDeepSearch } from "@/lib/knowledge/deepSearch/runDeepSearch";
+import { runStandardAnchorRag } from "@/lib/knowledge/anchorRag/runStandardAnchorRag";
 import {
   listAvailableKnowledgeUnitTypes,
 } from "@/lib/knowledge/executeQueryPlan";
@@ -61,6 +62,18 @@ import {
 } from "@/lib/knowledge/relevanceGate";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
+import type { InventoryDiagnostics } from "@/lib/knowledge/inventoryAggregation";
+import type { InventoryAnswerView } from "@/lib/knowledge/inventoryAggregation";
+import {
+  runAskOrchestration,
+  type AskOrchestrationDiagnostics,
+} from "@/lib/knowledge/askOrchestration";
+import {
+  classifyHardcodedValueIntent,
+  runHardcodedValueInventoryResolver,
+  slimHardcodedValueAnswerForClient,
+} from "@/lib/knowledge/hardcodedValueInventory";
+import { buildHardcodedUserAnswers } from "@/lib/knowledge/hardcodedValueInventory/buildHardcodedUserAnswers";
 
 function resolveRequestedSearchMode(
   mode: SearchMode | undefined,
@@ -146,6 +159,20 @@ export type AnswerQuestionResult = {
   } | null;
   /** full_analysis only — Markdown + Word download payload. */
   full_analysis_report: FullAnalysisReport | null;
+  /** Inventory/aggregation resolver diagnostics (set/list questions). */
+  inventory_aggregation: InventoryDiagnostics | null;
+  /** Structured inventory answer for card UI (no markdown tables). */
+  inventory_answer: InventoryAnswerView | null;
+  /** Structured entity-list answer for card UI (classes/programs/…). */
+  entity_list_answer: import("@/lib/knowledge/entityListAggregation").EntityListAnswerView | null;
+  /** Structured hardcoded-value inventory for card UI. */
+  hardcoded_value_answer: import("@/lib/knowledge/hardcodedValueInventory").HardcodedValueAnswerView | null;
+  /** Structured process explanation UI (gated evidence). */
+  process_answer_view: import("@/lib/knowledge/askOrchestration/relevanceGateTypes").ProcessAnswerView | null;
+  /** Unified structured product answer. */
+  structured_answer: import("@/lib/knowledge/structuredAnswer").StructuredAnswer | null;
+  /** Generic ask orchestration diagnostics (intent/graph/budget/claims). */
+  ask_orchestration: AskOrchestrationDiagnostics | null;
 };
 
 function emptyResult(
@@ -195,6 +222,13 @@ function emptyResult(
     planned_run_id: null,
     topic_gate: null,
     full_analysis_report: null,
+    inventory_aggregation: null,
+    inventory_answer: null,
+    entity_list_answer: null,
+    hardcoded_value_answer: null,
+    process_answer_view: null,
+    structured_answer: null,
+    ask_orchestration: null,
     ...extras,
   };
 }
@@ -304,6 +338,193 @@ export async function answerQuestion(params: {
     workflow_template_id: capabilities.workflowTemplateId,
   };
 
+  // --- Generic ask orchestration (intent → graph-first / inventory) ---
+  // No question hardcoding; inventory stays canonical; process/trace avoid Top-k-first.
+  try {
+    const orch = await runAskOrchestration({ question });
+    if (orch.used && !orch.handoff_to_hybrid) {
+      const hcView = orch.hardcoded_value_answer;
+      const hcUserAnswers =
+        orch.intent === "HARDCODED_VALUE_INVENTORY" && hcView
+          ? buildHardcodedUserAnswers(hcView)
+          : null;
+
+      const process_answer: ProcessAnswer = hcUserAnswers
+        ? hcUserAnswers.process_answer
+        : {
+            ...EMPTY_PROCESS_ANSWER,
+            direct_answer: orch.answer_markdown,
+            confirmed: orch.claims
+              .filter(
+                (c) =>
+                  c.strength === "AUTHORITATIVE" ||
+                  c.strength === "CODE_DERIVED",
+              )
+              .slice(0, 12)
+              .map((c) => ({
+                text: c.text,
+                level: "confirmed" as const,
+                source_ranks: [1],
+                source_ids: [],
+              })),
+            inferred: orch.claims
+              .filter((c) => c.strength === "INFERRED")
+              .slice(0, 8)
+              .map((c) => ({
+                text: c.text.startsWith("Ableitung:")
+                  ? c.text
+                  : `Ableitung: ${c.text}`,
+                level: "inferred" as const,
+                source_ranks: [],
+                source_ids: [],
+              })),
+            has_safe_process_claim: orch.status === "ok",
+            open_validation_questions:
+              orch.diagnostics.evidence_coverage.missing,
+          };
+
+      const technical_answer: TechnicalAnswer = hcUserAnswers
+        ? hcUserAnswers.technical_answer
+        : {
+            ...EMPTY_TECHNICAL_ANSWER,
+            processing: orch.diagnostics.graph_paths.slice(0, 10).map((p) => ({
+              text: `${p.object_name}.${p.unit_name} [${p.cache_status}] ${p.path_relations.join(" → ")}`,
+              level: "confirmed" as const,
+              source_ranks: [1],
+              source_ids: [],
+            })),
+            open: orch.diagnostics.evidence_coverage.missing.map((m) => ({
+              text: m,
+              level: "possible" as const,
+              source_ranks: [],
+              source_ids: [],
+            })),
+          };
+
+      return {
+        status: orch.status === "ok" ? "ok" : "insufficient",
+        question,
+        direct_answer: orch.answer_markdown,
+        reasoning: `Ask-Orchestrierung (${orch.intent}) — Graph-first / Canonical, kein Top-k-First.`,
+        technical_objects: orch.diagnostics.seeds,
+        uncertainties: [
+          ...orch.diagnostics.evidence_coverage.missing,
+          ...orch.diagnostics.discarded_unsupported_claims.map(
+            (d) => `verworfen: ${d.text}`,
+          ),
+        ],
+        process_answer,
+        technical_answer,
+        technical_details: hcUserAnswers
+          ? hcUserAnswers.technical_details
+          : { ...EMPTY_TECHNICAL_DETAILS },
+        compact_technical_details: hcUserAnswers
+          ? hcUserAnswers.compact_technical_details
+          : { ...EMPTY_COMPACT_TECHNICAL_DETAILS },
+        question_intent: orch.intent,
+        evidence_context_report: null,
+        entity_grounding: [],
+        relevance_gate: null,
+        sources: [],
+        model: "deterministic/ask_orchestration",
+        token_usage: { input: 0, output: 0, embedding: 0 },
+        estimated_cost: 0,
+        retrieval_summary: `ask_orchestration intent=${orch.intent} seeds=${orch.diagnostics.seeds.length} paths=${orch.diagnostics.graph_paths.length} cache=${orch.diagnostics.cached_method_analyses.length}`,
+        retrieval_mode: "ask_orchestration",
+        searched_document_count: orch.diagnostics.graph_paths.length,
+        top_score: null,
+        index_path: orch.diagnostics.canonical_sources[0] ?? "",
+        vector_search_active: false,
+        warnings: [],
+        search_mode: searchMode,
+        requested_search_mode: requestedMode,
+        query_plan: null,
+        subquery_count: 0,
+        planner_fallback: false,
+        duration_ms: Date.now() - started,
+        conversation_mode: false,
+        planned_run_id: null,
+        topic_gate: null,
+        full_analysis_report: null,
+        inventory_aggregation: orch.diagnostics.inventory,
+        inventory_answer: orch.inventory_answer ?? null,
+        entity_list_answer: orch.entity_list_answer ?? null,
+        hardcoded_value_answer: slimHardcodedValueAnswerForClient(
+          orch.hardcoded_value_answer ?? null,
+        ),
+        process_answer_view: orch.process_answer_view ?? null,
+        structured_answer: orch.structured_answer ?? null,
+        ask_orchestration: orch.diagnostics,
+        ...domainMeta,
+      };
+    }
+  } catch (e) {
+    warnings.push(
+      `ask_orchestration failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    // Fail closed for hardcoded-value questions: still deliver deterministic scan.
+    const hcClass = classifyHardcodedValueIntent(question);
+    if (hcClass.intent === "HARDCODED_VALUE_INVENTORY") {
+      try {
+        const hc = await runHardcodedValueInventoryResolver({ question });
+        if (hc.used && hc.answer_view) {
+          const slim = slimHardcodedValueAnswerForClient(hc.answer_view);
+          const userAnswers = buildHardcodedUserAnswers(hc.answer_view);
+          return {
+            status: slim && slim.materials.length > 0 ? "ok" : "insufficient",
+            question,
+            direct_answer: hc.summary_sentence,
+            reasoning:
+              "Ask-Orchestrierung fehlgeschlagen — Hardcoded-Value-Resolver als Fallback.",
+            technical_objects: [],
+            uncertainties: warnings,
+            process_answer: userAnswers.process_answer,
+            technical_answer: userAnswers.technical_answer,
+            technical_details: userAnswers.technical_details,
+            compact_technical_details: userAnswers.compact_technical_details,
+            question_intent: "HARDCODED_VALUE_INVENTORY",
+            evidence_context_report: null,
+            entity_grounding: [],
+            relevance_gate: null,
+            sources: [],
+            model: "deterministic/hardcoded_value_fallback",
+            token_usage: { input: 0, output: 0, embedding: 0 },
+            estimated_cost: 0,
+            retrieval_summary: "hardcoded_value_inventory fallback",
+            retrieval_mode: "ask_orchestration",
+            searched_document_count: 0,
+            top_score: null,
+            index_path: hc.sources[0] ?? "",
+            vector_search_active: false,
+            warnings,
+            search_mode: searchMode,
+            requested_search_mode: requestedMode,
+            query_plan: null,
+            subquery_count: 0,
+            planner_fallback: false,
+            duration_ms: Date.now() - started,
+            conversation_mode: false,
+            planned_run_id: null,
+            topic_gate: null,
+            full_analysis_report: null,
+            inventory_aggregation: null,
+            inventory_answer: null,
+            entity_list_answer: null,
+            hardcoded_value_answer: slim,
+            process_answer_view: null,
+            structured_answer: null,
+            ask_orchestration: null,
+            ...domainMeta,
+          };
+        }
+      } catch (fallbackErr) {
+        warnings.push(
+          `hardcoded_value fallback failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+        );
+      }
+    }
+  }
+
   type RetrievalBundle = {
     hits: KnowledgeHit[];
     document_count: number;
@@ -388,6 +609,154 @@ export async function answerQuestion(params: {
           duration_ms: Date.now() - started,
         },
       );
+    }
+  }
+
+  // --- Standard Anchor-RAG (direct_rag / planned_rag): no deep planning round ---
+  if (searchMode === "direct_rag" || searchMode === "planned_rag") {
+    try {
+      const std = await runStandardAnchorRag({
+        project,
+        question,
+        synthesize: true,
+      });
+      if (std.used && std.anchor) {
+        const pkg = std.anchor.evidence_package;
+        const process_answer: ProcessAnswer = {
+          ...EMPTY_PROCESS_ANSWER,
+          direct_answer: std.direct_answer,
+          confirmed: [
+            {
+              text: std.direct_answer,
+              level: "confirmed",
+              source_ranks: [1],
+              source_ids: [],
+            },
+          ],
+          open: std.open_questions.map((t) => ({
+            text: t,
+            level: "possible" as const,
+            source_ranks: [],
+            source_ids: [],
+          })),
+          has_safe_process_claim: true,
+          open_validation_questions: std.open_questions,
+        };
+        const result: AnswerQuestionResult = {
+          status: "ok",
+          question,
+          direct_answer: std.direct_answer,
+          reasoning: std.reasoning,
+          technical_objects: pkg.code_units
+            .slice(0, 20)
+            .map((u) => String((u as { name?: string }).name ?? ""))
+            .filter((n) => n && n !== "?"),
+          uncertainties: std.open_questions,
+          process_answer,
+          technical_answer: {
+            ...EMPTY_TECHNICAL_ANSWER,
+            processing: [
+              ...pkg.proven_claims.slice(0, 12).map((c) => ({
+                text: c,
+                level: "confirmed" as const,
+                source_ranks: [1],
+                source_ids: [],
+              })),
+              ...(std.anchor.medium_resolutions ?? []).map((m) => {
+                const mm = m as {
+                  medium_code?: string;
+                  medium_text?: string;
+                  resolution?: string;
+                };
+                return {
+                  text: `Medium-Text-Auflösung (technisch): NACHA=${mm.medium_code} → „${mm.medium_text}“ (Quelle: ${mm.resolution})`,
+                  level: "confirmed" as const,
+                  source_ranks: [1],
+                  source_ids: [],
+                };
+              }),
+            ],
+            open: std.open_questions.map((c) => ({
+              text: c,
+              level: "possible" as const,
+              source_ranks: [],
+              source_ids: [],
+            })),
+          },
+          technical_details: { ...EMPTY_TECHNICAL_DETAILS },
+          compact_technical_details: { ...EMPTY_COMPACT_TECHNICAL_DETAILS },
+          question_intent: classifyQuestionIntent(question),
+          evidence_context_report: null,
+          entity_grounding: [],
+          relevance_gate: null,
+          sources: std.sources_used.map((s, i) => ({
+            rank: i + 1,
+            source_key: s,
+            title: s,
+            knowledge_unit_type: "code_unit",
+            combined_score: 1,
+            snippet: s.slice(0, 200),
+          })),
+          model: std.model,
+          token_usage: std.token_usage,
+          estimated_cost: estimateCost(
+            std.token_usage.input,
+            std.token_usage.output,
+            std.token_usage.embedding,
+          ),
+          retrieval_summary: `Anchor-RAG: nodes=${std.anchor.graph.nodes.length} edges=${std.anchor.graph.edges.length} hits=${std.anchor.metrics.inventory_hits} scanned=${std.anchor.metrics.documents_scanned}`,
+          retrieval_mode: "standard_anchor_rag",
+          searched_document_count: std.anchor.metrics.focused
+            ? std.anchor.metrics.inventory_hits + std.anchor.graph.nodes.length
+            : std.anchor.metrics.documents_scanned ||
+              std.anchor.graph.nodes.length,
+          top_score: null,
+          index_path: project.active_index_path ?? "",
+          vector_search_active: false,
+          warnings: [
+            `standard_anchor_rag log=${std.log_dir}`,
+            `tnapr=${JSON.stringify(std.anchor.tnapr_resolutions?.length ?? 0)}`,
+          ],
+          message: "",
+          search_mode: searchMode,
+          requested_search_mode: requestedMode,
+          query_plan: null,
+          subquery_count: 1,
+          planner_fallback: false,
+          duration_ms: Date.now() - started,
+          domain_profile_id: domainMeta.domain_profile_id as AnswerQuestionResult["domain_profile_id"],
+          prompt_key: domainMeta.prompt_key,
+          prompt_version: domainMeta.prompt_version,
+          search_profile_id: domainMeta.search_profile_id,
+          workflow_template_id: domainMeta.workflow_template_id,
+          conversation_mode: false,
+          planned_run_id: null,
+          topic_gate: null,
+          full_analysis_report: null,
+          inventory_aggregation: null,
+          inventory_answer: null,
+          entity_list_answer: null,
+          hardcoded_value_answer: null,
+          process_answer_view: null,
+          structured_answer: null,
+          ask_orchestration: null,
+        };
+        console.info(
+          "[answerQuestion:standard_anchor_rag]",
+          JSON.stringify({
+            mode: searchMode,
+            log_dir: std.log_dir,
+            nodes: std.anchor.graph.nodes.length,
+            edges: std.anchor.graph.edges.length,
+          }),
+        );
+        return result;
+      }
+    } catch (e) {
+      warnings.push(
+        `Standard-Anchor-RAG übersprungen: ${e instanceof Error ? e.message : "error"}`,
+      );
+      console.warn("[answerQuestion] standard_anchor_rag failed:", e);
     }
   }
 
@@ -582,7 +951,7 @@ export async function answerQuestion(params: {
       const direct = await KnowledgeRetriever.search({
         project,
         query: question,
-        limit: params.limit ?? 12,
+        limit: params.limit ?? 40,
         searchProfile: capabilities.searchProfile,
       });
       retrieval = {
@@ -665,6 +1034,13 @@ export async function answerQuestion(params: {
     planned_run_id: plannedRunId,
     topic_gate: topicGate,
     full_analysis_report: null as FullAnalysisReport | null,
+    inventory_aggregation: null as InventoryDiagnostics | null,
+    inventory_answer: null as InventoryAnswerView | null,
+    entity_list_answer: null,
+    hardcoded_value_answer: null,
+    process_answer_view: null,
+    structured_answer: null,
+    ask_orchestration: null as AskOrchestrationDiagnostics | null,
   };
 
   const questionIntent = classifyQuestionIntent(question);
@@ -806,7 +1182,7 @@ export async function answerQuestion(params: {
   }
 
   const synthesisHits =
-    searchMode === "full_analysis"
+    searchMode === "full_analysis" || searchMode === "direct_rag"
       ? retrieval!.hits
       : relevanceGate.supporting_source_ids.length > 0
         ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
@@ -1143,7 +1519,7 @@ export async function answerQuestion(params: {
       sources.length === 0 &&
       relevanceGate.answerability === "partially_answerable"
     ) {
-      sources = synthesisHits.slice(0, 8);
+      sources = synthesisHits.slice(0, 24);
     }
 
     const primaryForTech =
@@ -1309,6 +1685,13 @@ export async function answerQuestion(params: {
       planned_run_id: plannedRunId,
       topic_gate: topicGate,
       full_analysis_report: fullAnalysisReport,
+      inventory_aggregation: null,
+      inventory_answer: null,
+      entity_list_answer: null,
+      hardcoded_value_answer: null,
+      process_answer_view: null,
+      structured_answer: null,
+      ask_orchestration: null,
     };
 
     if (params.userId) {

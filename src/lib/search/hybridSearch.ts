@@ -17,6 +17,8 @@ import {
   extractTechnicalSymbols,
   haystackMatchesSymbol,
 } from "@/lib/search/technicalSymbols";
+import { isQueryStopword as sharedIsQueryStopword } from "@/lib/knowledge/queryStopwords";
+import { normalizeLexicalQuery } from "@/lib/search/lexical/normalizeQuery";
 
 /** Fixed generic weights — not tuned to evaluation questions. */
 const W_EXACT = 4;
@@ -24,120 +26,14 @@ const W_FULLTEXT = 1.2;
 const W_VECTOR = 3;
 const W_METADATA = 1.0;
 const W_CONFIDENCE = 0.5;
+/** Exact multi-word phrase in field/title/purpose — strong lexical signal. */
+const W_PHRASE = 18;
+/** All content stems present in one document. */
+const W_ALL_TERMS = 8;
+/** Soft penalty for generic table profiles when stronger field hits exist. */
+const TABLE_PROFILE_SOFT_PENALTY = 6;
 /** Minimum cosine similarity to count as a vector hit. */
 const VECTOR_MIN = 0.15;
-
-/**
- * Query-side function words (DE/EN). Applied only to lexical query terms so
- * common words do not dominate IDF scoring; documents keep full text.
- */
-const QUERY_STOPWORDS = new Set([
-  "der",
-  "die",
-  "das",
-  "den",
-  "dem",
-  "des",
-  "ein",
-  "eine",
-  "einer",
-  "eines",
-  "einem",
-  "einen",
-  "und",
-  "oder",
-  "mit",
-  "von",
-  "fur",
-  "fuer",
-  "auf",
-  "aus",
-  "bei",
-  "nach",
-  "uber",
-  "ueber",
-  "unter",
-  "ist",
-  "sind",
-  "war",
-  "wird",
-  "werden",
-  "hat",
-  "haben",
-  "kann",
-  "koennen",
-  "nicht",
-  "auch",
-  "sich",
-  "wie",
-  "was",
-  "wer",
-  "wo",
-  "wann",
-  "welche",
-  "welcher",
-  "welches",
-  "welchen",
-  "ob",
-  "es",
-  "gibt",
-  "zum",
-  "zur",
-  "im",
-  "in",
-  "am",
-  "an",
-  "als",
-  "um",
-  "so",
-  "noch",
-  "nur",
-  "man",
-  "macht",
-  "wurde",
-  "wurden",
-  "dass",
-  "daß",
-  "da",
-  "dort",
-  "hier",
-  "dann",
-  "wenn",
-  "aber",
-  "doch",
-  "schon",
-  "sehr",
-  "mehr",
-  "alle",
-  "allem",
-  "allen",
-  "aller",
-  "alles",
-  "kein",
-  "keine",
-  "keinen",
-  "dieser",
-  "diese",
-  "dieses",
-  "diesen",
-  "the",
-  "a",
-  "an",
-  "of",
-  "to",
-  "for",
-  "is",
-  "are",
-  "be",
-  "this",
-  "that",
-  "with",
-  "from",
-  "by",
-  "on",
-  "or",
-  "and",
-]);
 
 export type HybridSearchHit = {
   rank: number;
@@ -212,7 +108,7 @@ function snippetFromDoc(doc: SearchDocument, terms: string[]): string {
 
 function isQueryStopword(term: string): boolean {
   const t = foldSearchDiacritics(term.toLowerCase());
-  return QUERY_STOPWORDS.has(t) || QUERY_STOPWORDS.has(term.toLowerCase());
+  return sharedIsQueryStopword(t) || sharedIsQueryStopword(term.toLowerCase());
 }
 
 /**
@@ -258,10 +154,21 @@ export async function hybridSearch(params: {
   const documentsById = new Map(
     params.documents.map((d) => [d.search_document_id, d]),
   );
-  const terms = lexicalQueryTerms(query);
+  const lexQ = normalizeLexicalQuery(query);
+  const terms = [
+    ...new Set([
+      ...lexicalQueryTerms(query),
+      ...lexQ.stems,
+      ...lexQ.content_terms.filter((t) => t.length >= 3),
+    ]),
+  ];
   const exactTerms = exactQueryTerms(query);
   const technicalSymbols = extractTechnicalSymbols(query);
   const symbolNeedles = technicalSymbols.map((s) => s.norm);
+  const phrases = lexQ.phrases.filter(
+    (p) => p.length >= 5 && p.split(/\s+/).length >= 2,
+  );
+  const contentStems = lexQ.stems.filter((t) => t.length >= 3);
 
   type Acc = {
     exact: number;
@@ -330,6 +237,46 @@ export async function hybridSearch(params: {
     const idf = Math.log(1 + N / postings.length);
     for (const p of postings) {
       bump(p.id, { fulltext: (1 + Math.log(1 + p.tf)) * idf, term });
+    }
+  }
+
+  // 2b) Exact phrase + all-content-stems over title/purpose/field text (generic)
+  const foldHay = (s: string) => foldSearchDiacritics(s.toLowerCase());
+  for (const doc of params.documents) {
+    const purpose = foldHay(doc.business_purpose ?? "");
+    const title = foldHay(doc.title ?? "");
+    const fieldText = foldHay(
+      String(
+        doc.metadata?.field_text ??
+          doc.metadata?.description ??
+          "",
+      ),
+    );
+    const search = foldHay(doc.search_text ?? "");
+    const descBlob = `${purpose} ${title} ${fieldText}`.trim();
+    for (const phrase of phrases) {
+      const p = foldHay(phrase);
+      if (p.length < 5) continue;
+      const inDesc = descBlob.includes(p);
+      const inSearch =
+        doc.knowledge_unit_type === "master_field" && search.includes(p);
+      if (!inDesc && !inSearch) continue;
+      // Field/purpose phrases outweigh bare search_text profile matches
+      bump(doc.search_document_id, {
+        exact: inDesc ? 4 : 2,
+        fulltext: inDesc ? W_PHRASE / W_FULLTEXT : W_PHRASE / (W_FULLTEXT * 2),
+        term: `phrase:${phrase}`,
+      });
+      break;
+    }
+    if (contentStems.length >= 2) {
+      const blob = `${descBlob} ${search}`;
+      if (contentStems.every((t) => blob.includes(foldHay(t)))) {
+        bump(doc.search_document_id, {
+          meta: W_ALL_TERMS / W_METADATA,
+          term: "all_terms",
+        });
+      }
     }
   }
 
@@ -413,6 +360,14 @@ export async function hybridSearch(params: {
     }
   }
 
+  const hasMasterPhrase = [...scores.entries()].some(([oid, os]) => {
+    const od = documentsById.get(oid);
+    return (
+      od?.knowledge_unit_type === "master_field" &&
+      [...os.matched].some((t) => t.startsWith("phrase:"))
+    );
+  });
+
   const hits: HybridSearchHit[] = [];
   for (const [id, s] of scores) {
     const doc = documentsById.get(id);
@@ -449,13 +404,21 @@ export async function hybridSearch(params: {
     const confidence_bonus = conf * W_CONFIDENCE;
     const typeBoost =
       options.knowledgeUnitTypeBoosts?.[doc.knowledge_unit_type] ?? 0;
-    const combined_score =
+    let combined_score =
       exact_score * W_EXACT +
       fulltext_score * W_FULLTEXT +
       vector_score * W_VECTOR +
       metadata_score * W_METADATA +
       confidence_bonus +
       typeBoost;
+    // Soft demote generic table profiles when a master_field phrase hit exists
+    if (
+      hasMasterPhrase &&
+      doc.knowledge_unit_type === "table_profile" &&
+      ![...s.matched].some((t) => t.startsWith("phrase:"))
+    ) {
+      combined_score -= TABLE_PROFILE_SOFT_PENALTY;
+    }
 
     hits.push({
       rank: 0,

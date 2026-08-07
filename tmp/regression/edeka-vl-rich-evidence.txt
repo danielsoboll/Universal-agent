@@ -1,0 +1,1103 @@
+Strukturierter Evidence-Kontext (nur aktuelle Frage, keine Vorfragen):
+
+Intent: entity_specific (confidence 0.60)
+
+Anweisung: Baue eine konkrete Prozessantwort aus Feldanker + Steuertabellen + Codewirkungen. Die direct_answer muss die Kette nennen: (1) Kennzeichen/Feld, (2) wo es greift (Auftrag/Lieferung), (3) konkrete Wirkungen aus Code/Kommentaren, (4) Steuertabellen/Werte. Keine Floskeln. Offenes nur markieren, wenn wirklich nicht belegt.
+
+### Prozesssignale aus Code-Kommentaren/Methoden (nur Evidenz, nichts erfinden)
+Nutze diese Punkte als Prozessbausteine in der Antwort (Trigger → Prüfung → Wirkung).
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK: Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der 
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE: Absagegrund bei Liefersplitt geändert:
+- ZCL_VIRTUELLES_LAGER / GET_CONFIRM_STATUS: Den Status der Confirm-Nachricht der zugehörenden Aufträge ermitteln
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES: " Nur beim Ändern virtueller Lager LF zuschlagen.
+- ZCL_VIRTUELLES_LAGER / ABGRU_DOES_NOT_EXIST: WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false EL
+- ZCL_VIRTUELLES_LAGER / CHECK_LFPOS_FOR_VLAGER: Weitere Materialien der Artikelhauptgruppe 31
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION: CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xl
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM: CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste CHECK ( 
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM: IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not_exist( abgru = cs_lips-zzabgrutm vlager = cs_likp-zz_vlager ). IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY: Nachrichtenstatus der Confirms holen
+- ZCL_EDEKA_BELEGLOG / GET_ABSAGE20: METHOD get_absage20. SELECT DISTINCT cdhdr~username, cdhdr~udate, cdhdr~utime, cdhdr~objectid, cdpos~tabkey FROM cdhdr JOIN cdpos ON cdpos~objectid EQ cdhdr~objectid AND cdpos~obje
+- ZCL_EDEKA_BELEGLOG / GET_VERSANDDATUMAENDERUNGEN5: Aktuell keine geänderten werte in ausgabetabelle.
+- ZCL_EDEKA_BELEGLOG / GET_VERLADESTELLEN10: Aktuell keine geänderten werte in ausgabetabelle.
+- ZCL_EDEKA_BELEGLOG / GET_MENGE30: METHOD get_menge30. SELECT DISTINCT cdhdr~username, cdhdr~udate, cdhdr~utime, cdhdr~objectid, cdpos~tabkey FROM cdhdr JOIN cdpos ON cdpos~objectid EQ cdhdr~objectid AND cdpos~objec
+- ZCL_EDEKA_BELEGLOG / GET_LIEFERUNG40: METHOD get_lieferung40. SELECT DISTINCT likp~erdat, likp~erzet, likp~ernam, likp~vbeln, vbfa~vbelv, lips~posnr, lips~uecha FROM vbfa JOIN likp ON likp~vbeln EQ vbfa~vbeln JOIN lips
+- ZCL_EDEKA_BELEGLOG / GET_TOUR50: METHOD get_tour50. DATA l_timestamp TYPE timestamp. SELECT DISTINCT vbsk~ernam, vbsk~erdat, vbsk~uzeit, vbsk~sammg, lips~posnr, lips~vbeln FROM vbss JOIN vbsk ON vbsk~sammg EQ vbss
+- ZCL_EDEKA_BELEGLOG / GET_KOMMIWE55: METHOD get_kommiwe55. DATA l_timestamp TYPE timestamp. SELECT DISTINCT vbsk~ernam, vbsk~erdat, vbsk~uzeit, vbsk~sammg, lips~posnr, vbss~vbeln FROM vbss JOIN vbsk ON vbsk~sammg EQ v
+- ZCL_EDEKA_BELEGLOG / GET_DESADVERFOLG85: METHOD get_desadverfolg85. DATA l_timestamp TYPE timestamp. SELECT DISTINCT nast~objky, nast~datvr, nast~uhrvr, nast~usnam FROM nast INTO TABLE @DATA(lt_aenderung) WHERE nast~objky
+- ZCL_EDEKA_BELEGLOG / GET_DESADVFEHLER80: METHOD get_desadvfehler80. DATA l_timestamp TYPE timestamp. SELECT DISTINCT nast~objky, nast~erdat, nast~eruhr, nast~usnam FROM nast INTO TABLE @DATA(lt_aenderung) WHERE nast~objky
+- ZCL_EDEKA_BELEGLOG / GET_WARENAUSGANG90: SHIFT new_objkey LEFT BY 3 PLACES.
+
+### Werte-Katalog aus Steuertabellenzeilen (nur belegte Schlüssel/Werte)
+Tabelle ZZTVAG:
+- ZZ_VLAGER: X
+- ABGRU: 01, 88, P8
+- ABWGRUND: VM, VE, VL
+Tabelle ZSD_LP_MONI_SUBM:
+- AUART: ZL2, ZLNP
+Tabelle ZDIS11:
+- SPRAS: DE
+- MMSTA: 02, 03
+- MTSTB: Art. nur auf Vorb.
+- MTSTB_LF: Nicht am Lager, wird für Sie vorbestellt
+
+### Quelle #6 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+short_desc: * Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der Packstatus einer Position geändert werden soll
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER * Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der Packstatus einer Position geändert werden soll
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #1 | KNVV
+source_id: Q01|MASTER_FIELD|KNVV|ZZ_VLAGER
+type: master_field
+object_type: TABLE_FIELD
+object_name: KNVV
+method: ZZ_VLAGER
+table: KNVV
+short_desc: Stammdatenfeld KNVV-ZZ_VLAGER · Kennzeichen virtuelles Lager · DE=ZZ_SD_VLAGER · DOM=XFELD
+confidence: 0.95
+entity_grounding_status: n/a
+facts:
+- FACT: Feldtext: Kennzeichen virtuelles Lager
+- FACT: Datenelement: ZZ_SD_VLAGER
+- FACT: Domäne: XFELD
+- FACT: Datentyp: CHAR(1)
+- FACT: Custom Z/Y/Append-Feld
+code_data_evidence:
+- [fact] KNVV-ZZ_VLAGER: Kennzeichen virtuelles Lager
+reads: KNVV
+
+### Quelle #3 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE
+short_desc: METHOD if_ex_le_shp_delivery_proc~save_document_prepare.
+
+*------------------------------------------------------------------------------
+* TF001: Thomas Frei 09.06.2026  Ticket#2026031982000089
+*        Absagegrund bei Liefersplitt geändert:
+*        alt: PR = Ladefläche ausgelastet
+*        neu: ZB = Liefersplitt
+*------------------------------------------------------------------------------
+
+    FIELD-SYMBOLS: <vbpok> TYPE tt_vbpok.
+
+    ASSIGN ('ZCL_VIRTUELLES_LAGER=>VBPOK') TO <vbpok>.
+    CHECK sy-subrc EQ 0.
+
+    LOOP AT ct_xlips ASSIGNING FIELD-SYMBOL(<lips>).
+
+      IF <lips>-uecha EQ '000000' AND <lips>-zzabgrutm IS INITIAL AND <lips>-ZZKONDMF NE me->hauptgruppe_thm.
+        "Bei einem Liefersplit erkennt diese Logik nicht, dass die Minderung "gewollt" ist. Daher hier eine fixe AUsnahme hinterlegen
+        "Laufzeit könnte hier durchaus kritisch werden
+        SELECT vbeln, pos
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD if_ex_le_shp_delivery_proc~save_document_prepare.
+
+*------------------------------------------------------------------------------
+* TF001: Thomas Frei 09.06.2026  Ticket#2026031982000089
+*        Absagegrund bei Liefersplitt geändert:
+*        alt: PR = Ladefläche ausgelastet
+*        neu: ZB = Liefersplitt
+*------------------------------------------------------------------------------
+
+    FIELD-SYMBOLS: <vbpok> TYPE tt_vbpok.
+
+    ASSIGN ('ZCL_VIRTUELLES_LAGER=>VBPOK') TO <vbpok>.
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #4 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|GET_CONFIRM_STATUS
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: GET_CONFIRM_STATUS
+short_desc: method GET_CONFIRM_STATUS.
+* Lokale Deklaration
+  DATA: L_TR_OBJKY TYPE RANGE OF NA_OBJKEY.
+
+  CLEAR: ME->T_NAST.
+
+* Den Status der Confirm-Nachricht der zugehörenden Aufträge ermitteln
+  L_TR_OBJKY = VALUE #( FOR GROUPS <AUFTRAG> OF <L_S_XLIPS> IN I_T_XLIPS
+                          WHERE ( VGTYP EQ 'C' )
+                          GROUP BY ( VGBEL = <L_S_XLIPS>-VGBEL )
+                          ( SIGN = 'I' OPTION = 'EQ' LOW = <AUFTRAG>-VGBEL ) ).
+  IF NOT L_TR_OBJKY IS INITIAL.
+    SELECT KAPPL OBJKY KSCHL SPRAS PARNR PARVW ERDAT ERUHR VSTAT
+      FROM NAST
+      INTO CORRESPONDING FIELDS OF TABLE ME->T_NAST
+      WHERE KAPPL EQ 'V1'
+        AND OBJKY IN L_TR_OBJKY
+        AND KSCHL EQ 'ZECD'.
+  ENDIF.
+
+endmethod.
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: GET_CONFIRM_STATUS
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER method GET_CONFIRM_STATUS.
+* Lokale Deklaration
+  DATA: L_TR_OBJKY TYPE RANGE OF NA_OBJKEY.
+
+  CLEAR: ME->T_NAST.
+
+* Den Status der Confirm-Nachricht der zugehörenden Aufträge ermitteln
+  L_TR_OBJKY = VALUE #( FOR GROUPS <AUFTRAG> OF <L_S_XLIPS> IN I_T_XLIPS
+                          WHERE ( VGTYP EQ 'C' )
+                          GROUP BY ( VGBEL = <L_S_XLIPS>-VGBEL )
+                          ( SIGN = 'I' OPTION = 'EQ' LOW = <AUFTRAG>-VGBEL ) ).
+  IF NOT L_TR_OBJKY IS INITIAL.
+    SELECT KAPP
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #5 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+short_desc: * " Nur beim Ändern virtueller Lager LF zuschlagen. * CHECK ( IF_TRTYP EQ 'B' OR IF_TRTYP EQ 'V' ) AND IS_LIKP-ZZ_VLAGER EQ ABAP_TRUE. *
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER * " Nur beim Ändern virtueller Lager LF zuschlagen. * CHECK ( IF_TRTYP EQ 'B' OR IF_TRTYP EQ 'V' ) AND IS_LIKP-ZZ_VLAGER EQ ABAP_TRUE. *
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #7 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: ABGRU_DOES_NOT_EXIST
+short_desc: WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false ELSE abap_true ).
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: ABGRU_DOES_NOT_EXIST
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false ELSE abap_true ).
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #8 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: CHECK_LFPOS_FOR_VLAGER
+short_desc: METHOD check_lfpos_for_vlager.
+
+*--------------------------------------------------------------------------------
+* TF001: Thomas Frei 08.07.2025 -> J. Thien am 08.07.2025 per E-Mail
+*        Weitere Materialien der Artikelhauptgruppe 31
+*
+* TF002: Thomas Frei 09.07.2025 -> J. Thien am 09.07.2025 per E-Mail
+*        Weitere Artikelhauptgruppe 21 wie 22&23 hinzugefügt
+*
+* TF003: Thomas Frei 10.10.2025 Ticket#2025101082000253
+*        Neue Artikelhauptgruppe aufgenommen
+*--------------------------------------------------------------------------------
+
+    DATA: lr_pstyv    TYPE RANGE OF pstyv,
+          lr_pstyv_31 TYPE RANGE OF pstyv,
+* s.n. TF003 - Deklaration
+          lr_pstyv_32 TYPE RANGE OF pstyv,
+* e.n. TF003
+          lr_kondm    TYPE RANGE OF kondm,
+          lr_matnr    TYPE RANGE OF matnr.
+
+    " Zulässige Positionstypen
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'ZLGL'
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: CHECK_LFPOS_FOR_VLAGER
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD check_lfpos_for_vlager.
+
+*--------------------------------------------------------------------------------
+* TF001: Thomas Frei 08.07.2025 -> J. Thien am 08.07.2025 per E-Mail
+*        Weitere Materialien der Artikelhauptgruppe 31
+*
+* TF002: Thomas Frei 09.07.2025 -> J. Thien am 09.07.2025 per E-Mail
+*        Weitere Artikelhauptgruppe 21 wie 22&23 hinzugefügt
+*
+* TF003: Thomas Frei 10.10.2025 Ticket#2025101082000253
+*        Neue Artikelhauptgruppe aufgenommen
+*--------------------------
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #9 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+short_desc: * CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xlips-uepos IS INITIAL AND is_xlips-uecha IS INITIAL.
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER * CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xlips-uepos IS INITIAL AND is_xlips-uecha IS INITIAL.
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #10 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+short_desc: CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #11 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM
+short_desc: IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not_exist( abgru = cs_lips-zzabgrutm vlager = cs_likp-zz_vlager ).
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not_exist( abgru = cs_lips-zzabgrutm vlager = cs_likp-zz_vlager ).
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #12 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY
+short_desc: METHOD if_ex_le_shp_delivery_proc~read_delivery.
+
+* Nachrichtenstatus der Confirms holen
+  ME->GET_CONFIRM_STATUS( EXPORTING I_T_XLIPS = CT_XLIPS ).
+
+ENDMETHOD.
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD if_ex_le_shp_delivery_proc~read_delivery.
+
+* Nachrichtenstatus der Confirms holen
+  ME->GET_CONFIRM_STATUS( EXPORTING I_T_XLIPS = CT_XLIPS ).
+
+ENDMETHOD.
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #2 | ZVLAGER_AUART
+source_id: table_profile:ZVLAGER_AUART
+type: table_profile
+object_type: TABLE
+object_name: ZVLAGER_AUART
+table: ZVLAGER_AUART
+short_desc: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)
+confidence: 0.75
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZVLAGER_AUART
+- FACT: Beschreibung: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)
+- FACT: Delivery Class A
+- FACT: Klassifikation NON_CONTROL_TABLE (Score 20)
+- FACT: Export-Klassifikation: keine Steuertabelle
+- FACT: Zeilen im Abzug: 0
+- FACT: Schlüsselfelder: MANDT, ZZ_VLAGER, AUART
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15; LOG_OR_TECHNICAL_NAME:-20
+- INFERENCE: Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZVLAGER_AUART
+
+### Quelle #13 | ZZTVAG
+source_id: table_profile:ZZTVAG
+type: table_profile
+object_type: TABLE
+object_name: ZZTVAG
+table: ZZTVAG
+short_desc: Absagegründe im Virtuellen Lager
+confidence: 1
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Beschreibung: Absagegründe im Virtuellen Lager
+- FACT: Delivery Class C
+- FACT: Klassifikation CUSTOMIZING_CONTROL_TABLE (Score 100)
+- FACT: Export-Klassifikation: kundeneigene Customizing-/Steuertabelle
+- FACT: Zeilen im Abzug: 17
+- FACT: Schlüsselfelder: MANDT, ZZ_VLAGER, ABGRU
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_C:+40; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15
+- INFERENCE: Abgeleitete Grobkategorie customizing_like aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZZTVAG
+
+### Quelle #32 | KNA1
+source_id: Q01|MASTER_FIELD|KNA1|ZZ_EXT_KUNNR
+type: master_field
+object_type: TABLE_FIELD
+object_name: KNA1
+method: ZZ_EXT_KUNNR
+table: KNA1
+short_desc: Stammdatenfeld KNA1-ZZ_EXT_KUNNR · Kundenindividuelle Bez. des Geschäftspartners (Werk, Lager) · DE=KNREF · DOM=KNREF
+confidence: 0.95
+entity_grounding_status: n/a
+facts:
+- FACT: Feldtext: Kundenindividuelle Bez. des Geschäftspartners (Werk, Lager)
+- FACT: Datenelement: KNREF
+- FACT: Domäne: KNREF
+- FACT: Datentyp: CHAR(30)
+- FACT: Custom Z/Y/Append-Feld
+code_data_evidence:
+- [fact] KNA1-ZZ_EXT_KUNNR: Kundenindividuelle Bez. des Geschäftspartners (Werk, Lager)
+reads: KNA1
+
+### Quelle #14 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_ABSAGE20
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_ABSAGE20
+short_desc: METHOD get_absage20.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBAP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ @key
+      AND cdhdr~objectclas  EQ 'VERKBELEG'
+      AND cdpos~fname       EQ 'ABGRU'
+      ORDER BY cdhdr~objectid.
+
+    LOOP AT lt_aenderung ASSIGNING FIELD-SYMBOL(<fs_aenderungen>).
+
+      DATA l_timestamp    TYPE timestamp.
+      DATA lokale_zeile   TYPE beleglog.
+      DATA new_key        TYPE char16.
+
+      SHIFT <fs_aenderungen>-tabkey BY 3 PLACES LEFT.  "Ersten 3 Stellen Mandant löschen
+      CON
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_ABSAGE20
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_absage20.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBAP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ @key
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #15 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_VERSANDDATUMAENDERUNGEN5
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_VERSANDDATUMAENDERUNGEN5
+short_desc: METHOD get_versanddatumaenderungen5.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBEP'
+                AND cdpos~changenr    EQ cdhdr~changenr
+       INTO TABLE @DATA(lt_aenderung)
+      WHERE cdhdr~objectid    EQ @key
+        AND cdhdr~objectclas  EQ 'VERKBELEG'
+        AND cdpos~fname       EQ 'EDATU'
+      ORDER BY cdhdr~objectid.
+
+    LOOP AT lt_aenderung ASSIGNING FIELD-SYMBOL(<fs_aenderungen>).
+
+      "Aktuell keine geänderten werte in ausgabetabelle.
+      "in fs-tabnam steht der schlüssel der VBEP. Erste 3 stellen und letzten 4 müssen weg
+      DATA l_timestamp TYPE timestamp.
+      DATA n
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_VERSANDDATUMAENDERUNGEN5
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_versanddatumaenderungen5.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBEP'
+                AND cdpos~changenr    EQ cdhdr~changenr
+       INTO TABLE @DATA(lt_aenderung)
+      WHERE cdhdr~objec
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #16 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_VERLADESTELLEN10
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_VERLADESTELLEN10
+short_desc: METHOD get_verladestellen10.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBAP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ @key
+      AND cdhdr~objectclas  EQ 'VERKBELEG'
+      AND cdpos~fname       EQ 'VSTEL'
+      ORDER BY cdhdr~objectid.
+
+    LOOP AT lt_aenderung ASSIGNING FIELD-SYMBOL(<fs_aenderungen>).
+
+      "Aktuell keine geänderten werte in ausgabetabelle.
+      DATA lokale_zeile   TYPE beleglog.
+      DATA new_key        TYPE char16.
+      DATA l_timestamp    TYPE timestamp.
+
+      SHIFT <fs_aenderungen>-tabk
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_VERLADESTELLEN10
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_verladestellen10.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBAP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #17 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_MENGE30
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_MENGE30
+short_desc: METHOD get_menge30.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+    FROM cdhdr
+    JOIN cdpos ON cdpos~objectid      EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBEP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ @key
+      AND cdhdr~objectclas  EQ 'VERKBELEG'
+      AND cdpos~fname       EQ 'WMENG'
+      ORDER BY cdhdr~objectid.
+
+    LOOP AT lt_aenderung ASSIGNING FIELD-SYMBOL(<fs_aenderungen>).
+
+      DATA l_timestamp    TYPE timestamp.
+      DATA lokale_zeile   TYPE beleglog.
+      DATA new_key        TYPE char16.
+
+      SHIFT <fs_aenderungen>-tabkey BY 3 PLACES LEFT.  "Ersten 3 Stellen Mandant löschen
+      CONDEN
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_MENGE30
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_menge30.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+    FROM cdhdr
+    JOIN cdpos ON cdpos~objectid      EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBEP'
+                AND cdhdr~changenr    EQ cdpos~changenr
+       INTO TABLE @DATA(lt_aenderung)
+    WHERE cdhdr~objectid    EQ @key
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #18 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_LIEFERUNG40
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_LIEFERUNG40
+short_desc: METHOD get_lieferung40.
+
+    SELECT DISTINCT likp~erdat, likp~erzet, likp~ernam, likp~vbeln, vbfa~vbelv, lips~posnr, lips~uecha
+      FROM vbfa
+      JOIN likp ON likp~vbeln EQ vbfa~vbeln
+      JOIN lips ON lips~vbeln EQ likp~vbeln
+      INTO TABLE @DATA(lt_lieferung)
+      WHERE vbfa~vbelv EQ @key.
+
+    SORT lt_lieferung BY posnr.
+    DELETE ADJACENT DUPLICATES FROM lt_lieferung COMPARING vbeln posnr.
+
+    LOOP AT lt_lieferung ASSIGNING FIELD-SYMBOL(<fs_lieferung>).
+
+      DATA: l_timestamp TYPE timestamp,
+            vgbel       TYPE vbeln,
+            vgpos       TYPE posnr.
+      DATA lokale_zeile TYPE beleglog.
+
+      CALL METHOD check_vorgaengerbeleg
+        EXPORTING
+          lieferung     = <fs_lieferung>-vbeln
+          position      = <fs_lieferung>-posnr
+        IMPORTING
+          vorgaenger    = vgbel
+          vorgaengerpos = vgpos.
+
+      CALL METHOD get_timestamp
+       
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_LIEFERUNG40
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_lieferung40.
+
+    SELECT DISTINCT likp~erdat, likp~erzet, likp~ernam, likp~vbeln, vbfa~vbelv, lips~posnr, lips~uecha
+      FROM vbfa
+      JOIN likp ON likp~vbeln EQ vbfa~vbeln
+      JOIN lips ON lips~vbeln EQ likp~vbeln
+      INTO TABLE @DATA(lt_lieferung)
+      WHERE vbfa~vbelv EQ @key.
+
+    SORT lt_lieferung BY posnr.
+    DELETE ADJACENT DUPLICATES FROM lt_lieferung COMPARING vbeln posnr.
+
+    LOOP AT lt_lieferung ASSIGNING FIELD-SYMBOL(<fs_lieferung>).
+
+      DATA: l_timestamp TYP
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #19 | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_TOUR50
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_EDEKA_BELEGLOG
+method: GET_TOUR50
+short_desc: METHOD get_tour50.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT vbsk~ernam,
+                    vbsk~erdat,
+                    vbsk~uzeit,
+                    vbsk~sammg,
+                    lips~posnr,
+                    lips~vbeln
+      FROM vbss
+      JOIN vbsk ON vbsk~sammg EQ vbss~sammg
+      JOIN lips ON lips~vbeln EQ vbss~vbeln
+       INTO TABLE @DATA(lt_tour)
+    WHERE vbss~vbeln EQ @lieferungskey
+      AND vbsk~smart EQ 'M'.
+
+    LOOP AT lt_tour ASSIGNING FIELD-SYMBOL(<fs_tour>).
+
+      DATA: vgbel TYPE vbeln,
+            vgpos TYPE posnr.
+      DATA: lokale_zeile TYPE beleglog.
+
+      CALL METHOD check_vorgaengerbeleg
+        EXPORTING
+          lieferung     = <fs_tour>-vbeln
+          position      = <fs_tour>-posnr
+        IMPORTING
+          vorgaenger    = vgbel
+          vorgaengerpos = vgpos.
+
+      CALL METHOD get_timestamp
+        EXPORTING
+          da
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_EDEKA_BELEGLOG
+- FACT: Routine: GET_TOUR50
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [fact] Referenz auf ZZ_VLAGER METHOD get_tour50.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT vbsk~ernam,
+                    vbsk~erdat,
+                    vbsk~uzeit,
+                    vbsk~sammg,
+                    lips~posnr,
+                    lips~vbeln
+      FROM vbss
+      JOIN vbsk ON vbsk~sammg EQ vbss~sammg
+      JOIN lips ON lips~vbeln EQ vbss~vbeln
+       INTO TABLE @DATA(lt_tour)
+    WHERE vbss~vbeln EQ @lieferungskey
+      AND vbsk~smart EQ 'M'.
+
+    LOOP AT lt_tour ASSIGNING FIELD-SYMBOL(<f
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #35 | ZEDEKAABSATZ
+source_id: table_profile:ZEDEKAABSATZ
+type: table_profile
+object_type: TABLE
+object_name: ZEDEKAABSATZ
+table: ZEDEKAABSATZ
+short_desc: Mehrwegabsätze Edeka (Edeka-Satzaufbau)
+confidence: 0.25
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZEDEKAABSATZ
+- FACT: Beschreibung: Mehrwegabsätze Edeka (Edeka-Satzaufbau)
+- FACT: Delivery Class A
+- FACT: Klassifikation NON_CONTROL_TABLE (Score -20)
+- FACT: Export-Klassifikation: keine Steuertabelle
+- FACT: Zeilen im Abzug: 0
+- FACT: Schlüsselfelder: JAHR, MONAT, VERLEGER, ARTNR, ILN
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; ROW_COUNT_LE_1000:+10; NO_CUSTOMIZING_INDICATOR:-10
+- INFERENCE: Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZEDEKAABSATZ
+
+### Quelle #36 | ZEDEKAXML_REPEAT
+source_id: table_profile:ZEDEKAXML_REPEAT
+type: table_profile
+object_type: TABLE
+object_name: ZEDEKAXML_REPEAT
+table: ZEDEKAXML_REPEAT
+short_desc: Edeka Leergut-XML: Positionen für die erneute Übertragung
+confidence: 0.313
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZEDEKAXML_REPEAT
+- FACT: Beschreibung: Edeka Leergut-XML: Positionen für die erneute Übertragung
+- FACT: Delivery Class A
+- FACT: Klassifikation NON_CONTROL_TABLE (Score -15)
+- FACT: Export-Klassifikation: keine Steuertabelle
+- FACT: Zeilen im Abzug: 0
+- FACT: Schlüsselfelder: MANDT, VBELN, POSNR
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; ROW_COUNT_LE_100:+15; NO_CUSTOMIZING_INDICATOR:-10
+- INFERENCE: Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZEDEKAXML_REPEAT
+
+### Quelle #28 | ZZTVAG
+source_id: Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01
+type: table_row
+object_type: TABLE_ROW
+object_name: ZZTVAG
+method: ABGRU=01|MANDT=001|ZZ_VLAGER=X
+table: ZZTVAG
+short_desc: MANDT=001; ZZ_VLAGER=X; ABGRU=01; ABWGRUND=VM
+confidence: 0.9
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Schlüssel ABGRU=01|MANDT=001|ZZ_VLAGER=X
+- FACT: Wert MANDT=001
+- FACT: Wert ZZ_VLAGER=X
+- FACT: Wert ABGRU=01
+- FACT: Wert ABWGRUND=VM
+- FACT: Primärgrund small_customizing_high_score_row
+relations:
+- ROW_OF_TABLE: TABLE_ROW:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01 → TABLE:ZZTVAG
+reads: ZZTVAG
+hardcoded_values: 001, X, 01, VM
+
+### Quelle #29 | ZZTVAG
+source_id: Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88
+type: table_row
+object_type: TABLE_ROW
+object_name: ZZTVAG
+method: ABGRU=88|MANDT=001|ZZ_VLAGER=X
+table: ZZTVAG
+short_desc: MANDT=001; ZZ_VLAGER=X; ABGRU=88; ABWGRUND=VE
+confidence: 0.9
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Schlüssel ABGRU=88|MANDT=001|ZZ_VLAGER=X
+- FACT: Wert MANDT=001
+- FACT: Wert ZZ_VLAGER=X
+- FACT: Wert ABGRU=88
+- FACT: Wert ABWGRUND=VE
+- FACT: Primärgrund small_customizing_high_score_row
+relations:
+- ROW_OF_TABLE: TABLE_ROW:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88 → TABLE:ZZTVAG
+reads: ZZTVAG
+hardcoded_values: 001, X, 88, VE
+
+### Quelle #30 | ZZTVAG
+source_id: Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8
+type: table_row
+object_type: TABLE_ROW
+object_name: ZZTVAG
+method: ABGRU=P8|MANDT=001|ZZ_VLAGER=X
+table: ZZTVAG
+short_desc: MANDT=001; ZZ_VLAGER=X; ABGRU=P8; ABWGRUND=VL
+confidence: 0.9
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Schlüssel ABGRU=P8|MANDT=001|ZZ_VLAGER=X
+- FACT: Wert MANDT=001
+- FACT: Wert ZZ_VLAGER=X
+- FACT: Wert ABGRU=P8
+- FACT: Wert ABWGRUND=VL
+- FACT: Primärgrund small_customizing_high_score_row
+relations:
+- ROW_OF_TABLE: TABLE_ROW:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8 → TABLE:ZZTVAG
+reads: ZZTVAG
+hardcoded_values: 001, X, P8, VL
+
+### Quelle #37 | ZDIS11
+source_id: Q01|001|ZDIS11|MANDT=001|SPRAS=DE|MMSTA=02
+type: table_row
+object_type: TABLE_ROW
+object_name: ZDIS11
+method: MANDT=001|MMSTA=02|SPRAS=DE
+table: ZDIS11
+short_desc: MANDT=001; SPRAS=DE; MMSTA=02; MTSTB=Art. nur auf Vorb.; MTSTB_LF=Nicht am Lager, wird für Sie vorbestellt
+confidence: 0.9
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZDIS11
+- FACT: Schlüssel MANDT=001|MMSTA=02|SPRAS=DE
+- FACT: Wert MANDT=001
+- FACT: Wert SPRAS=DE
+- FACT: Wert MMSTA=02
+- FACT: Wert MTSTB=Art. nur auf Vorb.
+- FACT: Wert MTSTB_LF=Nicht am Lager, wird für Sie vorbestellt
+- FACT: Primärgrund small_customizing_high_score_row
+relations:
+- ROW_OF_TABLE: TABLE_ROW:Q01|001|ZDIS11|MANDT=001|SPRAS=DE|MMSTA=02 → TABLE:ZDIS11
+reads: ZDIS11
+hardcoded_values: 001, DE, 02, Art. nur auf Vorb., Nicht am Lager, wird für Sie vorbestellt
+
+### Quelle #20 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_KOMMIWE55
+type: code_unit
+method: GET_KOMMIWE55
+short_desc: METHOD get_kommiwe55.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT vbsk~ernam,
+                    vbsk~erdat,
+                    vbsk~uzeit,
+                    vbsk~sammg,
+                    lips~posnr,
+                    vbss~vbeln
+      FROM vbss
+      JOIN vbsk ON vbsk~sammg EQ vbss~sammg
+      JOIN lips ON lips~vbeln EQ @lieferungskey
+
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_KOMMIWE55 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #21 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_DESADVERFOLG85
+type: code_unit
+method: GET_DESADVERFOLG85
+short_desc: METHOD get_desadverfolg85.
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT nast~objky, nast~datvr, nast~uhrvr, nast~usnam
+      FROM nast
+      INTO TABLE @DATA(lt_aenderung)
+    WHERE nast~objky EQ @key
+      AND nast~kappl ='V1'
+      AND nast~kschl = 'ZECD'
+      AND nast~vstat = '1'.
+
+    DATA new_objkey TYPE char13.
+
+    SELECT posnr
+      FRO
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_DESADVERFOLG85 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #22 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_DESADVFEHLER80
+type: code_unit
+method: GET_DESADVFEHLER80
+short_desc: METHOD get_desadvfehler80.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT nast~objky, nast~erdat, nast~eruhr, nast~usnam
+      FROM nast
+      INTO TABLE @DATA(lt_aenderung)
+    WHERE nast~objky EQ @key
+      AND nast~kappl ='V1'
+      AND nast~kschl = 'ZECD'
+      AND nast~vstat = '2'.
+
+    DATA new_objkey TYPE char13.
+
+    SELECT posnr
+      FR
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_DESADVFEHLER80 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #23 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_WARENAUSGANG90
+type: code_unit
+method: GET_WARENAUSGANG90
+short_desc: METHOD get_warenausgang90.
+
+    SELECT DISTINCT cdhdr~username,
+                       cdhdr~udate,
+                       cdhdr~utime,
+                       cdhdr~objectid
+         FROM cdhdr
+         JOIN cdpos ON cdpos~objectid EQ cdhdr~objectid
+                    AND cdhdr~changenr EQ cdpos~changenr
+         INTO TABLE @DATA(lt_aenderung)
+         WHER
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_WARENAUSGANG90 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #24 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_KOMMIENDE70
+type: code_unit
+method: GET_KOMMIENDE70
+short_desc: METHOD get_kommiende70.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT SINGLE
+             cdhdr~username,
+             cdhdr~udate,
+             cdhdr~utime,
+             cdhdr~objectid
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'LIEFERUNG'
+                AND cdpos~tabname     EQ 'VB
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_KOMMIENDE70 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #25 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_KOMMISTART60
+type: code_unit
+method: GET_KOMMISTART60
+short_desc: METHOD get_kommistart60.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT   cdhdr~username,
+             cdhdr~udate,
+             cdhdr~utime,
+             cdhdr~objectid
+
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid EQ cdhdr~objectid
+                AND cdpos~objectclas EQ 'LIEFERUNG'
+                AND cdpos~tabname EQ 'VBUK'
+                AND 
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_KOMMISTART60 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #26 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_FAKTURAVOLLGUT100
+type: code_unit
+method: GET_FAKTURAVOLLGUT100
+short_desc: METHOD get_fakturavollgut100.
+
+    DATA l_timestamp TYPE timestamp.
+
+    SELECT DISTINCT vbeln
+      FROM vbrp
+      INTO TABLE @DATA(lt_aenderung)
+      WHERE vgbel EQ @lieferungskey.
+    "AND ( vbrk~fkart EQ 'ZFLG' OR vbrk~fkart EQ 'ZLPL' ).
+
+
+    LOOP AT lt_aenderung ASSIGNING FIELD-SYMBOL(<aenderung>).
+
+      SELECT vbeln, posnr, vgpos, ernam, erdat, erz
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_FAKTURAVOLLGUT100 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #27 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_FAKTURALEERGUT110
+type: code_unit
+method: GET_FAKTURALEERGUT110
+short_desc: METHOD get_fakturaleergut110.
+
+*     Stand heute reicht der Status "Faktura erstellt"
+
+*       DATA l_timestamp TYPE timestamp.
+*
+*   SELECT DISTINCT cdhdr~username,
+*                   "cdpos~value_new,
+*                   "cdpos~value_old,
+*                   cdhdr~udate,
+*                   cdhdr~utime,
+*                   cdhdr~objectid
+*     FROM cdhdr
+
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_FAKTURALEERGUT110 | Zone: classes | Matched token: ZZ_VLAGER
+
+### Quelle #31 [compact] | ZMBM_ZUGRIFF_1
+source_id: table_profile:ZMBM_ZUGRIFF_1
+type: table_profile
+short_desc: Zugriff für automatische Auftragsabsage wegen Mindermenge
+facts: Tabelle ZMBM_ZUGRIFF_1 | Beschreibung: Zugriff für automatische Auftragsabsage wegen Mindermenge | Delivery Class A | Klassifikation REVIEW_CANDIDATE (Score 40) | Export-Klassifikation: Review-Kandidat | Zeilen im Abzug: 0
+
+### Quelle #33 [compact] | ZSD_LP_MONI_SUBM
+source_id: Q01|001|ZSD_LP_MONI_SUBM|MANDT=001|AUART=ZL2
+type: table_row
+method: AUART=ZL2|MANDT=001
+short_desc: MANDT=001; AUART=ZL2; ZZ_VLAGER=
+facts: Tabelle ZSD_LP_MONI_SUBM | Schlüssel AUART=ZL2|MANDT=001 | Wert MANDT=001 | Wert AUART=ZL2 | Wert ZZ_VLAGER= | Primärgrund small_customizing_high_score_row
+
+### Quelle #34 [compact] | ZSD_LP_MONI_SUBM
+source_id: Q01|001|ZSD_LP_MONI_SUBM|MANDT=001|AUART=ZLNP
+type: table_row
+method: AUART=ZLNP|MANDT=001
+short_desc: MANDT=001; AUART=ZLNP; ZZ_VLAGER=
+facts: Tabelle ZSD_LP_MONI_SUBM | Schlüssel AUART=ZLNP|MANDT=001 | Wert MANDT=001 | Wert AUART=ZLNP | Wert ZZ_VLAGER= | Primärgrund small_customizing_high_score_row
+
+### Quelle #38 [compact] | ZDIS11
+source_id: Q01|001|ZDIS11|MANDT=001|SPRAS=DE|MMSTA=03
+type: table_row
+method: MANDT=001|MMSTA=03|SPRAS=DE
+short_desc: MANDT=001; SPRAS=DE; MMSTA=03; MTSTB=Art. nur auf Vorb.; MTSTB_LF=Nicht am Lager, wird für Sie vorbestellt
+facts: Tabelle ZDIS11 | Schlüssel MANDT=001|MMSTA=03|SPRAS=DE | Wert MANDT=001 | Wert SPRAS=DE | Wert MMSTA=03 | Wert MTSTB=Art. nur auf Vorb.

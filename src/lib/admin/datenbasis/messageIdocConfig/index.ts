@@ -36,6 +36,13 @@ export {
 } from "@/lib/admin/datenbasis/messageIdocConfig/detectRaw";
 
 export {
+  MESSAGE_IDOC_11_RELATIONS_PATTERN,
+  MESSAGE_IDOC_11_RELATIONS_GROUP,
+  resolveMessageIdoc11RelationsFile,
+  isMessageIdoc11RelationsFileName,
+} from "@/lib/admin/datenbasis/messageIdocConfig/resolveRelations11";
+
+export {
   validateAndProfileJsonlFile,
   validateHeaderObject,
   looksLikeTechnicalObjectName,

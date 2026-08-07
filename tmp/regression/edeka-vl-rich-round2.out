@@ -1,0 +1,412 @@
+{
+  "inputStats": {
+    "hit_count": 38,
+    "evidence_chars": 43009,
+    "detailed": 26,
+    "compact": 12,
+    "code_hits": 24,
+    "master_fields": 2,
+    "profiles": 5,
+    "rows": 7,
+    "process_class_methods": 15,
+    "warnings": [
+      "Code-Expansion: 24 Canonical-Treffer zu [ZZ_VLAGER, KNVV-ZZ_VLAGER, ZVLAGER_AUART, ZZTVAG]",
+      "Lexikalische DDIC-Suche: 9 Phrase-/Feldtreffer priorisiert"
+    ],
+    "top": [
+      {
+        "rank": 1,
+        "type": "master_field",
+        "key": "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+        "title": "KNVV-ZZ_VLAGER"
+      },
+      {
+        "rank": 2,
+        "type": "table_profile",
+        "key": "table_profile:ZVLAGER_AUART",
+        "title": "Tabellenprofil ZVLAGER_AUART"
+      },
+      {
+        "rank": 3,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE"
+      },
+      {
+        "rank": 4,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|GET_CONFIRM_STATUS",
+        "title": "ZCL_VIRTUELLES_LAGER / GET_CONFIRM_STATUS"
+      },
+      {
+        "rank": 5,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES"
+      },
+      {
+        "rank": 6,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+      },
+      {
+        "rank": 7,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+        "title": "ZCL_VIRTUELLES_LAGER / ABGRU_DOES_NOT_EXIST"
+      },
+      {
+        "rank": 8,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER",
+        "title": "ZCL_VIRTUELLES_LAGER / CHECK_LFPOS_FOR_VLAGER"
+      },
+      {
+        "rank": 9,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION"
+      },
+      {
+        "rank": 10,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM"
+      },
+      {
+        "rank": 11,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM"
+      },
+      {
+        "rank": 12,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY",
+        "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY"
+      },
+      {
+        "rank": 13,
+        "type": "table_profile",
+        "key": "table_profile:ZZTVAG",
+        "title": "Tabellenprofil ZZTVAG"
+      },
+      {
+        "rank": 14,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_ABSAGE20",
+        "title": "ZCL_EDEKA_BELEGLOG / GET_ABSAGE20"
+      },
+      {
+        "rank": 15,
+        "type": "code_unit",
+        "key": "D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_VERSANDDATUMAENDERUNGEN5",
+        "title": "ZCL_EDEKA_BELEGLOG / GET_VERSANDDATUMAENDERUNGEN5"
+      }
+    ]
+  },
+  "evidence_context_report": {
+    "input_hit_count": 38,
+    "detailed_count": 26,
+    "compact_count": 12,
+    "omitted_count": 0,
+    "previously_weak_fields_now_included": [
+      "relations",
+      "callers_callees",
+      "reads/writes",
+      "entity_grounding_status",
+      "typed facts/inferences",
+      "diversified code+table+rule set"
+    ],
+    "notes": []
+  },
+  "duration_ms": 27202,
+  "warnings": [
+    "Code-Expansion: 24 Canonical-Treffer zu [ZZ_VLAGER, KNVV-ZZ_VLAGER, ZVLAGER_AUART, ZZTVAG]",
+    "Lexikalische DDIC-Suche: 9 Phrase-/Feldtreffer priorisiert"
+  ],
+  "direct_answer": "Das Edeka virtuelle Lager wird über das Kennzeichenfeld ZZ_VLAGER gesteuert, das in Aufträgen und Lieferungen verwendet wird. Es steuert spezifische Prüfungen und Verarbeitungen im Versandprozess, z.B. dass nach Versand der Confirm-Nachricht keine Verpackungsinformationen mehr geändert werden dürfen. Absagegründe bei Liefersplitt werden speziell behandelt, und es gibt eine Abfrage des Status der Confirm-Nachrichten zugehöriger Aufträge. Absagegründe sind in der Steuertabelle ZZTVAG mit definierten Codes hinterlegt.",
+  "reasoning": "Sicher belegt: Das Kennzeichenfeld ZZ_VLAGER in der Tabelle KNVV dient als Kennzeichen für das virtuelle Lager. Im Versandprozess (Klasse ZCL_VIRTUELLES_LAGER) werden Lieferungen mit ZZ_VLAGER='X' speziell geprüft, z.B. dürfen nach Versand der Confirm-Nachricht keine Verpackungsinformationen mehr geändert werden. Im Prozess wird bei Liefersplitt der Absagegrund geändert von 'PR' (Ladefläche ausgelastet) auf 'ZB' (Liefersplitt). Der Status der Confirm-Nachricht der zugehörenden Aufträge wird ermittelt, um den Versandstatus zu prüfen. Absagegründe im virtuellen Lager sind in der Steuertabelle ZZTVAG mit den Codes 01, 88, P8 und zugehörigen Absagegründen VM, VE, VL definiert. Die Verarbeitung des virtuellen Lagers erfolgt in verschiedenen Methoden der Klasse ZCL_VIRTUELLES_LAGER, die auf das Feld ZZ_VLAGER prüfen und darauf basierende Logik ausführen.\nOffen: Detaillierte fachliche Beschreibung des Geschäftszwecks und der organisatorischen Ziele des virtuellen Lagers ist nicht belegt. Konkrete Auswirkungen auf Bestellprozesse oder Kundenarchitektur sind nicht dokumentiert.",
+  "process_answer": {
+    "trigger": "Der Versandprozess prüft Lieferungen mit ZZ_VLAGER='X' nach Versand der Confirm-Nachricht, um Änderungen an Verpackungsinformationen zu verhindern.",
+    "process_effect": "Das Kennzeichenfeld ZZ_VLAGER in der Tabelle KNVV dient als Kennzeichen für das virtuelle Lager. Im Versandprozess (Klasse ZCL_VIRTUELLES_LAGER) werden Lieferungen mit ZZ_VLAGER='X' speziell geprüft, z.B. dürfen nach Versand der Confirm-Nachricht keine Verpackungsinformationen mehr geändert werden.",
+    "special_process": "Das Kennzeichenfeld ZZ_VLAGER in der Tabelle KNVV dient als Kennzeichen für das virtuelle Lager. Im Versandprozess (Klasse ZCL_VIRTUELLES_LAGER) werden Lieferungen mit ZZ_VLAGER='X' speziell geprüft, z.B. dürfen nach Versand der Confirm-Nachricht keine Verpackungsinformationen mehr geändert werden.",
+    "business_interpretation": ""
+  },
+  "technical_answer": {
+    "entry_point": [
+      {
+        "text": "Das virtuelle Lager wird über das Feld ZZ_VLAGER in Stammdaten (KNVV) und in Versandbelegen gesteuert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      }
+    ],
+    "trigger": [
+      {
+        "text": "Der Versandprozess prüft Lieferungen mit ZZ_VLAGER='X' nach Versand der Confirm-Nachricht, um Änderungen an Verpackungsinformationen zu verhindern.",
+        "level": "confirmed",
+        "source_ranks": [
+          6
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "processing": [
+      {
+        "text": "Im Versandprozess werden Absagegründe bei Liefersplitt geändert (alt: PR, neu: ZB).",
+        "level": "confirmed",
+        "source_ranks": [
+          3
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE"
+        ]
+      },
+      {
+        "text": "Der Status der Confirm-Nachricht wird über eine Abfrage der NAST-Tabelle ermittelt.",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|GET_CONFIRM_STATUS"
+        ]
+      },
+      {
+        "text": "Es gibt Prüfungen auf Absagegründe und Materialgruppen, die auf das virtuelle Lager und das Feld ZZ_VLAGER referenzieren.",
+        "level": "confirmed",
+        "source_ranks": [
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM"
+        ]
+      }
+    ],
+    "objects": [
+      {
+        "text": "Feld ZZ_VLAGER in KNVV und Versandbelegen (LIKPs, LIPS).",
+        "level": "confirmed",
+        "source_ranks": [
+          1,
+          6,
+          9,
+          10,
+          11
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM"
+        ]
+      },
+      {
+        "text": "Steuertabelle ZZTVAG mit Absagegründen für das virtuelle Lager.",
+        "level": "confirmed",
+        "source_ranks": [
+          13,
+          28,
+          29,
+          30
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "text": "Nach Versand der Confirm-Nachricht sind keine Änderungen an Verpackungsinformationen mehr erlaubt.",
+        "level": "confirmed",
+        "source_ranks": [
+          6
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          3
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|GET_CONFIRM_STATUS"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          5
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "text": "READ KNVV",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Fachliche Details zum Geschäftszweck und organisatorischen Nutzen des virtuellen Lagers sind nicht belegt.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "sources": [
+    {
+      "rank": 1,
+      "type": "master_field",
+      "key": "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+      "title": "KNVV-ZZ_VLAGER"
+    },
+    {
+      "rank": 3,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE"
+    },
+    {
+      "rank": 4,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|GET_CONFIRM_STATUS",
+      "title": "ZCL_VIRTUELLES_LAGER / GET_CONFIRM_STATUS"
+    },
+    {
+      "rank": 5,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES"
+    },
+    {
+      "rank": 6,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+    },
+    {
+      "rank": 7,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST",
+      "title": "ZCL_VIRTUELLES_LAGER / ABGRU_DOES_NOT_EXIST"
+    },
+    {
+      "rank": 8,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER",
+      "title": "ZCL_VIRTUELLES_LAGER / CHECK_LFPOS_FOR_VLAGER"
+    },
+    {
+      "rank": 9,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION"
+    },
+    {
+      "rank": 10,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM"
+    },
+    {
+      "rank": 11,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM"
+    },
+    {
+      "rank": 12,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY",
+      "title": "ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY"
+    },
+    {
+      "rank": 13,
+      "type": "table_profile",
+      "key": "table_profile:ZZTVAG",
+      "title": "Tabellenprofil ZZTVAG"
+    },
+    {
+      "rank": 28,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01",
+      "title": "ZZTVAG | ABGRU=01|MANDT=001|ZZ_VLAGER=X"
+    },
+    {
+      "rank": 29,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=88",
+      "title": "ZZTVAG | ABGRU=88|MANDT=001|ZZ_VLAGER=X"
+    },
+    {
+      "rank": 30,
+      "type": "table_row",
+      "key": "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=P8",
+      "title": "ZZTVAG | ABGRU=P8|MANDT=001|ZZ_VLAGER=X"
+    }
+  ],
+  "critique": {
+    "score_faithfulness": 9,
+    "score_usefulness": 8,
+    "score_process_coverage": 8,
+    "score_specificity": 8,
+    "hallucinations": [],
+    "unused_strong_evidence": [],
+    "missing_in_evidence": [
+      "Detaillierte fachliche Beschreibung des Geschäftszwecks und der organisatorischen Ziele des virtuellen Lagers",
+      "Konkrete Auswirkungen auf Bestellprozesse oder Kundenarchitektur"
+    ],
+    "input_quality": 9,
+    "verdict": "pass",
+    "one_line": "Die Antwort beschreibt korrekt und konkret das Kennzeichen ZZ_VLAGER, seine Verwendung in Aufträgen und Lieferungen, die Prozessprüfungen im Versand sowie die Absagegründe aus der Steuertabelle ZZTVAG, ohne Halluzinationen.",
+    "what_to_add_to_input_next": [
+      "Konkrete Evidence-Bausteine zur fachlichen Zielsetzung und organisatorischen Einordnung des virtuellen Lagers",
+      "Details zu Auswirkungen auf Bestellprozesse und Kundenarchitektur"
+    ]
+  }
+}

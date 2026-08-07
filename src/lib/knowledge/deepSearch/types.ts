@@ -57,9 +57,13 @@ export type QueryUnderstanding = {
   user_assumed_type?: string;
   assumed_type_confidence?: "low" | "medium" | "high";
   requested_output: string[];
+  /** Alias / extension: requested scope facets (Erklärung, Trace, …). */
+  requested_scope?: string[];
   preferred_search_plan: PreferredSearchPlan;
   search_plan_steps: string[];
   irrelevant_question_words: string[];
+  /** Alias of irrelevant_question_words for external contract. */
+  stopwords_removed?: string[];
   warnings: string[];
   model: string;
   prompt_version: string;

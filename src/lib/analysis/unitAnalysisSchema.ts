@@ -3,6 +3,12 @@ import { z } from "zod";
 /** Bump when prompt or schema semantics change — triggers re-analysis. */
 export const UNIT_ANALYSIS_PROMPT_VERSION = "unit-analysis-v4";
 
+/**
+ * Bump when the persisted analysis record shape / validation semantics change
+ * in a way that invalidates cached OpenAI results (independent of prompt text).
+ */
+export const UNIT_ANALYSIS_SCHEMA_VERSION = "unit-analysis-schema-v1";
+
 export const evidenceLineSchema = z.object({
   line: z.number().int().positive(),
   /** Model may return ""; repair/validation rejects empty quotes. */
@@ -128,8 +134,13 @@ export const unitAnalysisRecordSchema = unitAnalysisModelSchema.extend({
   class_name: z.string().min(1),
   method_name: z.string().min(1),
   model: z.string().min(1),
+  /** Alias of model for cache-key clarity; optional on legacy rows. */
+  model_version: z.string().min(1).optional(),
   prompt_version: z.string().min(1),
   content_hash: z.string().min(1),
+  /** Alias of content_hash (source code hash); optional on legacy rows. */
+  source_hash: z.string().min(1).optional(),
+  analysis_schema_version: z.string().min(1).optional(),
   deterministic: deterministicExtractionSchema,
   extraction_deviations: z.array(extractionDeviationSchema),
   external_interfaces_classified: z.array(classifiedInterfaceSchema).default([]),

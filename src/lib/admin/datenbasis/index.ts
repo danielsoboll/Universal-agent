@@ -54,6 +54,11 @@ export {
   VENDORS_TABLES,
 } from "@/lib/admin/datenbasis/vendorsPipeline";
 export {
+  detectRepositoryRelationsRaw,
+  validateRepositoryRelationsJsonl,
+  convertRepositoryRelations,
+} from "@/lib/admin/datenbasis/repositoryRelationsPipeline";
+export {
   CUSTOMERS_DOMAIN,
   VENDORS_DOMAIN,
 } from "@/lib/admin/datenbasis/masterDataDomain";
@@ -61,6 +66,12 @@ export {
   loadManifest,
   reconcileManifest,
   computeUnlockMap,
+  progressPercent,
+  nextActionLabel,
+  DATENBASIS_STEP_WEIGHTS,
+  DATENBASIS_PROGRESS,
+  isCanonicalReady,
+  isIndexReady,
 } from "@/lib/admin/datenbasis/manifestStore";
 export { DATENBASIS_STEP_IDS } from "@/lib/admin/datenbasis/types";
 export {
@@ -73,6 +84,8 @@ export {
   ensureMessageIdocConfigFolders,
   detectMessageIdocRawFiles,
   extractConfigGroupFromFileName,
+  resolveMessageIdoc11RelationsFile,
+  MESSAGE_IDOC_11_RELATIONS_PATTERN,
   describePlannedCanonicalModel,
   AREA_STATUS_LABELS,
   CANONICAL_OBJECT_TYPES,

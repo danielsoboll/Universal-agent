@@ -3,7 +3,14 @@ import { EmptyState, InlineError } from "@/components/ui/states";
 import { PressNavigateLink } from "@/components/ui/PressNavigateLink";
 import { SetupOverallProgress } from "@/components/admin/setup/SetupOverallProgress";
 import { SetupStepCard } from "@/components/admin/setup/SetupStepCard";
+import { WerkzeugePanel } from "@/components/admin/tools/WerkzeugePanel";
 import type { SetupOverview } from "@/lib/admin/setupMainSteps";
+import {
+  applyDashboardDemoOverview,
+  demoDisplayName,
+  demoListPercent,
+  sortProjectsForDemoDisplay,
+} from "@/lib/admin/dashboardDemoDisplay";
 
 export type ProjectSetupDashboardCustomer = {
   id: string;
@@ -17,6 +24,8 @@ export type ProjectSetupDashboardProps = {
   projects: ProjectSetupDashboardCustomer[];
   selectedCustomer: ProjectSetupDashboardCustomer | null;
   overview: SetupOverview | null;
+  /** Real list-bar percents for non-demo projects (e.g. DGL), keyed by customer id. */
+  listPercents?: Record<string, number>;
   readOnlyUser?: boolean;
   /** Show project list (General Admin: all; Project Admin / Anwender: scoped). */
   showProjectList?: boolean;
@@ -24,6 +33,8 @@ export type ProjectSetupDashboardProps = {
   showNewProject?: boolean;
   /** Projekt-Admin / General Admin — project admin link. */
   showProjectAdmin?: boolean;
+  /** Allow status sync action. */
+  canMutateStatus?: boolean;
   /** Empty-project CTA when list is shown but empty (General Admin). */
   emptyProjectsActionHref?: string;
   emptyProjectsActionLabel?: string;
@@ -39,6 +50,32 @@ function currentStatusText(overview: SetupOverview): string {
   return "Alle Hauptschritte erledigt";
 }
 
+function ProjectListProgress({ percent }: { percent: number | null }) {
+  if (percent == null) return null;
+  return (
+    <div className="mt-1.5 w-full">
+      <div
+        className="progress-track h-1.5 overflow-hidden rounded-full"
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Projektfortschritt"
+      >
+        <div
+          className={`h-full rounded-full ${
+            percent >= 100 ? "progress-fill-done" : "progress-fill"
+          }`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="mt-0.5 text-right text-[0.75rem] tabular-nums text-[var(--muted)]">
+        {percent}&nbsp;%
+      </p>
+    </div>
+  );
+}
+
 /**
  * Projektstatus + 6 Hauptschritte dashboard for Admin `/admin/dashboard`.
  * Anwender `/app` uses only SetupOverallProgress, not this full layout.
@@ -49,20 +86,30 @@ export function ProjectSetupDashboard({
   projects,
   selectedCustomer,
   overview,
+  listPercents = {},
   readOnlyUser = false,
   showProjectList = false,
   showNewProject = false,
   showProjectAdmin = false,
+  canMutateStatus = false,
   emptyProjectsActionHref = "/admin/setup",
   emptyProjectsActionLabel = "Neues Projekt anlegen",
   errorMessage,
   deletedMessage = false,
 }: ProjectSetupDashboardProps) {
   const customerId = selectedCustomer?.id;
-  const hasSetup = Boolean(customerId && selectedCustomer && overview);
+  const orderedProjects = sortProjectsForDemoDisplay(projects);
+  const displayOverview =
+    selectedCustomer && overview
+      ? applyDashboardDemoOverview(selectedCustomer.name, overview)
+      : overview;
+  const hasSetup = Boolean(customerId && selectedCustomer && displayOverview);
+  const selectedDisplayName = selectedCustomer
+    ? demoDisplayName(selectedCustomer.name)
+    : null;
 
   const currentProjectBlock =
-    hasSetup && selectedCustomer && overview ? (
+    hasSetup && selectedCustomer && displayOverview ? (
       <section className="admin-card project-current rounded-[12px] border p-3">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[0.875rem] font-medium text-[var(--muted)]">
@@ -71,19 +118,19 @@ export function ProjectSetupDashboard({
           <span className="project-current-label">Aktuell</span>
         </div>
         <h2 className="mt-0.5 text-[1.25rem] font-medium leading-snug tracking-tight break-words text-[var(--foreground)]">
-          {selectedCustomer.name}
+          {selectedDisplayName}
         </h2>
         <p className="mt-0.5 text-[0.875rem] text-[var(--muted)] break-words">
-          Status: {currentStatusText(overview)}
+          Status: {currentStatusText(displayOverview)}
         </p>
         {readOnlyUser ? (
           <p className="mt-2 text-[0.9375rem] text-[var(--muted)]">
             Ansicht für Projekt-Benutzer — Aktionen erledigt der Projekt-Admin.
           </p>
         ) : null}
-        {overview.localDataError ? (
+        {displayOverview.localDataError ? (
           <p className="mt-2 text-[0.9375rem] text-[var(--danger)] break-words">
-            {overview.localDataError}
+            {displayOverview.localDataError}
           </p>
         ) : null}
       </section>
@@ -120,7 +167,7 @@ export function ProjectSetupDashboard({
             ) : null}
           </div>
 
-          {!projects.length ? (
+          {!orderedProjects.length ? (
             showNewProject ? (
               <EmptyState
                 title="Noch kein Projekt"
@@ -135,25 +182,38 @@ export function ProjectSetupDashboard({
               />
             )
           ) : (
-            <ul className="mt-2 space-y-1">
-              {projects.map((c) => {
+            <ul className="mt-2 space-y-2">
+              {orderedProjects.map((c) => {
                 const current = c.id === customerId;
+                const fakePct = demoListPercent(c.name);
+                const listPct =
+                  fakePct ??
+                  (typeof listPercents[c.id] === "number"
+                    ? listPercents[c.id]!
+                    : current && displayOverview
+                      ? displayOverview.overallPercent
+                      : null);
                 return (
                   <li key={c.id}>
                     <Link
                       href={`${switchBasePath}?customer=${c.id}`}
-                      className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-[1.0625rem] ${
+                      className={`project-list-item block rounded-lg px-2.5 py-2 text-[1.0625rem] transition-[border-color,background] ${
                         current
                           ? "project-current font-medium text-[var(--foreground)]"
-                          : "border-transparent bg-[var(--surface)]/60 hover:border-[var(--border)]"
+                          : "text-[var(--foreground)]"
                       }`}
                     >
-                      <span className="min-w-0 break-words">{c.name}</span>
-                      {current ? (
-                        <span className="project-current-label shrink-0">
-                          Aktuell
+                      <div className="flex min-h-8 items-center justify-between gap-2">
+                        <span className="min-w-0 break-words">
+                          {demoDisplayName(c.name)}
                         </span>
-                      ) : null}
+                        {current ? (
+                          <span className="project-current-label shrink-0">
+                            Aktuell
+                          </span>
+                        ) : null}
+                      </div>
+                      <ProjectListProgress percent={listPct} />
                     </Link>
                   </li>
                 );
@@ -165,15 +225,15 @@ export function ProjectSetupDashboard({
         currentProjectBlock
       )}
 
-      {hasSetup && selectedCustomer && overview ? (
+      {hasSetup && selectedCustomer && displayOverview ? (
         <>
           {showProjectList ? currentProjectBlock : null}
 
           <SetupOverallProgress
-            percent={overview.overallPercent}
-            doneCount={overview.doneCount}
-            totalCount={overview.totalCount}
-            sentence={overview.overallSentence}
+            percent={displayOverview.overallPercent}
+            doneCount={displayOverview.doneCount}
+            totalCount={displayOverview.totalCount}
+            sentence={displayOverview.overallSentence}
           />
 
           <section className="space-y-1.5">
@@ -181,13 +241,18 @@ export function ProjectSetupDashboard({
               Hauptschritte
             </p>
             <ol className="space-y-1.5">
-              {overview.steps.map((step) => (
+              {displayOverview.steps.map((step) => (
                 <li key={step.id}>
                   <SetupStepCard step={step} />
                 </li>
               ))}
             </ol>
           </section>
+
+          <WerkzeugePanel
+            customerId={selectedCustomer.id}
+            canMutate={canMutateStatus}
+          />
 
           {showProjectAdmin ? (
             <PressNavigateLink

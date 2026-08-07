@@ -142,9 +142,9 @@ async function main() {
       path.join(rawDir, `D01_20260805_151000_${g1}.jsonl`),
       [
         JSON.stringify(header(g1, { rows_exported: 3, tables_found: 2 })),
-        JSON.stringify(dataRow(g1, "T685", { KSCHL: "ZD00", KAPPL: "V1" })),
-        JSON.stringify(dataRow(g1, "T685T", { KSCHL: "ZD00", VTEXT: "Test" })),
-        JSON.stringify(dataRow(g1, "T685", { KSCHL: "ZD01", KAPPL: "V1" })),
+        JSON.stringify(dataRow(g1, "T685", { KVEWE: "B", KSCHL: "ZD00", KAPPL: "V1" })),
+        JSON.stringify(dataRow(g1, "T685T", { KVEWE: "B", KSCHL: "ZD00", KAPPL: "V1", VTEXT: "Test" })),
+        JSON.stringify(dataRow(g1, "T685", { KVEWE: "B", KSCHL: "ZD01", KAPPL: "V1" })),
         "{bad",
       ].join("\n") + "\n",
       "utf8",

@@ -1,0 +1,285 @@
+Strukturierter Evidence-Kontext (nur aktuelle Frage, keine Vorfragen):
+
+Intent: entity_specific (confidence 0.60)
+
+### Prozesssignale aus Code-Kommentaren/Methoden (nur Evidenz, nichts erfinden)
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK: Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der 
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES: " Nur beim Ändern virtueller Lager LF zuschlagen.
+- ZCL_VIRTUELLES_LAGER / ABGRU_DOES_NOT_EXIST: WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false EL
+- ZCL_VIRTUELLES_LAGER / CHECK_LFPOS_FOR_VLAGER: Weitere Materialien der Artikelhauptgruppe 31
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION: CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xl
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM: CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste CHECK ( 
+- ZCL_EDEKA_BELEGLOG / GET_ABSAGE20: METHOD get_absage20. SELECT DISTINCT cdhdr~username, cdhdr~udate, cdhdr~utime, cdhdr~objectid, cdpos~tabkey FROM cdhdr JOIN cdpos ON cdpos~objectid EQ cdhdr~objectid AND cdpos~obje
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM: IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not_exist( abgru = cs_lips-zzabgrutm vlager = cs_likp-zz_vlager ). IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY: Nachrichtenstatus der Confirms holen
+- ZCL_VIRTUELLES_LAGER / IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE: Absagegrund bei Liefersplitt geändert:
+
+### Quelle #5 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+short_desc: * Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der Packstatus einer Position geändert werden soll
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER * Prüfungen Edeka-Virtuelles Lager: nach dem Versand der Confirm-Nachricht, dürfen keine Verpackungsinformationen mehr geändert werden LOOP AT iT_XLIKP ASSIGNING <L_S_LIKP> WHERE ZZ_VLAGER EQ 'X'. "Wir prüfen jetzt ob der Packstatus einer P
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #1 | KNVV
+source_id: Q01|MASTER_FIELD|KNVV|ZZ_VLAGER
+type: master_field
+object_type: TABLE_FIELD
+object_name: KNVV
+method: ZZ_VLAGER
+table: KNVV
+short_desc: Stammdatenfeld KNVV-ZZ_VLAGER · Kennzeichen virtuelles Lager · DE=ZZ_SD_VLAGER · DOM=XFELD
+confidence: 0.95
+entity_grounding_status: n/a
+facts:
+- FACT: Feldtext: Kennzeichen virtuelles Lager
+- FACT: Datenelement: ZZ_SD_VLAGER
+- FACT: Domäne: XFELD
+- FACT: Datentyp: CHAR(1)
+- FACT: Custom Z/Y/Append-Feld
+code_data_evidence:
+- [fact] KNVV-ZZ_VLAGER: Kennzeichen virtuelles Lager
+reads: KNVV
+
+### Quelle #4 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+short_desc: * " Nur beim Ändern virtueller Lager LF zuschlagen. * CHECK ( IF_TRTYP EQ 'B' OR IF_TRTYP EQ 'V' ) AND IS_LIKP-ZZ_VLAGER EQ ABAP_TRUE. *
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER * " Nur beim Ändern virtueller Lager LF zuschlagen. * CHECK ( IF_TRTYP EQ 'B' OR IF_TRTYP EQ 'V' ) AND IS_LIKP-ZZ_VLAGER EQ ABAP_TRUE. *
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #6 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|ABGRU_DOES_NOT_EXIST
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: ABGRU_DOES_NOT_EXIST
+short_desc: WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false ELSE abap_true ).
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: ABGRU_DOES_NOT_EXIST
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER WHERE abgru EQ @abgru. "AND ZZ_VLAGER EQ @VLAGER. Änderung Schlünzen, Absage von Mengen sollen auch für andere Kunden ziehen. result = COND #( WHEN sy-subrc EQ 0 THEN abap_false ELSE abap_true ).
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #7 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|CHECK_LFPOS_FOR_VLAGER
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: CHECK_LFPOS_FOR_VLAGER
+short_desc: METHOD check_lfpos_for_vlager.
+
+*--------------------------------------------------------------------------------
+* TF001: Thomas Frei 08.07.2025 -> J. Thien am 08.07.2025 per E-Mail
+*        Weitere Materialien der Artikelhauptgruppe 31
+*
+* TF002: Thomas Frei 09.07.2025 -> J. Thien am 09.07.2025 per E-Mail
+*        Weitere Artikelhauptgruppe 21 wie 22&23 hinzugefügt
+*
+* TF003: Thomas Frei 10.10.2
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: CHECK_LFPOS_FOR_VLAGER
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER METHOD check_lfpos_for_vlager.
+
+*--------------------------------------------------------------------------------
+* TF001: Thomas Frei 08.07.2025 -> J. Thien am 08.07.2025 per E-Mail
+*        Weitere Materialien der Artikelhauptgruppe 31
+*
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #9 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+short_desc: * CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xlips-uepos IS INITIAL AND is_xlips-uecha IS INITIAL.
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHECK_ITEM_DELETION
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER * CHECK Z_ES_TOGGLES=>VIRT_STORAGE_CHANGE_DLVRY EQ ABAP_TRUE. CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) AND is_likp-zz_vlager EQ abap_true. CHECK is_xlips-vgbel IS NOT INITIAL AND is_xlips-vgpos IS NOT INITIAL AND is_xlips-uepos IS INITI
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #10 | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+type: code_unit
+object_type: CODE_UNIT
+object_name: ZCL_VIRTUELLES_LAGER
+method: IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+short_desc: CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste
+confidence: 0.7
+entity_grounding_status: n/a
+facts:
+- FACT: Code referenziert ZZ_VLAGER
+- FACT: Objekt: ZCL_VIRTUELLES_LAGER
+- FACT: Routine: IF_EX_LE_SHP_DELIVERY_PROC~FILL_DELIVERY_ITEM
+- FACT: Zone: classes
+- FACT: Matched token: ZZ_VLAGER
+code_data_evidence:
+- [code] Referenz auf ZZ_VLAGER CHECK ( if_trtyp EQ 'B' OR if_trtyp EQ 'V' ) " Richtiger Modus? AND is_likp-zz_vlager EQ abap_true " LF für VLAGER AND cs_lips-uecha IS INITIAL " Chargensplit / Stückliste
+hardcoded_values: ZZ_VLAGER
+
+### Quelle #2 | ZVLAGER_AUART
+source_id: table_profile:ZVLAGER_AUART
+type: table_profile
+object_type: TABLE
+object_name: ZVLAGER_AUART
+table: ZVLAGER_AUART
+short_desc: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)
+confidence: 0.75
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZVLAGER_AUART
+- FACT: Beschreibung: Nicht erlaubte Auftragsarten virtuelles Lager (Dialog)
+- FACT: Delivery Class A
+- FACT: Klassifikation NON_CONTROL_TABLE (Score 20)
+- FACT: Export-Klassifikation: keine Steuertabelle
+- FACT: Zeilen im Abzug: 0
+- FACT: Schlüsselfelder: MANDT, ZZ_VLAGER, AUART
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_A:-20; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15; LOG_OR_TECHNICAL_NAME:-20
+- INFERENCE: Abgeleitete Grobkategorie transaction_data aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZVLAGER_AUART
+
+### Quelle #3 | ZZTVAG
+source_id: table_profile:ZZTVAG
+type: table_profile
+object_type: TABLE
+object_name: ZZTVAG
+table: ZZTVAG
+short_desc: Absagegründe im Virtuellen Lager
+confidence: 1
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Beschreibung: Absagegründe im Virtuellen Lager
+- FACT: Delivery Class C
+- FACT: Klassifikation CUSTOMIZING_CONTROL_TABLE (Score 100)
+- FACT: Export-Klassifikation: kundeneigene Customizing-/Steuertabelle
+- FACT: Zeilen im Abzug: 17
+- FACT: Schlüsselfelder: MANDT, ZZ_VLAGER, ABGRU
+- FACT: Keine bekannten Code-Referenzen
+inferences:
+- INFERENCE: Klassifikationshinweise (exportiert): DELIVERY_CLASS_C:+40; MAINTENANCE_ALLOWED:+15; TABLE_MAINTENANCE_DIALOG:+30; ROW_COUNT_LE_100:+15
+- INFERENCE: Abgeleitete Grobkategorie customizing_like aus Delivery Class/Klassifikation (nicht fachlich verifiziert)
+reads: ZZTVAG
+
+### Quelle #14 | ZZTVAG
+source_id: Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01
+type: table_row
+object_type: TABLE_ROW
+object_name: ZZTVAG
+method: ABGRU=01|MANDT=001|ZZ_VLAGER=X
+table: ZZTVAG
+short_desc: MANDT=001; ZZ_VLAGER=X; ABGRU=01; ABWGRUND=VM
+confidence: 0.9
+entity_grounding_status: n/a
+facts:
+- FACT: Tabelle ZZTVAG
+- FACT: Schlüssel ABGRU=01|MANDT=001|ZZ_VLAGER=X
+- FACT: Wert MANDT=001
+- FACT: Wert ZZ_VLAGER=X
+- FACT: Wert ABGRU=01
+- FACT: Wert ABWGRUND=VM
+- FACT: Primärgrund small_customizing_high_score_row
+relations:
+- ROW_OF_TABLE: TABLE_ROW:Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01 → TABLE:ZZTVAG
+reads: ZZTVAG
+hardcoded_values: 001, X, 01, VM
+
+### Quelle #8 [compact] | ZCL_EDEKA_BELEGLOG
+source_id: D01|CLASS|ZCL_EDEKA_BELEGLOG|METHOD|GET_ABSAGE20
+type: code_unit
+method: GET_ABSAGE20
+short_desc: METHOD get_absage20.
+
+    SELECT DISTINCT cdhdr~username,
+                    cdhdr~udate,
+                    cdhdr~utime,
+                    cdhdr~objectid,
+                    cdpos~tabkey
+      FROM cdhdr
+      JOIN cdpos ON cdpos~objectid    EQ cdhdr~objectid
+                AND cdpos~objectclas  EQ 'VERKBELEG'
+                AND cdpos~tabname     EQ 'VBAP'
+                AND cdhdr~changen
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_EDEKA_BELEGLOG | Routine: GET_ABSAGE20 | Zone: classes
+
+### Quelle #11 [compact] | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM
+type: code_unit
+method: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM
+short_desc: IF cs_lips-zzabgrutm IS NOT INITIAL AND me->abgru_does_not_exist( abgru = cs_lips-zzabgrutm vlager = cs_likp-zz_vlager ).
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_VIRTUELLES_LAGER | Routine: IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_DELIVERY_ITEM | Zone: classes
+
+### Quelle #12 [compact] | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY
+type: code_unit
+method: IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY
+short_desc: METHOD if_ex_le_shp_delivery_proc~read_delivery.
+
+* Nachrichtenstatus der Confirms holen
+  ME->GET_CONFIRM_STATUS( EXPORTING I_T_XLIPS = CT_XLIPS ).
+
+ENDMETHOD.
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_VIRTUELLES_LAGER | Routine: IF_EX_LE_SHP_DELIVERY_PROC~READ_DELIVERY | Zone: classes
+
+### Quelle #13 [compact] | ZCL_VIRTUELLES_LAGER
+source_id: D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE
+type: code_unit
+method: IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE
+short_desc: METHOD if_ex_le_shp_delivery_proc~save_document_prepare.
+
+*------------------------------------------------------------------------------
+* TF001: Thomas Frei 09.06.2026  Ticket#2026031982000089
+*        Absagegrund bei Liefersplitt geändert:
+*        alt: PR = Ladefläche ausgelastet
+*        neu: ZB = Liefersplitt
+*------------------------------------------------------------------------------
+
+  
+facts: Code referenziert ZZ_VLAGER | Objekt: ZCL_VIRTUELLES_LAGER | Routine: IF_EX_LE_SHP_DELIVERY_PROC~SAVE_DOCUMENT_PREPARE | Zone: classes

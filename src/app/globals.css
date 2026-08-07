@@ -366,6 +366,90 @@ a.is-pressed .main-step-card:not(.main-step-card--locked),
   box-shadow: none;
 }
 
+/* Project switcher rows — readable in light + dark, light 3D button feel */
+.project-list-item {
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--foreground));
+  background: color-mix(in srgb, var(--surface-raised) 85%, var(--foreground) 4%);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 70%, transparent),
+    0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent),
+    0 2px 6px color-mix(in srgb, var(--foreground) 5%, transparent);
+  transform: translateY(0);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+@media (hover: hover) {
+  .project-list-item:hover:not(.is-pressed) {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    background: color-mix(in srgb, var(--surface-raised) 70%, var(--accent-soft) 30%);
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, #ffffff 85%, transparent),
+      0 4px 10px color-mix(in srgb, var(--foreground) 10%, transparent),
+      0 8px 18px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+}
+
+.project-list-item:active,
+.project-list-item.is-pressed {
+  transform: translateY(1px);
+  box-shadow:
+    0 0 0 color-mix(in srgb, #ffffff 40%, transparent),
+    0 1px 2px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.dark .project-list-item {
+  border-color: color-mix(in srgb, #ffffff 14%, var(--border));
+  background: color-mix(in srgb, #ffffff 10%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 8%, transparent),
+    0 2px 6px color-mix(in srgb, #000000 45%, transparent);
+}
+
+@media (hover: hover) {
+  .dark .project-list-item:hover:not(.is-pressed) {
+    border-color: color-mix(in srgb, #ffffff 24%, var(--border));
+    background: color-mix(in srgb, #ffffff 16%, transparent);
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, #ffffff 14%, transparent),
+      0 6px 14px color-mix(in srgb, #000000 55%, transparent),
+      0 0 0 1px color-mix(in srgb, #ffffff 6%, transparent);
+  }
+}
+
+.dark .project-list-item:active,
+.dark .project-list-item.is-pressed {
+  transform: translateY(1px);
+  box-shadow:
+    0 0 0 color-mix(in srgb, #ffffff 4%, transparent),
+    0 1px 3px color-mix(in srgb, #000000 50%, transparent);
+}
+
+.project-list-item.project-current {
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+}
+
+.dark .project-list-item.project-current {
+  background: color-mix(in srgb, var(--selected-bg) 70%, #ffffff 8%);
+  border-color: color-mix(in srgb, var(--selected-border) 80%, #ffffff 20%);
+}
+
+@media (hover: hover) {
+  .project-list-item.project-current:hover:not(.is-pressed) {
+    background: color-mix(in srgb, var(--selected-bg) 88%, var(--accent-soft));
+  }
+
+  .dark .project-list-item.project-current:hover:not(.is-pressed) {
+    background: color-mix(in srgb, var(--selected-bg) 65%, #ffffff 12%);
+  }
+}
+
 .project-current-label {
   display: inline-flex;
   align-items: center;

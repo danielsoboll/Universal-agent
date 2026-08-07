@@ -49,6 +49,85 @@ function emptyStep(
   };
 }
 
+/**
+ * Feste Fortschritts-Logik (SSOT, Summe = 100):
+ *
+ * | Meilenstein                         | %   | Schritte        |
+ * |-------------------------------------|-----|-----------------|
+ * | Canonical bereit (exportiert+eingelesen) | 40  | A–D             |
+ * | Testdaten-Fragen                    | +15 | E               |
+ * | Index / Vektoren                    | +30 | F               |
+ * | Freigabe                            | +15 | G               |
+ *
+ * Beispiel: Materialstammdaten konvertiert, noch kein Index → 40 %.
+ * Nicht 0 % (Daten sind da) und nicht 100 % (Suche/RAG fehlt noch).
+ */
+export const DATENBASIS_STEP_WEIGHTS: Record<DatenbasisStepId, number> = {
+  A_sap_export: 5,
+  B_raw_detect: 10,
+  C_validate: 10,
+  D_convert: 15,
+  E_test_questions: 15,
+  F_rag_test: 30,
+  G_approve: 15,
+};
+
+/** Meilenstein-Prozente — abgeleitet aus den Gewichten, nicht separat pflegen. */
+export const DATENBASIS_PROGRESS = {
+  CANONICAL_READY_PERCENT:
+    DATENBASIS_STEP_WEIGHTS.A_sap_export +
+    DATENBASIS_STEP_WEIGHTS.B_raw_detect +
+    DATENBASIS_STEP_WEIGHTS.C_validate +
+    DATENBASIS_STEP_WEIGHTS.D_convert,
+  AFTER_TESTS_PERCENT:
+    DATENBASIS_STEP_WEIGHTS.A_sap_export +
+    DATENBASIS_STEP_WEIGHTS.B_raw_detect +
+    DATENBASIS_STEP_WEIGHTS.C_validate +
+    DATENBASIS_STEP_WEIGHTS.D_convert +
+    DATENBASIS_STEP_WEIGHTS.E_test_questions,
+  AFTER_INDEX_PERCENT:
+    DATENBASIS_STEP_WEIGHTS.A_sap_export +
+    DATENBASIS_STEP_WEIGHTS.B_raw_detect +
+    DATENBASIS_STEP_WEIGHTS.C_validate +
+    DATENBASIS_STEP_WEIGHTS.D_convert +
+    DATENBASIS_STEP_WEIGHTS.E_test_questions +
+    DATENBASIS_STEP_WEIGHTS.F_rag_test,
+  APPROVED_PERCENT: 100,
+  LABEL_CANONICAL_READY: "Canonical bereit — Index/Vektoren ausstehend",
+  LABEL_INDEX_PENDING: "Index/Vektoren ausstehend",
+  LABEL_APPROVAL_PENDING: "Freigabe ausstehend",
+} as const;
+
+const CANONICAL_STEPS: readonly DatenbasisStepId[] = [
+  "A_sap_export",
+  "B_raw_detect",
+  "C_validate",
+  "D_convert",
+];
+
+export function isCanonicalReady(manifest: DatenbasisManifest): boolean {
+  return CANONICAL_STEPS.every(
+    (id) => manifest.steps[id]?.status === "done",
+  );
+}
+
+export function isIndexReady(manifest: DatenbasisManifest): boolean {
+  return manifest.steps.F_rag_test.status === "done";
+}
+
+/** Turn sequential "locked" into "open" so each step shows real status. */
+export function openIndependentSteps(
+  steps: DatenbasisManifest["steps"],
+): DatenbasisManifest["steps"] {
+  const next = { ...steps };
+  for (const id of DATENBASIS_STEP_IDS) {
+    if (next[id].status === "locked") {
+      next[id] = { ...next[id], status: "open" };
+    }
+  }
+  return next;
+}
+
 export function createInitialManifest(
   projectKey: string,
   cfg: ExportTypeConfig,
@@ -56,12 +135,14 @@ export function createInitialManifest(
 ): DatenbasisManifest {
   const steps = {} as Record<DatenbasisStepId, DatenbasisStepState>;
   for (const id of DATENBASIS_STEP_IDS) {
-    let status: DatenbasisStepStatus = "locked";
-    if (unlocked && cfg.implementation === "full") {
-      status = id === "A_sap_export" ? "ready" : "locked";
-    } else if (unlocked && cfg.implementation === "prepared") {
-      // prepared: show as locked pipeline until rules verified
-      status = "locked";
+    let status: DatenbasisStepStatus = "open";
+    if (!unlocked || cfg.implementation === "locked") {
+      status = "open"; // area still visible; overall reflects scaffold
+    } else if (cfg.implementation === "prepared") {
+      status = "open";
+    } else if (cfg.implementation === "full") {
+      // All steps independently open — no sequential lock chain
+      status = id === "A_sap_export" ? "ready" : "open";
     }
     steps[id] = emptyStep(id, status);
   }
@@ -75,8 +156,10 @@ export function createInitialManifest(
     overall: unlocked
       ? cfg.implementation === "full"
         ? "not_started"
-        : "locked"
-      : "locked",
+        : cfg.implementation === "prepared"
+          ? "not_started"
+          : "not_started"
+      : "not_started",
     source_fingerprint: null,
     selected_raw_file: null,
     raw_immutable: true,
@@ -142,12 +225,10 @@ export function deriveOverall(
   unlocked: boolean,
   implementation: ExportTypeConfig["implementation"],
 ): DatenbasisOverallStatus {
-  if (!unlocked || implementation === "locked") return "locked";
-  if (implementation === "prepared") return "locked";
+  if (implementation === "locked") return "not_started";
+  if (!unlocked && implementation === "prepared") return "not_started";
   if (steps.G_approve.status === "done") return "approved";
-  if (
-    DATENBASIS_STEP_IDS.some((id) => steps[id].status === "error")
-  ) {
+  if (DATENBASIS_STEP_IDS.some((id) => steps[id].status === "error")) {
     return "failed";
   }
   if (steps.F_rag_test.status === "done") {
@@ -161,46 +242,42 @@ export function deriveOverall(
         steps[id].status === "ready",
     )
   ) {
-    if (
+    const onlyAReady =
       steps.A_sap_export.status === "ready" &&
       DATENBASIS_STEP_IDS.every(
         (id) =>
           id === "A_sap_export" ||
+          steps[id].status === "open" ||
           steps[id].status === "locked",
-      )
-    ) {
-      return "not_started";
-    }
+      );
+    if (onlyAReady) return "not_started";
     return "in_progress";
   }
   return "not_started";
 }
 
-/** After a successful step, unlock the next; reset following on failure. */
+/** After a successful step, keep remaining steps independently open. */
 export function advanceAfterSuccess(
   manifest: DatenbasisManifest,
   completedId: DatenbasisStepId,
 ): DatenbasisManifest {
-  const idx = DATENBASIS_STEP_IDS.indexOf(completedId);
-  const steps = { ...manifest.steps };
+  const steps = openIndependentSteps({ ...manifest.steps });
   steps[completedId] = {
     ...steps[completedId],
     status: "done",
     updated_at: nowIso(),
   };
-  const nextId = DATENBASIS_STEP_IDS[idx + 1];
-  if (nextId) {
-    steps[nextId] = {
-      ...steps[nextId],
-      status: nextId === "G_approve" ? "awaiting" : "ready",
-      updated_at: nowIso(),
-    };
-    // lock anything after next
-    for (let i = idx + 2; i < DATENBASIS_STEP_IDS.length; i++) {
-      const id = DATENBASIS_STEP_IDS[i]!;
+  // Next undoned step becomes ready for a clear CTA (others stay open).
+  const idx = DATENBASIS_STEP_IDS.indexOf(completedId);
+  for (let i = idx + 1; i < DATENBASIS_STEP_IDS.length; i++) {
+    const id = DATENBASIS_STEP_IDS[i]!;
+    if (steps[id].status === "open" || steps[id].status === "locked") {
       steps[id] = {
-        ...emptyStep(id, "locked"),
+        ...steps[id],
+        status: id === "G_approve" ? "awaiting" : "ready",
+        updated_at: nowIso(),
       };
+      break;
     }
   }
   const cfg = getExportTypeConfig(manifest.export_type);
@@ -217,19 +294,13 @@ export function markStepError(
   stepId: DatenbasisStepId,
   result: DatenbasisStepState["result"],
 ): DatenbasisManifest {
-  const steps = { ...manifest.steps };
+  const steps = openIndependentSteps({ ...manifest.steps });
   steps[stepId] = {
     ...steps[stepId],
     status: "error",
     result,
     updated_at: nowIso(),
   };
-  // lock following
-  const idx = DATENBASIS_STEP_IDS.indexOf(stepId);
-  for (let i = idx + 1; i < DATENBASIS_STEP_IDS.length; i++) {
-    const id = DATENBASIS_STEP_IDS[i]!;
-    steps[id] = emptyStep(id, "locked");
-  }
   return {
     ...manifest,
     steps,
@@ -327,43 +398,16 @@ export function reconcileManifest(
       ...manifest,
       unlocked,
       order_index: cfg.orderIndex,
+      steps: openIndependentSteps(manifest.steps),
     };
-    if (!unlocked) {
-      manifest.overall = "locked";
-      for (const id of DATENBASIS_STEP_IDS) {
-        manifest.steps[id] = {
-          ...manifest.steps[id],
-          status: "locked",
-        };
-      }
-    } else if (
-      cfg.implementation === "full" &&
-      manifest.overall === "locked"
-    ) {
-      // freshly unlocked
-      if (
-        DATENBASIS_STEP_IDS.every(
-          (id) =>
-            manifest!.steps[id].status === "locked" ||
-            !manifest!.steps[id].updated_at,
-        )
-      ) {
-        manifest = createInitialManifest(key, cfg, true);
-      } else {
-        manifest.overall = deriveOverall(
-          manifest.steps,
-          true,
-          cfg.implementation,
-        );
-      }
-    } else if (cfg.implementation !== "full") {
-      manifest.overall = "locked";
-    } else {
+    if (cfg.implementation === "full" || cfg.implementation === "prepared") {
       manifest.overall = deriveOverall(
         manifest.steps,
-        true,
+        unlocked,
         cfg.implementation,
       );
+    } else {
+      manifest.overall = "not_started";
     }
   }
 
@@ -375,12 +419,39 @@ export function nextActionLabel(manifest: DatenbasisManifest): {
   stepId: DatenbasisStepId | null;
   label: string;
 } {
-  if (!manifest.unlocked || manifest.overall === "locked") {
-    return { stepId: null, label: "Gesperrt" };
-  }
   if (manifest.overall === "approved") {
     return { stepId: null, label: "Freigegeben" };
   }
+  const doneCount = DATENBASIS_STEP_IDS.filter(
+    (id) => manifest.steps[id].status === "done",
+  ).length;
+  const testsDone = manifest.steps.E_test_questions.status === "done";
+  const indexDone = isIndexReady(manifest);
+
+  if (!manifest.unlocked && doneCount === 0) {
+    return { stepId: null, label: "Bereich noch nicht gestartet" };
+  }
+
+  // Feste Phasen-Labels nach Meilenstein (nicht generische Step-Verben)
+  if (isCanonicalReady(manifest) && !indexDone) {
+    if (!testsDone) {
+      return {
+        stepId: "E_test_questions",
+        label: DATENBASIS_PROGRESS.LABEL_CANONICAL_READY,
+      };
+    }
+    return {
+      stepId: "F_rag_test",
+      label: DATENBASIS_PROGRESS.LABEL_INDEX_PENDING,
+    };
+  }
+  if (indexDone && manifest.steps.G_approve.status !== "done") {
+    return {
+      stepId: "G_approve",
+      label: DATENBASIS_PROGRESS.LABEL_APPROVAL_PENDING,
+    };
+  }
+
   const failed = DATENBASIS_STEP_IDS.find(
     (id) => manifest.steps[id].status === "error",
   );
@@ -400,10 +471,23 @@ export function nextActionLabel(manifest: DatenbasisManifest): {
 }
 
 export function progressPercent(manifest: DatenbasisManifest): number {
-  if (!manifest.unlocked) return 0;
-  if (manifest.overall === "approved") return 100;
-  const done = DATENBASIS_STEP_IDS.filter(
-    (id) => manifest.steps[id].status === "done",
-  ).length;
-  return Math.round((done / DATENBASIS_STEP_IDS.length) * 100);
+  if (manifest.overall === "approved") {
+    return DATENBASIS_PROGRESS.APPROVED_PERCENT;
+  }
+  if (
+    DATENBASIS_STEP_IDS.every(
+      (id) =>
+        manifest.steps[id].status !== "done" &&
+        manifest.steps[id].status !== "running",
+    )
+  ) {
+    return 0;
+  }
+  let score = 0;
+  for (const id of DATENBASIS_STEP_IDS) {
+    if (manifest.steps[id].status === "done") {
+      score += DATENBASIS_STEP_WEIGHTS[id];
+    }
+  }
+  return Math.min(100, Math.round(score));
 }

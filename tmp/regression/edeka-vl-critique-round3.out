@@ -1,0 +1,295 @@
+{
+  "question": "Wie funktioniert das Edeka virtuelle Lager?",
+  "retrieval_mode": "hybrid (exact + fulltext + vector)",
+  "duration_ms": 37428,
+  "warnings": [
+    "Code-Expansion: 8 Canonical-Treffer zu [ZZ_VLAGER, KNVV-ZZ_VLAGER, ZVLAGER_AUART, ZZTVAG]",
+    "Lexikalische DDIC-Suche: 9 Phrase-/Feldtreffer priorisiert"
+  ],
+  "top_hits": [
+    {
+      "rank": 1,
+      "type": "master_field",
+      "key": "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER",
+      "score": 391
+    },
+    {
+      "rank": 2,
+      "type": "table_profile",
+      "key": "table_profile:ZVLAGER_AUART",
+      "score": 366
+    },
+    {
+      "rank": 3,
+      "type": "table_profile",
+      "key": "table_profile:ZZTVAG",
+      "score": 331
+    },
+    {
+      "rank": 4,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_AUFTRAGSMONITOR|METHOD|GET_AUFTRAEGE",
+      "score": 64
+    },
+    {
+      "rank": 5,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|ZIF_ORDERS_IN~EXIT_SAPLVEDA_002",
+      "score": 64
+    },
+    {
+      "rank": 6,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|AUFTRAGSART_SETZEN",
+      "score": 64
+    },
+    {
+      "rank": 7,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|LOAD_ZVPOS",
+      "score": 64
+    },
+    {
+      "rank": 8,
+      "type": "code_unit",
+      "key": "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+      "score": 64
+    }
+  ],
+  "direct_answer": "Das Edeka virtuelle Lager wird über ein Kennzeichen im Kundenstammsatz (KNVV-ZZ_VLAGER) gesteuert und beeinflusst die Auftrags- und Versandprozesse, insbesondere durch spezielle Prüfungen und Einschränkungen bei Auftragsarten und Verpackungsinformationen nach Versandbestätigung.",
+  "reasoning": "Sicher belegt: Das virtuelle Lager wird durch das Kennzeichen im Kundenstammsatzfeld KNVV-ZZ_VLAGER identifiziert. Nach dem Versand der Confirm-Nachricht dürfen im virtuellen Lager keine Verpackungsinformationen mehr geändert werden. Es existieren Tabellen mit nicht erlaubten Auftragsarten (ZVLAGER_AUART) und Absagegründen (ZZTVAG) für das virtuelle Lager, die den Prozess steuern. Das virtuelle Lager beeinflusst Prüfungen und Feldattribute im Versandprozess, z.B. bei der Änderung von Feldern und Packstatus.\nAbgeleitet: Abgeleitet: Im Prozess werden Aufträge mit dem Kennzeichen für das virtuelle Lager speziell behandelt, z.B. bei der Auswahl von Aufträgen und der Setzung von Auftragsarten.\nOffen: Die genaue fachliche Zielsetzung und der vollständige Geschäftsprozess des Edeka virtuellen Lagers sind nicht dokumentiert. Details zur organisatorischen Einbindung und Prozessoptimierung des virtuellen Lagers sind nicht belegt.",
+  "process_answer": {
+    "trigger": "Aufträge mit gesetztem Kennzeichen ZZ_VLAGER werden im Auftragserfassungs- und Versandprozess speziell behandelt.",
+    "process_effect": "Das virtuelle Lager wird durch das Kennzeichen im Kundenstammsatzfeld KNVV-ZZ_VLAGER identifiziert. Nach dem Versand der Confirm-Nachricht dürfen im virtuellen Lager keine Verpackungsinformationen mehr geändert werden.",
+    "special_process": "Das virtuelle Lager wird durch das Kennzeichen im Kundenstammsatzfeld KNVV-ZZ_VLAGER identifiziert. Nach dem Versand der Confirm-Nachricht dürfen im virtuellen Lager keine Verpackungsinformationen mehr geändert werden.",
+    "confirmed": [
+      {
+        "text": "Das virtuelle Lager wird durch das Kennzeichen im Kundenstammsatzfeld KNVV-ZZ_VLAGER identifiziert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Nach dem Versand der Confirm-Nachricht dürfen im virtuellen Lager keine Verpackungsinformationen mehr geändert werden.",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      },
+      {
+        "text": "Es existieren Tabellen mit nicht erlaubten Auftragsarten (ZVLAGER_AUART) und Absagegründen (ZZTVAG) für das virtuelle Lager, die den Prozess steuern.",
+        "level": "confirmed",
+        "source_ranks": [
+          2,
+          3,
+          12
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART",
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Das virtuelle Lager beeinflusst Prüfungen und Feldattribute im Versandprozess, z.B. bei der Änderung von Feldern und Packstatus.",
+        "level": "confirmed",
+        "source_ranks": [
+          8,
+          9
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "open": [
+      {
+        "text": "Die genaue fachliche Zielsetzung und der vollständige Geschäftsprozess des Edeka virtuellen Lagers sind nicht dokumentiert.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      },
+      {
+        "text": "Details zur organisatorischen Einbindung und Prozessoptimierung des virtuellen Lagers sind nicht belegt.",
+        "level": "possible",
+        "source_ranks": [],
+        "source_ids": []
+      }
+    ]
+  },
+  "technical_answer": {
+    "entry_point": [
+      {
+        "text": "Das virtuelle Lager wird über das Feld KNVV-ZZ_VLAGER im Kundenstammsatz aktiviert.",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      }
+    ],
+    "trigger": [
+      {
+        "text": "Aufträge mit gesetztem Kennzeichen ZZ_VLAGER werden im Auftragserfassungs- und Versandprozess speziell behandelt.",
+        "level": "confirmed",
+        "source_ranks": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_AUFTRAGSMONITOR|METHOD|GET_AUFTRAEGE",
+          "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|ZIF_ORDERS_IN~EXIT_SAPLVEDA_002",
+          "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|AUFTRAGSART_SETZEN",
+          "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|LOAD_ZVPOS"
+        ]
+      }
+    ],
+    "processing": [
+      {
+        "text": "Nach Versandbestätigung (Confirm-Nachricht) werden keine Änderungen an Verpackungsinformationen mehr zugelassen, wenn das virtuelle Lager aktiv ist.",
+        "level": "confirmed",
+        "source_ranks": [
+          9
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "objects": [
+      {
+        "text": "KNVV-ZZ_VLAGER (Kennzeichen virtuelles Lager)",
+        "level": "confirmed",
+        "source_ranks": [
+          1
+        ],
+        "source_ids": [
+          "Q01|MASTER_FIELD|KNVV|ZZ_VLAGER"
+        ]
+      },
+      {
+        "text": "Tabelle ZVLAGER_AUART mit nicht erlaubten Auftragsarten für das virtuelle Lager",
+        "level": "confirmed",
+        "source_ranks": [
+          2
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART"
+        ]
+      },
+      {
+        "text": "Tabelle ZZTVAG mit Absagegründen im virtuellen Lager",
+        "level": "confirmed",
+        "source_ranks": [
+          3,
+          12
+        ],
+        "source_ids": [
+          "table_profile:ZZTVAG",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      }
+    ],
+    "results": [
+      {
+        "text": "Spezielle Auftragsarten und Absagegründe werden für das virtuelle Lager berücksichtigt.",
+        "level": "confirmed",
+        "source_ranks": [
+          2,
+          3,
+          6,
+          12
+        ],
+        "source_ids": [
+          "table_profile:ZVLAGER_AUART",
+          "table_profile:ZZTVAG",
+          "D01|CLASS|ZCL_EDI_ORDERS_IN|METHOD|AUFTRAGSART_SETZEN",
+          "Q01|001|ZZTVAG|MANDT=001|ZZ_VLAGER=X|ABGRU=01"
+        ]
+      },
+      {
+        "text": "Belegter Wert: ZZ_VLAGER",
+        "level": "confirmed",
+        "source_ranks": [
+          4
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_AUFTRAGSMONITOR|METHOD|GET_AUFTRAEGE"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "text": "Das Kennzeichen ZZ_VLAGER steuert Prüfungen und Feldänderungen im Versandprozess.",
+        "level": "confirmed",
+        "source_ranks": [
+          8,
+          9
+        ],
+        "source_ids": [
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~CHANGE_FIELD_ATTRIBUTES",
+          "D01|CLASS|ZCL_VIRTUELLES_LAGER|METHOD|IF_EX_LE_SHP_DELIVERY_PROC~DELIVERY_FINAL_CHECK"
+        ]
+      }
+    ],
+    "open": []
+  },
+  "evidence_truncation": {
+    "input_hit_count": 12,
+    "detailed_count": 8,
+    "compact_count": 4,
+    "omitted_count": 0,
+    "previously_weak_fields_now_included": [
+      "relations",
+      "callers_callees",
+      "reads/writes",
+      "entity_grounding_status",
+      "typed facts/inferences",
+      "diversified code+table+rule set"
+    ],
+    "notes": []
+  },
+  "openai_critique": {
+    "score_faithfulness": 9,
+    "score_usefulness": 7,
+    "score_process_coverage": 6,
+    "hallucinations": [],
+    "unused_strong_evidence": [
+      "Details aus ZCL_EDI_ORDERS_IN Methoden (ZIF_ORDERS_IN~EXIT_SAPLVEDA_002, AUFTRAGSART_SETZEN, LOAD_ZVPOS) zur konkreten Prozesslogik bei Auftragsarten und Positionsladung",
+      "Tabellenprofile ZVLAGER_AUART und ZZTVAG mit konkreten Einträgen und deren Bedeutung (z.B. Absagegründe, nicht erlaubte Auftragsarten)"
+    ],
+    "missing_in_evidence": [
+      "Eine klare, zusammenhängende Beschreibung des Gesamtprozesses des virtuellen Lagers aus fachlicher Sicht",
+      "Konkrete Prozessschritte, wie das virtuelle Lager in den Auftrags- und Versandprozess eingebunden ist",
+      "Erklärung, wie das Kennzeichen ZZ_VLAGER technisch und organisatorisch wirkt (z.B. Trigger, Prüfungen, Sperren)"
+    ],
+    "evidence_quality_issues": [
+      "Viele Code-Snippets referenzieren nur das Feld ZZ_VLAGER, liefern aber keine ausführliche Prozessbeschreibung",
+      "Tabellenprofile und einzelne Tabellenzeilen sind vorhanden, aber ohne erklärenden Kontext",
+      "Keine zusammenfassende Dokumentation oder Prozessbeschreibung im Evidence-Paket"
+    ],
+    "concrete_retrieval_fixes": [
+      "Suche nach Dokumentationen oder Prozessbeschreibungen zum Edeka virtuellen Lager, nicht nur Code-Referenzen",
+      "Füge erklärende Texte oder Kommentare aus Fachkonzepten oder Prozesshandbüchern hinzu",
+      "Ergänze Beispiele oder Ablaufbeschreibungen, die den Einsatz des Kennzeichens ZZ_VLAGER im Prozess erläutern"
+    ],
+    "verdict": "iterate",
+    "one_line": "Antwort ist größtenteils korrekt, aber das Evidence-Paket liefert keine vollständige Prozessbeschreibung und wichtige Details fehlen."
+  },
+  "critique_tokens": {
+    "input": 3971,
+    "output": 433
+  }
+}

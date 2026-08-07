@@ -9,7 +9,14 @@ import {
 } from "@/lib/analysis/unitAnalysisPrompt";
 import { repairUnitAnalysisRecord } from "@/lib/analysis/repairUnitAnalyses";
 import {
+  evaluateUnitAnalysisCache,
+  formatCacheDecisionLog,
+  withCacheMetadata,
+  type UnitAnalysisCacheDecision,
+} from "@/lib/analysis/unitAnalysisCache";
+import {
   UNIT_ANALYSIS_PROMPT_VERSION,
+  UNIT_ANALYSIS_SCHEMA_VERSION,
   unitAnalysisModelSchema,
   unitAnalysisRecordSchema,
   type UnitAnalysisErrorRecord,
@@ -32,17 +39,24 @@ export function hashUnitContent(sourceCode: string): string {
   return createHash("sha256").update(sourceCode, "utf8").digest("hex");
 }
 
+/**
+ * @deprecated Prefer evaluateUnitAnalysisCache — kept for callers that only need boolean.
+ */
 export function shouldSkipExistingAnalysis(
   existing: UnitAnalysisRecord | undefined,
   contentHash: string,
   promptVersion = UNIT_ANALYSIS_PROMPT_VERSION,
+  model = AI_CONFIG.chatModel,
+  analysisSchemaVersion = UNIT_ANALYSIS_SCHEMA_VERSION,
 ): boolean {
-  if (!existing) return false;
-  if (existing.needs_reanalysis) return false;
-  return (
-    existing.content_hash === contentHash &&
-    existing.prompt_version === promptVersion
-  );
+  return evaluateUnitAnalysisCache({
+    existing,
+    source_key: existing?.source_key ?? "",
+    contentHash,
+    promptVersion,
+    model,
+    analysisSchemaVersion,
+  }).hit;
 }
 
 export function parseCodeUnitsJsonl(text: string): CodeUnitInput[] {
@@ -113,14 +127,20 @@ export type AnalyzeCodeUnitResult =
       ok: true;
       record: UnitAnalysisRecord;
       skipped: boolean;
+      cache: UnitAnalysisCacheDecision;
       deviationsLogged: boolean;
       evidenceMismatches: number;
     }
-  | { ok: false; error: UnitAnalysisErrorRecord };
+  | {
+      ok: false;
+      error: UnitAnalysisErrorRecord;
+      cache?: UnitAnalysisCacheDecision;
+    };
 
 /**
  * Analyze one METHOD code unit via OpenAI structured output.
  * Post-validates evidence, enriches macros / deterministic facts.
+ * Reuses cache when source_key + hashes + prompt + model + schema match.
  */
 export async function analyzeCodeUnit(params: {
   unit: CodeUnitInput;
@@ -128,18 +148,31 @@ export async function analyzeCodeUnit(params: {
   provider?: OpenAIProvider;
   model?: string;
   promptVersion?: string;
+  analysisSchemaVersion?: string;
   knownMacros?: Set<string>;
 }): Promise<AnalyzeCodeUnitResult> {
   const promptVersion = params.promptVersion ?? UNIT_ANALYSIS_PROMPT_VERSION;
   const model = params.model ?? AI_CONFIG.chatModel;
+  const analysisSchemaVersion =
+    params.analysisSchemaVersion ?? UNIT_ANALYSIS_SCHEMA_VERSION;
   const contentHash = hashUnitContent(params.unit.source_code);
   const knownMacros = params.knownMacros ?? new Set<string>();
 
-  if (shouldSkipExistingAnalysis(params.existing, contentHash, promptVersion)) {
+  const cache = evaluateUnitAnalysisCache({
+    existing: params.existing,
+    source_key: params.unit.source_key,
+    contentHash,
+    promptVersion,
+    model,
+    analysisSchemaVersion,
+  });
+
+  if (cache.hit && params.existing) {
     return {
       ok: true,
-      record: params.existing!,
+      record: withCacheMetadata(params.existing, analysisSchemaVersion),
       skipped: true,
+      cache,
       deviationsLogged: false,
       evidenceMismatches: 0,
     };
@@ -172,8 +205,11 @@ export async function analyzeCodeUnit(params: {
       class_name: params.unit.object_name,
       method_name: params.unit.unit_name,
       model,
+      model_version: model,
       prompt_version: promptVersion,
       content_hash: contentHash,
+      source_hash: contentHash,
+      analysis_schema_version: analysisSchemaVersion,
       deterministic,
       extraction_deviations,
     };
@@ -188,7 +224,10 @@ export async function analyzeCodeUnit(params: {
         ...repaired.record,
         prompt_version: promptVersion,
         content_hash: contentHash,
+        source_hash: contentHash,
         model,
+        model_version: model,
+        analysis_schema_version: analysisSchemaVersion,
       },
       sourceCode: params.unit.source_code,
       knownMacros,
@@ -196,8 +235,9 @@ export async function analyzeCodeUnit(params: {
 
     return {
       ok: true,
-      record: enriched,
+      record: withCacheMetadata(enriched, analysisSchemaVersion),
       skipped: false,
+      cache,
       deviationsLogged: enriched.extraction_deviations.length > 0,
       evidenceMismatches: repaired.evidenceMismatches,
     };
@@ -213,6 +253,7 @@ export async function analyzeCodeUnit(params: {
 
     return {
       ok: false,
+      cache,
       error: {
         at: new Date().toISOString(),
         source_key: params.unit.source_key,
@@ -227,3 +268,5 @@ export async function analyzeCodeUnit(params: {
     };
   }
 }
+
+export { formatCacheDecisionLog };

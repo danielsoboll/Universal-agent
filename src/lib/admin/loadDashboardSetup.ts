@@ -7,6 +7,7 @@ import {
   type ProjectSetupContext,
   type SetupOverview,
 } from "@/lib/admin/setupMainSteps";
+import { resolveBoundProjectKey } from "@/lib/localData/resolveDataProjectKey";
 
 export type DashboardCustomerRow = {
   id: string;
@@ -14,12 +15,8 @@ export type DashboardCustomerRow = {
   slug: string | null;
   status: string | null;
   product_module: string | null;
+  landscape_label?: string | null;
 };
-
-function resolveProjectKey(slug: string | null | undefined): string {
-  const s = (slug ?? "").trim();
-  return s || "P01";
-}
 
 /** Load customers visible to the current access context. */
 export async function loadScopedCustomers(
@@ -29,12 +26,16 @@ export async function loadScopedCustomers(
 
   let customersQuery = supabase
     .from("customers")
-    .select("id, name, slug, status, product_module")
+    .select("id, name, slug, status, product_module, landscape_label")
     .order("created_at", { ascending: false });
   customersQuery = applyCustomerScopeFilter(customersQuery, ctx);
 
   let { data: customers, error: customersError } = await customersQuery;
-  if (customersError && /product_module/i.test(customersError.message)) {
+  if (
+    customersError &&
+    (/product_module/i.test(customersError.message) ||
+      /landscape_label/i.test(customersError.message))
+  ) {
     let fallbackQuery = supabase
       .from("customers")
       .select("id, name, slug, status")
@@ -44,6 +45,7 @@ export async function loadScopedCustomers(
     customers = (retry.data ?? []).map((c) => ({
       ...c,
       product_module: null as string | null,
+      landscape_label: null as string | null,
     }));
     customersError = retry.error;
   }
@@ -110,7 +112,11 @@ export async function buildDashboardOverview(opts: {
     customerStatus: opts.selected.status,
     productModule:
       opts.selected.product_module ?? opts.ctx.productModule ?? null,
-    projectKey: resolveProjectKey(opts.selected.slug),
+    projectKey: resolveBoundProjectKey({
+      slug: opts.selected.slug,
+      landscapeLabel: opts.selected.landscape_label,
+      customerId: opts.customerId,
+    }),
     hasGoals: stats.hasGoals,
     membershipCount: stats.membershipCount,
     userMembershipCount: stats.userMembershipCount,

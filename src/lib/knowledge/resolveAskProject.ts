@@ -3,6 +3,7 @@ import path from "path";
 import { fileProjectRepository } from "@/lib/localAuth/projectRepository";
 import type { LocalProject } from "@/lib/localAuth/types";
 import { LocalDataError } from "@/lib/localData/errors";
+import { BOUND_DATA_PROJECT_KEY } from "@/lib/localData/boundProject";
 import { getLocalDataRoot } from "@/lib/localData/root";
 import { parseSearchDocumentsJsonl } from "@/lib/search/buildSearchDocuments";
 import { domainProfileIdForAppModule } from "@/lib/domain/capabilities";
@@ -537,9 +538,9 @@ export async function resolveKnowledgeProject(params: {
 
   const localProjects = await fileProjectRepository.list();
 
-  // Prefer a local project whose customer_id folder exists and matches a
-  // usable key (env data key, existing landscape folder, slug as folder).
+  // universal-agent: immer P01 als Datenroot (fest verdrahtet)
   const usableKeys = [
+    BOUND_DATA_PROJECT_KEY,
     envDataKey,
     landscapeLabel && folderExists(localDataRoot, landscapeLabel)
       ? landscapeLabel
@@ -550,7 +551,8 @@ export async function resolveKnowledgeProject(params: {
   const matched = localProjects.find(
     (p) =>
       folderExists(localDataRoot, p.customer_id) &&
-      (usableKeys.includes(p.customer_id) ||
+      (p.customer_id === BOUND_DATA_PROJECT_KEY ||
+        usableKeys.includes(p.customer_id) ||
         p.id === projectId ||
         (slug && p.customer_id === slug)),
   );
@@ -565,6 +567,7 @@ export async function resolveKnowledgeProject(params: {
   // If landscape_label is only a display label (e.g. "Intern") and no folder
   // exists, fall back to env key / sole discovered data folder / local repo.
   const dataKey = pickFilesystemCustomerId(localDataRoot, [
+    BOUND_DATA_PROJECT_KEY,
     envDataKey,
     landscapeLabel,
     ...localProjects.map((p) => p.customer_id),

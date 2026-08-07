@@ -13,12 +13,16 @@ import path from "path";
 import {
   analysesToJsonl,
   analyzeCodeUnit,
+  formatCacheDecisionLog,
   parseCodeUnitsJsonl,
   parseUnitAnalysesJsonl,
 } from "../src/lib/analysis/analyzeCodeUnits";
 import { loadKnownMacrosFromFragments } from "../src/lib/analysis/macroExtract";
 import type { UnitAnalysisRecord } from "../src/lib/analysis/unitAnalysisSchema";
-import { UNIT_ANALYSIS_PROMPT_VERSION } from "../src/lib/analysis/unitAnalysisSchema";
+import {
+  UNIT_ANALYSIS_PROMPT_VERSION,
+  UNIT_ANALYSIS_SCHEMA_VERSION,
+} from "../src/lib/analysis/unitAnalysisSchema";
 import { AI_CONFIG } from "../src/lib/ai/config";
 import { OpenAIProvider } from "../src/lib/ai/openaiProvider";
 import { LocalDataError } from "../src/lib/localData/errors";
@@ -30,11 +34,14 @@ import {
 import { resolveWritablePath } from "../src/lib/localData/paths";
 import { getLocalDataRoot } from "../src/lib/localData/root";
 
-const PROJECT_KEY = "P01";
+import { BOUND_DATA_PROJECT_KEY } from "../src/lib/localData/boundProject";
+
+const PROJECT_KEY = BOUND_DATA_PROJECT_KEY;
 const CODE_UNITS_REL = "classes/code_units.jsonl";
 const ANALYSES_REL = "classes/unit_analyses.jsonl";
 const ERRORS_REL = "unit_analysis_errors.jsonl";
 const DEVIATIONS_REL = "unit_analysis_deviations.jsonl";
+const FINAL_LIMIT_STATE = "analyze-classes-final-limit.state";
 
 function stripQuotes(value: string): string {
   const v = value.trim();
@@ -95,6 +102,28 @@ function parseLimit(argv: string[]): number | null {
 
 function wantsOnlyNeedsReanalysis(argv: string[]): boolean {
   return argv.includes("--only-needs-reanalysis");
+}
+
+/** Hard stop after approved mass-batch ceiling (e.g. 3200). */
+function readFinalLimit(): number | null {
+  const absolute = resolveWritablePath(PROJECT_KEY, "logs", FINAL_LIMIT_STATE);
+  if (!existsSync(absolute)) return null;
+  const raw = readFileSync(absolute, "utf8").trim();
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return Math.floor(n);
+}
+
+function enforceFinalLimit(limit: number | null, onlyNeeds: boolean): void {
+  if (onlyNeeds || limit == null) return;
+  if (process.env.ANALYZE_ALLOW_OVER_FINAL?.trim() === "1") return;
+  const finalLimit = readFinalLimit();
+  if (finalLimit == null) return;
+  if (limit > finalLimit) {
+    fail(
+      `Auto-Stop: --limit ${limit} überschreitet FINAL_LIMIT=${finalLimit} (${FINAL_LIMIT_STATE}). Kein Folgebatch. Override: ANALYZE_ALLOW_OVER_FINAL=1`,
+    );
+  }
 }
 
 function readNeedsReanalysisKeys(): string[] {
@@ -186,6 +215,8 @@ async function main() {
     throw error;
   }
 
+  enforceFinalLimit(limit, onlyNeeds);
+
   if (!process.env.OPENAI_API_KEY?.trim()) {
     fail("OPENAI_API_KEY fehlt in .env.local — Analyse abgebrochen.");
   }
@@ -248,7 +279,7 @@ async function main() {
   appendLogLine(
     PROJECT_KEY,
     "analyze-sap-code-units.log",
-    `[${startedAt}] start only_needs=${onlyNeeds} selected=${selected.length} total_methods=${units.length} prompt=${UNIT_ANALYSIS_PROMPT_VERSION} model=${AI_CONFIG.chatModel} known_macros=${knownMacros.size}`,
+    `[${startedAt}] start only_needs=${onlyNeeds} selected=${selected.length} total_methods=${units.length} prompt=${UNIT_ANALYSIS_PROMPT_VERSION} schema=${UNIT_ANALYSIS_SCHEMA_VERSION} model=${AI_CONFIG.chatModel} known_macros=${knownMacros.size} final_limit=${readFinalLimit() ?? "none"}`,
   );
 
   for (const unit of selected) {
@@ -283,7 +314,7 @@ async function main() {
       appendLogLine(
         PROJECT_KEY,
         "analyze-sap-code-units.log",
-        `[${new Date().toISOString()}] SKIP ${unit.source_key}`,
+        `[${new Date().toISOString()}] SKIP ${unit.source_key} ${formatCacheDecisionLog(result.cache)}`,
       );
     } else {
       analyzed += 1;
@@ -306,7 +337,7 @@ async function main() {
       appendLogLine(
         PROJECT_KEY,
         "analyze-sap-code-units.log",
-        `[${new Date().toISOString()}] OK ${unit.source_key} confidence=${result.record.confidence} deviations=${result.record.extraction_deviations.length} evidence_mismatches=${result.evidenceMismatches}`,
+        `[${new Date().toISOString()}] OK ${unit.source_key} confidence=${result.record.confidence} deviations=${result.record.extraction_deviations.length} evidence_mismatches=${result.evidenceMismatches} ${formatCacheDecisionLog(result.cache)}`,
       );
 
       if (result.evidenceMismatches > 0) {

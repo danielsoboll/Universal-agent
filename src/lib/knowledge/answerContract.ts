@@ -17,6 +17,7 @@ import {
 } from "@/lib/knowledge/answerSchema";
 import type { QuestionIntentResult } from "@/lib/knowledge/questionIntent";
 import { detectComparisonSides } from "@/lib/knowledge/questionIntent";
+import { messageIdocObjectIsAuthoritativeOutputType } from "@/lib/domain/typeAuthority";
 
 /** Business-purpose claims that must never be "confirmed" without explicit FACT text. */
 const OVERCLAIM_RE =
@@ -24,6 +25,10 @@ const OVERCLAIM_RE =
 
 const INFERRED_MARKERS_RE =
   /\b(vermutlich|deutet\s+darauf|könnte|koennte|wahrscheinlich|möglicherweise|moeglicherweise|scheint|interpretation|anzunehmen)\b/i;
+
+/** Claims that a technical symbol *is* an output/message type. */
+const OUTPUT_TYPE_EXISTENCE_CLAIM_RE =
+  /\b(ist\s+(eine?\s+)?(output[\s_-]?type|nachrichtenart|ausgabeart|nachricht)|als\s+(output[\s_-]?type|nachrichtenart|ausgabeart)\b)/i;
 
 const NO_PROCESS_MSG =
   "Der technische Mechanismus ist teilweise belegt; der vollständige fachliche Hintergrund ist in den Quellen nicht dokumentiert. Es wurde keine Prozessantwort erfunden.";
@@ -113,6 +118,26 @@ function claimSupportedBySources(
   return hitCount >= Math.max(1, Math.ceil(tokens.length * 0.4));
 }
 
+function hasAuthoritativeOutputTypeHit(hits: KnowledgeHit[]): boolean {
+  return hits.some((h) => {
+    if (h.knowledge_unit_type !== "message_idoc_object") return false;
+    const ot = (h.object_type || "").toLowerCase();
+    if (ot !== "output_type" && ot !== "output_type_text") return false;
+    const attrs = {
+      ...(h.metadata ?? {}),
+      KVEWE:
+        h.metadata?.KVEWE ??
+        (h.facts ?? [])
+          .map((f) => /^KVEWE=(.+)$/i.exec(f)?.[1])
+          .find(Boolean),
+    };
+    return messageIdocObjectIsAuthoritativeOutputType({
+      object_type: ot,
+      attributes: attrs,
+    });
+  });
+}
+
 function normalizeLevel(
   stmt: LlmStatement,
   hits: KnowledgeHit[],
@@ -136,6 +161,13 @@ function normalizeLevel(
   // Business overclaims never confirmed
   if (level === "confirmed" && OVERCLAIM_RE.test(text)) {
     level = "inferred";
+  }
+
+  // Existence-as-OUTPUT_TYPE without authoritative T685 KVEWE=B proof → not confirmed
+  if (OUTPUT_TYPE_EXISTENCE_CLAIM_RE.test(text) && !hasAuthoritativeOutputTypeHit(hits)) {
+    if (level === "confirmed" || level === "inferred") {
+      level = "possible";
+    }
   }
 
   if (level === "confirmed") {

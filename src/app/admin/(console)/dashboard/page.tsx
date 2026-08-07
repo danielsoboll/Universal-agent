@@ -10,6 +10,9 @@ import {
   buildDashboardOverview,
   loadScopedCustomers,
 } from "@/lib/admin/loadDashboardSetup";
+import {
+  demoListPercent,
+} from "@/lib/admin/dashboardDemoDisplay";
 
 export default async function AdminDashboardPage({
   searchParams,
@@ -58,6 +61,32 @@ export default async function AdminDashboardPage({
         })
       : null;
 
+  // Real list bars for projects without demo fake (DGL stays visible when
+  // another project is selected).
+  const listPercentEntries = await Promise.all(
+    customers.map(async (c) => {
+      if (demoListPercent(c.name) != null) return null;
+      if (c.id === customerId && overview) {
+        return [c.id, overview.overallPercent] as const;
+      }
+      try {
+        const o = await buildDashboardOverview({
+          ctx,
+          customerId: c.id,
+          selected: c,
+        });
+        return [c.id, o.overallPercent] as const;
+      } catch (err) {
+        console.error("[admin/dashboard] list percent", c.id, err);
+        return null;
+      }
+    }),
+  );
+  const listPercents: Record<string, number> = {};
+  for (const entry of listPercentEntries) {
+    if (entry) listPercents[entry[0]] = entry[1];
+  }
+
   return (
     <ProjectSetupDashboard
       title="Dashboard"
@@ -69,11 +98,13 @@ export default async function AdminDashboardPage({
           : null
       }
       overview={overview}
+      listPercents={listPercents}
       readOnlyUser={readOnlyUser}
       // General Admin: all projects. Project Admin: membership-scoped (loadScopedCustomers).
       showProjectList
       showNewProject={isGeneralAdmin}
       showProjectAdmin={canMutate && Boolean(selectedCustomer)}
+      canMutateStatus={canMutate}
       errorMessage={sp.error ?? null}
       deletedMessage={Boolean(sp.deleted)}
     />
