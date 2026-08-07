@@ -7,7 +7,6 @@ import type { KnowledgeHit } from "@/lib/knowledge/knowledgeRetriever";
 import type { AggregatedKnowledgeHit } from "@/lib/knowledge/executeQueryPlan";
 import type { EntityGroundingResult } from "@/lib/knowledge/entityGrounding";
 import type { QuestionIntentResult } from "@/lib/knowledge/questionIntent";
-import { buildControlValueCatalog } from "@/lib/knowledge/richEvidence";
 import {
   detectComparisonSides,
   questionTopicAnchors,
@@ -57,9 +56,7 @@ const TYPE_BUCKETS: Record<string, "code" | "table" | "rule" | "analysis" | "oth
   control_table: "table",
   control_table_analysis: "table",
   table_profile: "table",
-  table_row: "table",
   canonical_table_row: "table",
-  master_field: "table",
   business_rule: "rule",
   code_table_interpretation: "analysis",
   dynamic_table_access: "analysis",
@@ -127,20 +124,20 @@ export function selectCoherentEvidenceHits(
   }
 
   const anchors = questionTopicAnchors(question ?? "");
-  // Rich budget: ~10× früherer Direct-RAG-Evidence (nur nützliche Buckets)
-  const codeCap = intent.preferences.prefer_code ? 16 : 14;
+  const codeCap = intent.preferences.prefer_code ? 3 : 2;
+  // Comparison with technical tokens: don't drown code in generic mapping tables
   const hasTechAnchor = anchors.some(
     (a) => /^[zy]/i.test(a) || /_/.test(a) || a.length >= 6,
   );
   const tableCap =
     intent.intent === "comparison" && hasTechAnchor
-      ? 2
+      ? 1
       : intent.preferences.prefer_tables
-        ? 12
-        : 10;
-  const ruleCap = 4;
-  const analysisCap = 4;
-  const otherCap = 4;
+        ? 3
+        : 2;
+  const ruleCap = 2;
+  const analysisCap = 2;
+  const otherCap = 1;
 
   const picked: KnowledgeHit[] = [];
   const pickedIds = new Set<string>();
@@ -152,9 +149,6 @@ export function selectCoherentEvidenceHits(
     analysis: analysisCap,
     other: otherCap,
   };
-  /** Max table_row hits per object/table — Samples, keine Flut. */
-  const tableRowPerTable = new Map<string, number>();
-  const TABLE_ROW_CAP = 6;
 
   const hitBlob = (h: KnowledgeHit) =>
     `${h.title} ${h.source_key} ${h.object_name} ${h.subobject_name} ${h.snippet}`.toLowerCase();
@@ -166,27 +160,14 @@ export function selectCoherentEvidenceHits(
   };
 
   const ordered = [...hits].sort((a, b) => {
-    // Prefer master_field / code_unit with expand markers before raw rows
-    const pri = (h: KnowledgeHit) => {
-      if (h.knowledge_unit_type === "master_field") return 3;
-      if (h.knowledge_unit_type === "code_unit") return 2;
-      if (h.knowledge_unit_type === "table_profile") return 1;
-      return 0;
-    };
-    const da = anchorScore(a) * 10 + pri(a);
-    const db = anchorScore(b) * 10 + pri(b);
+    const da = anchorScore(a);
+    const db = anchorScore(b);
     if (db !== da) return db - da;
     return a.rank - b.rank;
   });
 
   const tryPick = (h: KnowledgeHit) => {
     if (pickedIds.has(h.search_document_id)) return false;
-    if (h.knowledge_unit_type === "table_row") {
-      const table = (h.object_name || h.source_key.split("|")[2] || "row").toUpperCase();
-      const n = tableRowPerTable.get(table) ?? 0;
-      if (n >= TABLE_ROW_CAP) return false;
-      tableRowPerTable.set(table, n + 1);
-    }
     const b = bucketOf(h);
     if (counts[b] >= caps[b]) return false;
     picked.push(h);
@@ -256,12 +237,12 @@ export function selectCoherentEvidenceHits(
     }
   }
 
-  // Cap detailed generously; compact catches overflow of useful ranks
-  const detailed = picked.slice(0, 32);
+  // Cap detailed at 10; remainder of selected → compact; rest omitted
+  const detailed = picked.slice(0, 10);
   const detailedIds = new Set(detailed.map((h) => h.search_document_id));
   const compact = hits
     .filter((h) => !detailedIds.has(h.search_document_id))
-    .slice(0, 24);
+    .slice(0, 6);
   const compactIds = new Set(compact.map((h) => h.search_document_id));
   const omitted = hits.filter(
     (h) =>
@@ -278,34 +259,14 @@ function toStructured(
   detail: "full" | "compact",
 ): StructuredEvidenceSource {
   const table =
-    hit.object_type?.toUpperCase() === "TABLE" ||
-    hit.knowledge_unit_type === "table_row" ||
-    hit.knowledge_unit_type === "table_profile"
+    hit.object_type?.toUpperCase() === "TABLE"
       ? hit.object_name
-      : hit.knowledge_unit_type === "master_field"
-        ? hit.object_name
-        : (hit.tables_read?.[0] || hit.tables_written?.[0] || "");
+      : (hit.tables_read?.[0] || hit.tables_written?.[0] || "");
 
   const callers_callees = [
     ...(hit.called_methods ?? []).slice(0, detail === "full" ? 12 : 4).map((m) => `calls:${m}`),
     ...(hit.called_functions ?? []).slice(0, detail === "full" ? 6 : 2).map((m) => `fn:${m}`),
   ];
-
-  const meta = hit.metadata ?? {};
-  const keyValues = meta.key_values;
-  const extraFacts: string[] = [];
-  if (keyValues && typeof keyValues === "object" && !Array.isArray(keyValues)) {
-    for (const [k, v] of Object.entries(keyValues as Record<string, unknown>).slice(0, 8)) {
-      extraFacts.push(`${k}=${String(v)}`);
-    }
-  }
-  if (meta.matched_token) {
-    extraFacts.push(`Matched token: ${String(meta.matched_token)}`);
-  }
-  const facts = [...(hit.facts ?? []), ...extraFacts].slice(
-    0,
-    detail === "full" ? 20 : 6,
-  );
 
   return {
     rank: hit.rank,
@@ -316,77 +277,22 @@ function toStructured(
     method: hit.subobject_name || "",
     table,
     short_desc:
-      (hit.technical_summary || hit.business_purpose || hit.snippet || hit.title || "").slice(
-        0,
-        detail === "full" ? 900 : 360,
-      ),
-    facts,
-    inferences: (hit.inferences ?? []).slice(0, detail === "full" ? 8 : 2),
-    code_data_evidence: evidenceLines(hit, detail === "full" ? 12 : 3),
-    relations: relationLines(hit).slice(0, detail === "full" ? 12 : 3),
+      (hit.technical_summary || hit.snippet || hit.title || "").slice(0, 320),
+    facts: (hit.facts ?? []).slice(0, detail === "full" ? 8 : 3),
+    inferences: (hit.inferences ?? []).slice(0, detail === "full" ? 4 : 1),
+    code_data_evidence: evidenceLines(hit, detail === "full" ? 6 : 2),
+    relations: relationLines(hit).slice(0, detail === "full" ? 8 : 2),
     callers_callees,
-    reads: (hit.tables_read ?? []).slice(0, detail === "full" ? 16 : 6),
-    writes: (hit.tables_written ?? []).slice(0, detail === "full" ? 12 : 4),
+    reads: (hit.tables_read ?? []).slice(0, detail === "full" ? 10 : 4),
+    writes: (hit.tables_written ?? []).slice(0, detail === "full" ? 8 : 3),
     confidence: hit.doc_confidence ?? hit.confidence ?? null,
     entity_grounding_status: groundingStatusForHit(hit, grounding),
     hardcoded_values: (hit.hardcoded_values ?? []).slice(
       0,
-      detail === "full" ? 24 : 8,
+      detail === "full" ? 16 : 6,
     ),
     detail_level: detail,
   };
-}
-
-function extractCommentHints(text: string): string[] {
-  const scored: Array<{ text: string; score: number }> = [];
-  for (const raw of text.split(/\n|(?=\*)/)) {
-    const line = raw.trim();
-    if (!line.startsWith("*") && !line.startsWith('"')) continue;
-    const cleaned = line.replace(/^[*"]+\s*/, "").trim();
-    if (cleaned.length < 24) continue;
-    if (!/[a-zA-ZäöüÄÖÜ]{4,}/.test(cleaned)) continue;
-    // Skip change-log / email noise
-    if (/E-Mail|per Mail|TF\d{3}|Änderung Schlünzen|Thomas Frei/i.test(cleaned)) {
-      continue;
-    }
-    let score = 1;
-    if (/virtuell|Lager|Confirm|Absage|Auftrag|Verpack|Prüfung|nicht erlaubt/i.test(cleaned)) {
-      score += 5;
-    }
-    scored.push({ text: cleaned.slice(0, 220), score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.map((s) => s.text);
-}
-
-/**
- * Deterministic process digest from code evidence (comments + method names).
- * Helps synthesis use available technical process signals without inventing docs.
- */
-export function buildCodeProcessDigest(hits: KnowledgeHit[]): string {
-  const lines: string[] = [];
-  const seen = new Set<string>();
-  for (const h of hits) {
-    if (h.knowledge_unit_type !== "code_unit") continue;
-    const label = [h.object_name, h.subobject_name].filter(Boolean).join(" / ");
-    const blob = `${h.technical_summary || ""}\n${h.snippet || ""}`;
-    const comments = extractCommentHints(blob);
-    const key = `${label}|${comments[0] || blob.slice(0, 60)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (comments.length > 0) {
-      lines.push(`- ${label}: ${comments[0]}`);
-    } else if (blob.trim().length > 40) {
-      lines.push(`- ${label}: ${blob.replace(/\s+/g, " ").trim().slice(0, 180)}`);
-    }
-    if (lines.length >= 20) break;
-  }
-  if (lines.length === 0) return "";
-  return [
-    "### Prozesssignale aus Code-Kommentaren/Methoden (nur Evidenz, nichts erfinden)",
-    "Nutze diese Punkte als Prozessbausteine in der Antwort (Trigger → Prüfung → Wirkung).",
-    ...lines,
-  ].join("\n");
 }
 
 function formatSourceBlock(s: StructuredEvidenceSource): string {
@@ -527,22 +433,13 @@ export function buildEvidenceContext(params: {
     })
     .filter(Boolean);
 
-  const processDigest = buildCodeProcessDigest([...detailed, ...compact]);
-  const valueCatalog = buildControlValueCatalog(params.hits);
-
   const prompt_text = [
     "Strukturierter Evidence-Kontext (nur aktuelle Frage, keine Vorfragen):",
     `Intent: ${params.intent.intent} (confidence ${params.intent.confidence.toFixed(2)})`,
-    "Anweisung: Baue eine konkrete Prozessantwort aus Feldanker + Steuertabellen + Codewirkungen. " +
-      "Die direct_answer muss die Kette nennen: (1) Kennzeichen/Feld, (2) wo es greift (Auftrag/Lieferung), " +
-      "(3) konkrete Wirkungen aus Code/Kommentaren, (4) Steuertabellen/Werte. Keine Floskeln. " +
-      "Offenes nur markieren, wenn wirklich nicht belegt.",
     params.intent.preferences.require_both_comparison_sides
       ? `Vergleichsseiten im Trefferset: alt=${comparison_sides.has_alt} neu=${comparison_sides.has_neu}`
       : "",
     aggHints.length ? aggHints.join("\n") : "",
-    processDigest,
-    valueCatalog,
     "",
     ...sources.map(formatSourceBlock),
     omitted.length
@@ -562,12 +459,12 @@ export function buildEvidenceContext(params: {
       omitted_count: omitted.length,
       previously_weak_fields_now_included,
       caps: {
-        code: params.intent.preferences.prefer_code ? 16 : 14,
-        table: params.intent.preferences.prefer_tables ? 12 : 10,
-        rule: 4,
-        analysis: 4,
-        max_detailed: 32,
-        max_compact: 24,
+        code: params.intent.preferences.prefer_code ? 3 : 2,
+        table: params.intent.preferences.prefer_tables ? 3 : 2,
+        rule: 2,
+        analysis: 2,
+        max_detailed: 10,
+        max_compact: 6,
       },
       comparison_sides,
       notes,

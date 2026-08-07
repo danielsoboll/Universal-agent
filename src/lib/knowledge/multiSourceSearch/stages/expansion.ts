@@ -154,26 +154,6 @@ export async function runRelationsExpansionStage(params: {
       hint: "canonical/function-modules/relations.jsonl",
       label: "fm",
     },
-    {
-      parts: ["message-idoc-config", "relations.jsonl"],
-      hint: "canonical/message-idoc-config/relations.jsonl",
-      label: "message_idoc",
-    },
-    {
-      parts: ["control-tables", "table_relations.jsonl"],
-      hint: "canonical/control-tables/table_relations.jsonl",
-      label: "control_tables",
-    },
-    {
-      parts: ["relations", "code_table_links.jsonl"],
-      hint: "canonical/relations/code_table_links.jsonl",
-      label: "code_table_links",
-    },
-    {
-      parts: ["relations", "class_analysis_links.jsonl"],
-      hint: "canonical/relations/class_analysis_links.jsonl",
-      label: "class_analysis_links",
-    },
   ];
 
   for (const file of files) {

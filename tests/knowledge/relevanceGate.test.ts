@@ -149,6 +149,8 @@ function testInsufficientOnUngroundedNamedEntity() {
       },
     ],
     has_ungrounded_named_entity: true,
+    has_ungrounded_technical_anchor: false,
+    ungrounded_technical_anchors: [],
     grounded_entity_names: [],
     contradicted_entity_names: ["Pepsi Cola"],
   };

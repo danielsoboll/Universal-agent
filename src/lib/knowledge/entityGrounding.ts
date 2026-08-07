@@ -1,5 +1,6 @@
 import type { KnowledgeHit } from "@/lib/knowledge/types";
 import type { QueryPlan } from "@/lib/knowledge/queryPlanSchema";
+import { extractTechnicalSymbols } from "@/lib/search/technicalSymbols";
 
 /**
  * Deterministic entity grounding — runs BEFORE answer synthesis.
@@ -58,6 +59,10 @@ export type GroundingReport = {
   results: EntityGroundingResult[];
   /** Any named business subject (customer/partner/material/plant) not confirmed/possible. */
   has_ungrounded_named_entity: boolean;
+  /** Technical anchor (identifier) from the question without confirmed/possible grounding. */
+  has_ungrounded_technical_anchor: boolean;
+  /** Ungrounded technical tokens — fail-closed, no substitute tables/fields. */
+  ungrounded_technical_anchors: string[];
   /** All named subjects that are confirmed or possible — safe to state entity-specific facts about. */
   grounded_entity_names: string[];
   /** Named subjects that are contradicted or not_found — must not receive transferred rules. */
@@ -178,6 +183,9 @@ export function extractQueryEntities(
   if (customerCandidate) push(customerCandidate, "customer_name");
 
   for (const id of extractIdentifierCandidates(question)) push(id, "identifier");
+  for (const sym of extractTechnicalSymbols(question)) {
+    push(sym.raw, "identifier");
+  }
   for (const n of extractNumberCandidates(question)) push(n.value, n.type);
 
   for (const e of plan?.entities ?? []) {
@@ -443,9 +451,17 @@ export function groundQueryEntities(params: {
   );
 
   const namedResults = results.filter((r) => NAMED_SUBJECT_TYPES.has(r.entity_type));
+  const identifierResults = results.filter((r) => r.entity_type === "identifier");
   const has_ungrounded_named_entity = namedResults.some(
     (r) => r.grounding_status === "contradicted" || r.grounding_status === "not_found",
   );
+  const ungrounded_technical_anchors = identifierResults
+    .filter(
+      (r) =>
+        r.grounding_status === "contradicted" || r.grounding_status === "not_found",
+    )
+    .map((r) => r.query_entity);
+  const has_ungrounded_technical_anchor = ungrounded_technical_anchors.length > 0;
   const grounded_entity_names = namedResults
     .filter((r) => r.grounding_status === "confirmed" || r.grounding_status === "possible")
     .map((r) => r.query_entity);
@@ -457,9 +473,20 @@ export function groundQueryEntities(params: {
     query_entities: params.queryEntities,
     results,
     has_ungrounded_named_entity,
+    has_ungrounded_technical_anchor,
+    ungrounded_technical_anchors,
     grounded_entity_names,
     contradicted_entity_names,
   };
+}
+
+/** Fail-closed user message when a technical anchor has no evidence. */
+export function technicalAnchorFailClosedMessage(anchors: string[]): string {
+  const primary = anchors[0]?.trim();
+  if (!primary) {
+    return "Im aktuell verarbeiteten Datenbestand wurden keine belastbaren technischen Fundstellen gefunden.";
+  }
+  return `Zu ${primary} wurden im aktuell verarbeiteten Datenbestand keine belastbaren technischen Fundstellen gefunden.`;
 }
 
 /** Distinct "similar rule, different entity" hints for the answer's optional neighbor-hit note. */

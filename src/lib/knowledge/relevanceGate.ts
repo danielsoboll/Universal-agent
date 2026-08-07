@@ -415,6 +415,28 @@ export function assessRelevanceGate(params: {
         : 0
       : matched_concepts.length / query_concepts.length;
 
+  // Technical anchor without evidence → fail closed (no substitute tables/fields)
+  if (params.grounding?.has_ungrounded_technical_anchor) {
+    const anchor = params.grounding.ungrounded_technical_anchors[0] ?? "";
+    return {
+      answerability: "insufficient",
+      query_concepts,
+      matched_concepts,
+      missing_concepts: [
+        ...missing_concepts,
+        ...params.grounding.ungrounded_technical_anchors,
+      ],
+      supporting_source_ids: [],
+      contradicting_source_ids: [...contradicting],
+      similar_but_insufficient_source_ids: [
+        ...new Set([...similar, ...params.hits.map((h) => h.search_document_id)]),
+      ],
+      reason: anchor
+        ? `Zu ${anchor} wurden im aktuell verarbeiteten Datenbestand keine belastbaren technischen Fundstellen gefunden.`
+        : "Keine belastbaren technischen Fundstellen für den gesuchten Anker.",
+    };
+  }
+
   // Named-subject grounding failure → insufficient regardless of lexical coverage
   if (params.grounding?.has_ungrounded_named_entity) {
     return {

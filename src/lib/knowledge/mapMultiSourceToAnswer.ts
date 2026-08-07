@@ -249,12 +249,5 @@ export function mapMultiSourceToAnswerResult(params: {
     planned_run_id: run.run_id,
     topic_gate: null,
     full_analysis_report: null,
-    inventory_aggregation: null,
-    inventory_answer: null,
-    entity_list_answer: null,
-    hardcoded_value_answer: null,
-    process_answer_view: null,
-    structured_answer: null,
-    ask_orchestration: null,
   };
 }

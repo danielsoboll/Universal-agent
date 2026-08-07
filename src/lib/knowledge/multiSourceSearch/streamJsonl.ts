@@ -30,43 +30,6 @@ export async function* streamJsonlObjects(
   }
 }
 
-/**
- * Stream JSONL objects whose raw line contains at least one needle (case-insensitive).
- * Skips JSON.parse for non-matching lines — used for focused exact-symbol paths.
- */
-export async function* streamJsonlObjectsMatching(
-  absolutePath: string,
-  needles: string[],
-): AsyncGenerator<Record<string, unknown>, void, unknown> {
-  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) return;
-  const upperNeedles = needles
-    .map((n) => n.trim().toUpperCase())
-    .filter((n) => n.length >= 2);
-  if (upperNeedles.length === 0) return;
-  const rl = createInterface({
-    input: createReadStream(absolutePath, { encoding: "utf8" }),
-    crlfDelay: Infinity,
-  });
-  try {
-    for await (const line of rl) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const upper = trimmed.toUpperCase();
-      if (!upperNeedles.some((n) => upper.includes(n))) continue;
-      try {
-        const obj = JSON.parse(trimmed) as unknown;
-        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-          yield obj as Record<string, unknown>;
-        }
-      } catch {
-        // skip malformed lines
-      }
-    }
-  } finally {
-    rl.close();
-  }
-}
-
 /** Count non-empty lines without parsing (fast estimate). */
 export async function countJsonlLines(
   absolutePath: string,

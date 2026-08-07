@@ -88,14 +88,4 @@ export type AskQuestionResult = {
   searchProfileId?: string;
   /** full_analysis only — Markdown + Word for download. */
   fullAnalysisReport?: FullAnalysisReport | null;
-  /** Structured inventory answer (card UI, no markdown tables). */
-  inventoryAnswer?: import("@/lib/knowledge/inventoryAggregation").InventoryAnswerView | null;
-  /** Structured entity-list answer (class/program cards). */
-  entityListAnswer?: import("@/lib/knowledge/entityListAggregation").EntityListAnswerView | null;
-  /** Structured hardcoded material/value inventory. */
-  hardcodedValueAnswer?: import("@/lib/knowledge/hardcodedValueInventory").HardcodedValueAnswerView | null;
-  /** Structured process explanation (gated cards). */
-  processAnswerView?: import("@/lib/knowledge/askOrchestration/relevanceGateTypes").ProcessAnswerView | null;
-  /** Unified structured product answer. */
-  structuredAnswer?: import("@/lib/knowledge/structuredAnswer").StructuredAnswer | null;
 };

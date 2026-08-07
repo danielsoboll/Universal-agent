@@ -42,7 +42,6 @@ function basePlan(question: string): MultiSourceSearchPlan {
     ],
     source_order: [
       "exact_symbol",
-      "lexical",
       "master_data",
       "control_tables",
       "classes",
@@ -53,7 +52,6 @@ function basePlan(question: string): MultiSourceSearchPlan {
     max_rounds: 2,
     budgets: {
       exact_symbol: 20,
-      lexical: 16,
       master_data: 8,
       control_tables: 14,
       classes: 10,

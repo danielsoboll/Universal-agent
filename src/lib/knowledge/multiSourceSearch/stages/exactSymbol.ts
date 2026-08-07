@@ -408,11 +408,10 @@ export async function runExactSymbolStage(params: {
           id,
           source: "exact_symbol",
           rank_tier: "exact",
-          evidence_type: "CONFIGURATION_OBJECT",
+          evidence_type: "EXACT_CODE_USAGE",
           title: `${objectType}: ${display || objectId}`,
           summary: `MESSAGE_IDOC ${objectType} ${objectId}`.slice(0, 400),
           object_name: objectId || undefined,
-          object_type: objectType || undefined,
           table_name: asString(
             (rec.source as { source_table?: string } | undefined)?.source_table,
           ) || undefined,

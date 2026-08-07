@@ -29,7 +29,6 @@ import { runClassesStage } from "@/lib/knowledge/multiSourceSearch/stages/classe
 import { runControlTablesStage } from "@/lib/knowledge/multiSourceSearch/stages/controlTables";
 import { runExactSymbolStage } from "@/lib/knowledge/multiSourceSearch/stages/exactSymbol";
 import { runRelationsExpansionStage } from "@/lib/knowledge/multiSourceSearch/stages/expansion";
-import { runLexicalStage } from "@/lib/knowledge/multiSourceSearch/stages/lexical";
 import { runMasterDataStage } from "@/lib/knowledge/multiSourceSearch/stages/masterData";
 import {
   runFunctionModulesStage,
@@ -63,8 +62,6 @@ export type RunMultiSourceSearchParams = {
   maxRounds?: number;
   enrichPlanWithLlm?: boolean;
   synthesize?: boolean;
-  /** Optional curated evidence package text prepended to synthesis context. */
-  evidencePackageBlock?: string;
   /** Optional note comparing to direct_rag (caller may attach). */
   compareNote?: string;
   /** Deep-search seeds from Query Understanding (optional). */
@@ -207,7 +204,6 @@ export async function runMultiSourceSearch(
         max_rounds: 0,
         budgets: {
           exact_symbol: 0,
-          lexical: 0,
           master_data: 0,
           control_tables: 0,
           classes: 0,
@@ -230,7 +226,6 @@ export async function runMultiSourceSearch(
           items: [],
           by_source: {
             exact_symbol: 0,
-            lexical: 0,
             master_data: 0,
             control_tables: 0,
             classes: 0,
@@ -348,16 +343,9 @@ export async function runMultiSourceSearch(
     for (const stageId of stageOrder) {
       if (stageId === "master_data" && round > 1) continue;
       if (stageId === "exact_symbol" && round > 1) continue;
-      if (stageId === "lexical" && round > 1) continue;
       // Technical symbol primary: skip broad master_data concept scan
       if (
         stageId === "master_data" &&
-        specialized.plan_type === "TECHNICAL_SYMBOL_TO_PROCESS"
-      ) {
-        continue;
-      }
-      if (
-        stageId === "lexical" &&
         specialized.plan_type === "TECHNICAL_SYMBOL_TO_PROCESS"
       ) {
         continue;
@@ -407,38 +395,6 @@ export async function runMultiSourceSearch(
               seedAnchorsFromPrimary(anchors, primaryAnchor);
             }
           }
-        }
-      } else if (stageId === "lexical") {
-        const lexResult = await runLexicalStage({
-          projectKey,
-          plan,
-          anchors,
-          coverage: cov,
-          round,
-          specialized,
-        });
-        stageResult = lexResult;
-        if (lexResult.lexical_diagnosis) {
-          plan.notes.push(
-            `Lexikalisch: Phrasen=[${lexResult.lexical_diagnosis.query.phrases.slice(0, 4).join("; ")}] ` +
-              `Terms=[${lexResult.lexical_diagnosis.query.content_terms.slice(0, 6).join(", ")}] ` +
-              `phrase_hits=${lexResult.lexical_diagnosis.phrase_hits} ` +
-              `all_term=${lexResult.lexical_diagnosis.all_term_hits}`,
-          );
-        }
-        if (lexResult.primary_anchor_detected && !primaryAnchor) {
-          primaryAnchor = lexResult.primary_anchor_detected;
-          specialized = buildSpecializedPlan({
-            plan,
-            primaryAnchor,
-            planType:
-              primaryAnchor.anchor_type === "CONTROL_TABLE"
-                ? "CONTROL_TABLE_TO_PROCESS"
-                : "MASTER_FIELD_TO_PROCESS",
-          });
-          plan.specialized = specialized;
-          plan.notes.push(...specialized.notes);
-          seedAnchorsFromPrimary(anchors, primaryAnchor);
         }
       } else if (stageId === "master_data") {
         const mdResult = (await runMasterDataStage({
@@ -628,7 +584,7 @@ export async function runMultiSourceSearch(
 
   const extractedTokens = extractTechnicalSymbols(question).map((s) => s.norm);
 
-  const base_final_context = buildFinalContext({
+  const final_context = buildFinalContext({
     question,
     plan,
     evidence,
@@ -639,9 +595,6 @@ export async function runMultiSourceSearch(
     structured: structured_context,
     specialized,
   });
-  const final_context = params.evidencePackageBlock
-    ? `${params.evidencePackageBlock}\n\n---\n\n${base_final_context}`
-    : base_final_context;
 
   let answer = null;
   let synthTokens: { input: number; output: number } | undefined;
@@ -664,48 +617,16 @@ export async function runMultiSourceSearch(
     }
   }
 
-  // Deterministic framing when TECHNICAL_SYMBOL and synthesis omitted/weak.
-  // Do NOT claim "object not found" when config/code identity objects already match the symbol.
+  // Deterministic framing when TECHNICAL_SYMBOL and synthesis omitted/weak
   if (
     specialized.plan_type === "TECHNICAL_SYMBOL_TO_PROCESS" &&
     primaryAnchor?.symbol &&
     primaryAnchor.objects?.length
   ) {
-    const sym = primaryAnchor.symbol.toUpperCase();
-    const identityObjects = primaryAnchor.objects.filter((o) => {
-      const u = o.toUpperCase();
-      return (
-        u === sym ||
-        u.endsWith(`|${sym}`) ||
-        u.includes(`|${sym}|`) ||
-        u.startsWith(`${sym}|`) ||
-        u.includes(sym)
-      );
-    });
-    const configLike = identityObjects.some(
-      (o) =>
-        o.includes("|") ||
-        /^[A-Z0-9_]{2,}$/i.test(o),
-    );
-    const exactConfigHit = stages
-      .flatMap((s) => s.hits)
-      .some(
-        (h) =>
-          h.related_to_symbol === true &&
-          (h.path_hint ?? "").includes("message-idoc-config") &&
-          (h.confidence ?? 0) >= 0.9,
-      );
-
-    const preamble = exactConfigHit || (configLike && identityObjects.length > 0)
-      ? [
-          `Zum technischen Symbol ${primaryAnchor.symbol} liegen exakte Treffer vor (u. a. ${identityObjects.slice(0, 8).join(", ")}).`,
-          `Die folgende Antwort stützt sich auf diese Objekte und ihre Relationen.`,
-        ].join(" ")
-      : [
-          `Ein eigenständiges Objekt exakt vom vermuteten Typ „${primaryAnchor.user_object_type_guess ?? "Objekt"}“ namens ${primaryAnchor.symbol} wurde nicht isoliert.`,
-          `Es existieren jedoch technische Objekte mit ${primaryAnchor.symbol} im Namen: ${primaryAnchor.objects.slice(0, 8).join(", ")}.`,
-        ].join(" ");
-
+    const preamble = [
+      `Ein eindeutiges ${primaryAnchor.user_object_type_guess ?? "Nachrichten"}objekt ${primaryAnchor.symbol} wurde nicht gefunden.`,
+      `Es existieren jedoch folgende technische Objekte mit ${primaryAnchor.symbol} im Namen: ${primaryAnchor.objects.slice(0, 8).join(", ")}.`,
+    ].join(" ");
     if (!answer) {
       answer = {
         direct_answer: preamble,

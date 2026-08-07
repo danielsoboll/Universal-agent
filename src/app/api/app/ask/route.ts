@@ -7,7 +7,6 @@ import {
 } from "@/lib/onboarding/access";
 import { answerQuestion } from "@/lib/knowledge/answerQuestion";
 import { resolveAskLocalProject } from "@/lib/knowledge/resolveAskProject";
-import { slimHardcodedValueAnswerForClient } from "@/lib/knowledge/hardcodedValueInventory/slimHardcodedValueAnswerForClient";
 
 export const runtime = "nodejs";
 /** Lokaler Index + OpenAI — Vollanalyse kann länger laufen. */
@@ -221,13 +220,6 @@ export async function POST(request: Request) {
       promptVersion: result.prompt_version,
       searchProfileId: result.search_profile_id,
       fullAnalysisReport: result.full_analysis_report,
-      inventoryAnswer: result.inventory_answer,
-      entityListAnswer: result.entity_list_answer,
-      hardcodedValueAnswer: slimHardcodedValueAnswerForClient(
-        result.hardcoded_value_answer,
-      ),
-      processAnswerView: result.process_answer_view,
-      structuredAnswer: result.structured_answer,
     },
     { status: httpStatus },
   );
