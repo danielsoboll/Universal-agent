@@ -176,6 +176,7 @@ export async function askQuestionAction(
       promptVersion: result.prompt_version,
       searchProfileId: result.search_profile_id,
       fullAnalysisReport: result.full_analysis_report,
+      searchBudget: result.search_budget,
     };
   }
 
@@ -213,5 +214,6 @@ export async function askQuestionAction(
     promptVersion: result.prompt_version,
     searchProfileId: result.search_profile_id,
     fullAnalysisReport: result.full_analysis_report,
+    searchBudget: result.search_budget,
   };
 }

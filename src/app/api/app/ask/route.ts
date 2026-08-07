@@ -220,6 +220,7 @@ export async function POST(request: Request) {
       promptVersion: result.prompt_version,
       searchProfileId: result.search_profile_id,
       fullAnalysisReport: result.full_analysis_report,
+      searchBudget: result.search_budget,
     },
     { status: httpStatus },
   );

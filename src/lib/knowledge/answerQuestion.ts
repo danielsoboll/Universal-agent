@@ -62,6 +62,16 @@ import {
 } from "@/lib/knowledge/relevanceGate";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
+import {
+  decideSearchBudgetAfterLocalExact,
+  emptySearchBudgetDiagnostics,
+  estimateEmbeddingTokens,
+  finalizeSearchBudgetAfterRetrieval,
+  namedEntityTechnicalAnchors,
+  prioritizeCommunicationHits,
+  type SearchBudgetDiagnostics,
+  type SearchBudgetGateDecision,
+} from "@/lib/knowledge/searchBudget";
 
 function resolveRequestedSearchMode(
   mode: SearchMode | undefined,
@@ -147,6 +157,8 @@ export type AnswerQuestionResult = {
   } | null;
   /** full_analysis only — Markdown + Word download payload. */
   full_analysis_report: FullAnalysisReport | null;
+  /** SEARCH_BUDGET_GATE diagnostics (stage, cache, OpenAI calls). */
+  search_budget: SearchBudgetDiagnostics | null;
 };
 
 function emptyResult(
@@ -196,6 +208,7 @@ function emptyResult(
     planned_run_id: null,
     topic_gate: null,
     full_analysis_report: null,
+    search_budget: null,
     ...extras,
   };
 }
@@ -316,6 +329,9 @@ export async function answerQuestion(params: {
   };
 
   let retrieval: RetrievalBundle;
+  let searchBudget: SearchBudgetGateDecision | null = null;
+  let openaiCalls = 0;
+  let estimatedInputTokens = 0;
   let plannedRunId: string | null = null;
   let topicGate: AnswerQuestionResult["topic_gate"] = null;
 
@@ -578,23 +594,73 @@ export async function answerQuestion(params: {
     }
 
     if (searchMode === "direct_rag") {
-      // direct_rag path unchanged — fast hybrid (+ exact-symbol pre-pass in hybridSearch).
-      // Query-Understanding / Multi-Source belong exclusively to deep_search.
-      const direct = await KnowledgeRetriever.search({
+      // SEARCH_BUDGET_GATE Stage 0: LOCAL_EXACT (no vector / no embedding OpenAI)
+      const local = await KnowledgeRetriever.search({
         project,
         query: question,
         limit: params.limit ?? 12,
         searchProfile: capabilities.searchProfile,
+        enableVector: false,
       });
-      retrieval = {
-        hits: direct.hits,
-        document_count: direct.document_count,
-        vector_search_active: direct.vector_search_active,
-        index_path: direct.index_path,
-        query_embedding_tokens: direct.query_embedding_tokens,
-        query_embedding_cost: direct.query_embedding_cost,
-        warnings: direct.warnings,
-      };
+      searchBudget = decideSearchBudgetAfterLocalExact({
+        question,
+        searchMode,
+        localHits: local.hits,
+      });
+
+      if (
+        searchBudget.stage === "LOCAL_EXACT" &&
+        searchBudget.coverage.sufficient
+      ) {
+        retrieval = {
+          hits: searchBudget.hits,
+          document_count: local.document_count,
+          vector_search_active: false,
+          index_path: local.index_path,
+          query_embedding_tokens: 0,
+          query_embedding_cost: 0,
+          warnings: [
+            ...local.warnings,
+            `SEARCH_BUDGET=${searchBudget.stage}`,
+            searchBudget.diagnostics.blocked_reason ?? "",
+          ].filter(Boolean),
+        };
+        searchBudget.diagnostics.new_openai_calls = openaiCalls;
+        searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
+      } else {
+        // Stage 1: EXISTING_RETRIEVAL — hybrid over existing indexes (may embed query)
+        const full = await KnowledgeRetriever.search({
+          project,
+          query: question,
+          limit: params.limit ?? 12,
+          searchProfile: capabilities.searchProfile,
+          enableVector: true,
+        });
+        if (full.query_embedding_tokens > 0) {
+          openaiCalls += 1;
+          estimatedInputTokens +=
+            full.query_embedding_tokens || estimateEmbeddingTokens(question);
+        }
+        retrieval = {
+          hits: prioritizeCommunicationHits(
+            full.hits,
+            namedEntityTechnicalAnchors(question),
+          ),
+          document_count: full.document_count,
+          vector_search_active: full.vector_search_active,
+          index_path: full.index_path,
+          query_embedding_tokens: full.query_embedding_tokens,
+          query_embedding_cost: full.query_embedding_cost,
+          warnings: [
+            ...full.warnings,
+            `SEARCH_BUDGET=${searchBudget.stage}`,
+            searchBudget.diagnostics.escalation_reason ?? "",
+          ].filter(Boolean),
+        };
+        searchBudget.diagnostics.retrieval_hit_count = full.hits.length;
+        searchBudget.diagnostics.new_openai_calls = openaiCalls;
+        searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
+      }
       subqueryCount = subqueryCount || 1;
       plannedRunId = null;
       topicGate = null;
@@ -643,6 +709,61 @@ export async function answerQuestion(params: {
     domainProfile: capabilities.domainProfile,
   });
 
+  // Finalize SEARCH_BUDGET after retrieval + gate (no mass analysis).
+  if (searchBudget) {
+    searchBudget = finalizeSearchBudgetAfterRetrieval({
+      question,
+      searchMode,
+      prior: searchBudget,
+      retrievalHits: retrieval!.hits,
+      relevanceSufficient:
+        relevanceGate.answerability === "answerable" ||
+        relevanceGate.answerability === "partially_answerable",
+    });
+    if (searchBudget.fail_closed) {
+      retrieval = {
+        ...retrieval!,
+        hits: [],
+      };
+    } else if (searchBudget.hits.length > 0) {
+      retrieval = {
+        ...retrieval!,
+        hits: searchBudget.hits,
+      };
+    }
+    searchBudget.diagnostics.new_openai_calls = openaiCalls;
+    searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
+  } else if (searchMode === "full_analysis" || searchMode === "deep_search") {
+    searchBudget = {
+      stage: "DEEP_ANALYSIS",
+      hits: retrieval!.hits,
+      fail_closed: false,
+      fail_closed_message: null,
+      allow_vector_retrieval: true,
+      allow_on_demand_analysis: true,
+      on_demand_limit: 5,
+      coverage: {
+        sufficient: false,
+        local_exact_hits: [],
+        communication_hits: [],
+        cache_hits: 0,
+        missing_code_analysis: [],
+        reason: "DEEP_ANALYSIS mode",
+      },
+      diagnostics: {
+        ...emptySearchBudgetDiagnostics("DEEP_ANALYSIS"),
+        escalation_reason:
+          searchMode === "full_analysis"
+            ? "Suchmodus Vollanalyse"
+            : "Suchmodus KI-Tiefensuche",
+        retrieval_hit_count: retrieval!.hits.length,
+      },
+    };
+  }
+
+  const budgetDiag =
+    searchBudget?.diagnostics ?? emptySearchBudgetDiagnostics();
+
   const metaExtras = {
     search_mode: searchMode,
     requested_search_mode: requestedMode,
@@ -650,7 +771,20 @@ export async function answerQuestion(params: {
     subquery_count: subqueryCount,
     planner_fallback: plannerFallback,
     duration_ms: Date.now() - started,
-    warnings: [...warnings],
+    warnings: [
+      ...warnings,
+      ...(searchBudget
+        ? [
+            `search_budget_stage=${searchBudget.stage}`,
+            searchBudget.diagnostics.escalation_reason
+              ? `search_budget_escalation=${searchBudget.diagnostics.escalation_reason}`
+              : "",
+            searchBudget.diagnostics.blocked_reason
+              ? `search_budget_blocked=${searchBudget.diagnostics.blocked_reason}`
+              : "",
+          ].filter(Boolean)
+        : []),
+    ],
     ...domainMeta,
     prompt_key:
       (searchMode === "planned_rag" || searchMode === "full_analysis") &&
@@ -666,21 +800,28 @@ export async function answerQuestion(params: {
     planned_run_id: plannedRunId,
     topic_gate: topicGate,
     full_analysis_report: null as FullAnalysisReport | null,
+    search_budget: budgetDiag,
   };
 
   const questionIntent = classifyQuestionIntent(question);
 
   if (retrieval!.hits.length === 0) {
+    const failMsg =
+      searchBudget?.fail_closed_message ??
+      "Im aktuell indexierten Wissensbestand nicht belastbar beantwortbar.";
     const pa: ProcessAnswer = {
       ...EMPTY_PROCESS_ANSWER,
-      direct_answer:
-        "Im aktuell indexierten Wissensbestand nicht belastbar beantwortbar.",
+      direct_answer: failMsg,
       open_validation_questions: [
-        "Keine passenden SearchDocuments gefunden.",
+        searchBudget?.fail_closed
+          ? "Keine belastbare technische Verbindung zum genannten Anker."
+          : "Keine passenden SearchDocuments gefunden.",
       ],
       open: [
         {
-          text: "Keine passenden SearchDocuments gefunden.",
+          text: searchBudget?.fail_closed
+            ? "Keine belastbare technische Verbindung zum genannten Anker."
+            : "Keine passenden SearchDocuments gefunden.",
           level: "not_supported",
           source_ranks: [],
           source_ids: [],
@@ -693,7 +834,9 @@ export async function answerQuestion(params: {
       status: "insufficient",
       question,
       direct_answer: pa.direct_answer,
-      reasoning: "Die Suche lieferte keine Treffer.",
+      reasoning: searchBudget?.fail_closed
+        ? "SEARCH_BUDGET fail-closed: kein technischer Anker-Treffer."
+        : "Die Suche lieferte keine Treffer.",
       technical_objects: [],
       uncertainties: pa.open_validation_questions,
       process_answer: pa,
@@ -717,7 +860,9 @@ export async function answerQuestion(params: {
       estimated_cost:
         estimateCost(plannerTokens.input, plannerTokens.output, 0) +
         retrieval!.query_embedding_cost,
-      retrieval_summary: `0/${retrieval!.document_count} Treffer`,
+      retrieval_summary: searchBudget?.fail_closed
+        ? `0 Treffer (fail-closed, stage=${searchBudget.stage})`
+        : `0/${retrieval!.document_count} Treffer`,
       retrieval_mode: mode,
       searched_document_count: retrieval!.document_count,
       top_score: null,
@@ -1025,6 +1170,18 @@ export async function answerQuestion(params: {
     const output =
       (completion.usage?.completion_tokens ?? 0) + plannerTokens.output;
     const embedding = retrieval!.query_embedding_tokens;
+    openaiCalls += 1;
+    estimatedInputTokens += input;
+    if (searchBudget) {
+      searchBudget.diagnostics.new_openai_calls = openaiCalls;
+      searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
+      searchBudget.diagnostics.notes.push(
+        `Synthese aus Bestand (stage=${searchBudget.stage}); on_demand_executed=${searchBudget.diagnostics.on_demand_executed}.`,
+      );
+      // Keep metaExtras.search_budget in sync
+      (metaExtras as { search_budget: SearchBudgetDiagnostics }).search_budget =
+        searchBudget.diagnostics;
+    }
 
     // Deterministic gate — never trust the LLM's insufficient_evidence flag
     // alone for named-entity transfer; grounding was computed before synthesis.
@@ -1237,7 +1394,7 @@ export async function answerQuestion(params: {
     ].filter(Boolean);
 
     const durationMs = Date.now() - started;
-    const retrievalSummary = `${retrieval!.hits.length} Treffer aus ${retrieval!.document_count} Dokumenten`;
+    const retrievalSummary = `${retrieval!.hits.length} Treffer aus ${retrieval!.document_count} Dokumenten [budget=${searchBudget?.stage ?? "n/a"}]`;
 
     let fullAnalysisReport: FullAnalysisReport | null = null;
     if (searchMode === "full_analysis") {
@@ -1321,6 +1478,7 @@ export async function answerQuestion(params: {
       planned_run_id: plannedRunId,
       topic_gate: topicGate,
       full_analysis_report: fullAnalysisReport,
+      search_budget: searchBudget?.diagnostics ?? budgetDiag,
     };
 
     if (params.userId) {

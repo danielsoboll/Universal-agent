@@ -82,8 +82,21 @@ async function main() {
         (result.compact_technical_details?.systemaktion?.length ?? 0) +
         (result.technical_details?.table_accesses?.length ?? 0),
       unsupported_notes: unsupported.slice(0, 6),
-      duration_ms: Date.now() - started,
-    });
+    search_budget: result.search_budget
+      ? {
+          stage: result.search_budget.stage_reached,
+          named_entity: result.search_budget.named_entity,
+          anchors: result.search_budget.technical_anchors,
+          cache_hits: result.search_budget.cache_hits,
+          openai_calls: result.search_budget.new_openai_calls,
+          estimated_input_tokens: result.search_budget.estimated_input_tokens,
+          escalation: result.search_budget.escalation_reason,
+          blocked: result.search_budget.blocked_reason,
+          on_demand_executed: result.search_budget.on_demand_executed,
+        }
+      : null,
+    duration_ms: Date.now() - started,
+  });
     console.log(`\n=== ${c.id} ===`);
     console.log(JSON.stringify(report[report.length - 1], null, 2));
   }

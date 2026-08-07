@@ -198,6 +198,11 @@ export async function knowledgeSearch(params: {
     metadata_filters?: Record<string, unknown>;
   };
   enableRelationExpansion?: boolean;
+  /**
+   * Override vector/embedding search. When false → LOCAL_EXACT / lexical only
+   * (no OpenAI embedding call). When omitted, enabled if key + embeddings exist.
+   */
+  enableVector?: boolean;
   /** When omitted, resolved from project.domain_profile_id. */
   searchProfile?: DomainSearchProfile;
 }): Promise<KnowledgeSearchResult> {
@@ -238,9 +243,13 @@ export async function knowledgeSearch(params: {
         ? params.project.enabled_knowledge_unit_types
         : undefined;
 
-  const enableVector =
+  const canVector =
     embeddingsById.size > 0 && Boolean(process.env.OPENAI_API_KEY?.trim());
-  if (!enableVector && embeddingsById.size > 0) {
+  const enableVector =
+    params.enableVector === false ? false : canVector;
+  if (params.enableVector === false) {
+    warnings.push("SEARCH_BUDGET: Vector Search übersprungen (LOCAL_EXACT).");
+  } else if (!enableVector && embeddingsById.size > 0) {
     warnings.push("OPENAI_API_KEY fehlt — Vector Search deaktiviert.");
   }
 

@@ -88,4 +88,6 @@ export type AskQuestionResult = {
   searchProfileId?: string;
   /** full_analysis only — Markdown + Word for download. */
   fullAnalysisReport?: FullAnalysisReport | null;
+  /** SEARCH_BUDGET_GATE diagnostics. */
+  searchBudget?: import("@/lib/knowledge/searchBudget").SearchBudgetDiagnostics | null;
 };
