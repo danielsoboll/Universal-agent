@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 /** Lokaler Index + OpenAI — Expansion/Vollanalyse kann länger laufen. */
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   question: z.string().min(1).max(4000),
