@@ -280,6 +280,17 @@ export function loadPortableLexicalDocuments(
     "portable:lexical-index/documents.jsonl",
   );
   entry.lexicalDocs = rows.map(toLexicalDocument);
+  const custAbs = path.join(
+    portableSubdir(projectId, "lexical-index", entry.handle.dataRoot),
+    "customer_entity_documents.jsonl",
+  );
+  if (existsSync(custAbs)) {
+    const extra = readJsonlTracked<PortableLexicalDocument>(
+      custAbs,
+      "portable:lexical-index/customer_entity_documents.jsonl",
+    );
+    entry.lexicalDocs.push(...extra.map(toLexicalDocument));
+  }
   askPerfNote(`portable lexical loaded: ${entry.lexicalDocs.length} docs`);
   return entry.lexicalDocs;
 }
@@ -342,6 +353,58 @@ export function lookupPortableSymbols(
   return out;
 }
 
+export type PortableSymbolContainmentMatch = {
+  /** Symbol-index name key that contains the needle (not equal). */
+  name: string;
+  document_ids: string[];
+};
+
+/**
+ * Scan loaded symbol name keys for technical containment (substring).
+ * Candidate generation only — does not invent graph/alias relations.
+ * Caller must apply eligibility/fan-out guardrails.
+ */
+export function findPortableSymbolNamesContaining(params: {
+  projectId: string;
+  needle: string;
+  dataRoot?: string;
+  /** Soft cap while scanning; excess sets truncated=true. */
+  scanLimit?: number;
+  excludeExact?: boolean;
+}): {
+  matches: PortableSymbolContainmentMatch[];
+  scanned_keys: number;
+  truncated: boolean;
+} {
+  const entry = getOrCreateEntry(params.projectId, params.dataRoot);
+  const matches: PortableSymbolContainmentMatch[] = [];
+  if (!entry) {
+    return { matches, scanned_keys: 0, truncated: false };
+  }
+  ensureSymbolMaps(entry);
+  const needle = params.needle.trim().toUpperCase();
+  if (needle.length < 2) {
+    return { matches, scanned_keys: 0, truncated: false };
+  }
+  const scanLimit = params.scanLimit ?? 80;
+  const excludeExact = params.excludeExact !== false;
+  let scanned = 0;
+  let truncated = false;
+  for (const [name, ids] of entry.symbolsByName!) {
+    scanned += 1;
+    if (!name.includes(needle)) continue;
+    if (excludeExact && name === needle) continue;
+    // Technical name keys only — skip prose-like keys.
+    if (!/^[A-Z0-9_|./\-]+$/.test(name)) continue;
+    matches.push({ name, document_ids: ids });
+    if (matches.length >= scanLimit) {
+      truncated = true;
+      break;
+    }
+  }
+  return { matches, scanned_keys: scanned, truncated };
+}
+
 function pushSymbolName(
   map: Map<string, string[]>,
   name: string,
@@ -383,16 +446,30 @@ function ensureSymbolMaps(entry: CacheEntry): void {
   );
   const map = new Map<string, string[]>();
   const byId = new Map<string, PortableSymbolRecord>();
-  for (const file of [abs, absLex]) {
-    for (const row of readJsonlTracked<PortableSymbolNamePosting>(
-      file,
-      `portable:${path.basename(file)}`,
-    )) {
-      for (const id of row.document_ids) {
-        indexNameTokens(map, row.name, id);
+    for (const file of [abs, absLex]) {
+      for (const row of readJsonlTracked<PortableSymbolNamePosting>(
+        file,
+        `portable:${path.basename(file)}`,
+      )) {
+        for (const id of row.document_ids) {
+          indexNameTokens(map, row.name, id);
+        }
       }
     }
-  }
+    const absCust = path.join(
+      portableSubdir(entry.handle.projectId, "symbol-index", entry.handle.dataRoot),
+      "by_name_customer_entities.jsonl",
+    );
+    if (existsSync(absCust)) {
+      for (const row of readJsonlTracked<PortableSymbolNamePosting>(
+        absCust,
+        "portable:by_name_customer_entities.jsonl",
+      )) {
+        for (const id of row.document_ids) {
+          indexNameTokens(map, row.name, id);
+        }
+      }
+    }
   const syms = readJsonlTracked<PortableSymbolRecord>(
     path.join(
       portableSubdir(entry.handle.projectId, "symbol-index", entry.handle.dataRoot),

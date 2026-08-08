@@ -85,6 +85,10 @@ import {
   isConfigTableExpansionHit,
   mergePreserveConfigTableExpansion,
 } from "@/lib/knowledge/configTableExpansion";
+import {
+  isSymbolContainmentHit,
+  mergePreserveSymbolContainment,
+} from "@/lib/knowledge/symbolContainment";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
 import {
@@ -1281,9 +1285,12 @@ async function answerQuestionCore(params: {
       : relevanceGate.supporting_source_ids.length > 0
         ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
         : retrieval!.hits;
-  const synthesisHits = mergePreserveConfigTableExpansion(
-    mergePreserveConfirmedSeedEvidence(
-      synthesisHitsRaw,
+  const synthesisHits = mergePreserveSymbolContainment(
+    mergePreserveConfigTableExpansion(
+      mergePreserveConfirmedSeedEvidence(
+        synthesisHitsRaw,
+        retrieval!.hits,
+      ),
       retrieval!.hits,
     ),
     retrieval!.hits,
@@ -1768,6 +1775,19 @@ async function answerQuestionCore(params: {
     if (cfgKeep.length > 0) {
       const seen = new Set(sources.map((h) => h.search_document_id));
       for (const h of cfgKeep) {
+        if (seen.has(h.search_document_id)) continue;
+        seen.add(h.search_document_id);
+        sources.push(h);
+      }
+      sources = sources.map((h, i) => ({ ...h, rank: i + 1 }));
+    }
+    // Contained technical symbols are candidates only — surface a few if present.
+    const containKeep = synthesisHits
+      .filter(isSymbolContainmentHit)
+      .slice(0, 4);
+    if (containKeep.length > 0) {
+      const seen = new Set(sources.map((h) => h.search_document_id));
+      for (const h of containKeep) {
         if (seen.has(h.search_document_id)) continue;
         seen.add(h.search_document_id);
         sources.push(h);

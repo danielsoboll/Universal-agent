@@ -13,6 +13,7 @@ import {
 } from "@/lib/knowledge/exactAuthoritative";
 import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
 import { isConfigTableExpansionHit } from "@/lib/knowledge/configTableExpansion";
+import { isSymbolContainmentHit } from "@/lib/knowledge/symbolContainment";
 
 const COMM_SET = new Set<string>(COMMUNICATION_OBJECT_TYPES);
 
@@ -185,6 +186,9 @@ export function prioritizeCommunicationHits(
       s += 1900;
     } else if (isBareTechnicalUsageHit(h)) {
       s += 1800;
+    } else if (isSymbolContainmentHit(h)) {
+      // Contained name candidates stay below exact/direct evidence.
+      s += 1100;
     } else if (h.exact_score >= 3 && h.knowledge_unit_type === "master_field") {
       s += 1500;
     } else if (h.exact_score >= 3) {

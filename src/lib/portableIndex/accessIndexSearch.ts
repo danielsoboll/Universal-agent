@@ -48,6 +48,10 @@ import {
   expandConfigTablesFromSeeds,
   isConfigTableExpansionHit,
 } from "@/lib/knowledge/configTableExpansion";
+import {
+  expandSymbolContainmentFromSeeds,
+  isSymbolContainmentHit,
+} from "@/lib/knowledge/symbolContainment";
 import { parseFieldLikeSeeds } from "@/lib/knowledge/seedEnrichment/enrichConfirmedFieldSeeds";
 
 export type AccessIndexSearchResult = {
@@ -670,6 +674,61 @@ export function searchViaAccessIndexes(params: {
     if (bareFallback.graph_used) graph_used = true;
   }
 
+  // Generic symbol-name containment from confirmed exact seeds only.
+  // Candidate generation — no graph/alias relation, not pushed into confirmedSeeds.
+  if (confirmedSeeds.length > 0) {
+    const containment = expandSymbolContainmentFromSeeds({
+      projectId,
+      confirmedSeeds,
+      alreadySeenIds: seenIds,
+    });
+    if (containment.hits.length > 0 || containment.warnings.length > 0) {
+      indexes_used.push(...containment.indexes_used);
+      warnings.push(...containment.warnings);
+      for (const h of containment.hits) {
+        const existingIdx = hits.findIndex(
+          (x) => x.search_document_id === h.search_document_id,
+        );
+        if (existingIdx >= 0) {
+          const prev = hits[existingIdx]!;
+          const terms = new Set([
+            ...(prev.matched_terms ?? []),
+            ...(h.matched_terms ?? []),
+          ]);
+          hits[existingIdx] = {
+            ...prev,
+            matched_terms: [...terms],
+            metadata: {
+              ...(prev.metadata ?? {}),
+              ...(h.metadata ?? {}),
+              symbol_name_containment: true,
+            },
+            // Keep prior exact_score if higher; containment must not inflate authority.
+            exact_score: Math.max(prev.exact_score, Math.min(h.exact_score, 2)),
+          };
+          continue;
+        }
+        seenIds.add(h.search_document_id);
+        hits.push(h);
+      }
+      if (containment.trace.length) {
+        matchedTerms.push(`sym_contain:${containment.variants.length}`);
+        warnings.push(
+          `Containment Trace: ${containment.trace
+            .slice(0, 4)
+            .map((t) => {
+              if (!t.eligible || t.skip_reason) {
+                return `${t.seed} [skip:${t.skip_reason ?? "ineligible"}]`;
+              }
+              const names = t.variants.map((v) => v.name).slice(0, 4);
+              return `${t.seed} → [${names.join(", ")}]`;
+            })
+            .join("; ")}`,
+        );
+      }
+    }
+  }
+
   if (hits.length === 0) {
     askPerfNote("access indexes: no candidates after bare-token fallback");
     return {
@@ -722,6 +781,10 @@ export function searchViaAccessIndexes(params: {
       s += 95;
     } else if (isBareTechnicalUsageHit(h)) {
       s += 90;
+    } else if (isSymbolContainmentHit(h)) {
+      // Contained name candidate (OCTOPUS→EDIOCTOPUS) — below exact/direct,
+      // never outranks authoritative exact of the seed.
+      s += 55;
     }
 
     const blob =

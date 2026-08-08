@@ -8,6 +8,7 @@ import {
 } from "@/lib/knowledge/exactAuthoritative";
 import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
 import { isConfigTableExpansionHit } from "@/lib/knowledge/configTableExpansion";
+import { isSymbolContainmentHit } from "@/lib/knowledge/symbolContainment";
 import { namedEntityTechnicalAnchors } from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
 
 /**
@@ -317,6 +318,8 @@ function hasSpecificEvidence(
   if (isBareTechnicalUsageHit(hit)) return true;
   // 1-hop config/table expansion from a confirmed seed is specific evidence.
   if (isConfigTableExpansionHit(hit)) return true;
+  // Contained technical symbol candidates carry inventory/evidence docs.
+  if (isSymbolContainmentHit(hit)) return true;
   if ((hit.facts?.length ?? 0) > 0) return true;
   if ((hit.evidence?.length ?? 0) > 0) return true;
   if ((hit.evidence_refs?.length ?? 0) > 0) return true;
@@ -421,20 +424,33 @@ function retainBareTechnicalUsageEvidence(params: {
 }): void {
   const anchors = params.technicalAnchors.map((a) => a.toUpperCase());
   for (const hit of params.hits) {
-    if (!isBareTechnicalUsageHit(hit) && !isConfigTableExpansionHit(hit)) {
+    if (
+      !isBareTechnicalUsageHit(hit) &&
+      !isConfigTableExpansionHit(hit) &&
+      !isSymbolContainmentHit(hit)
+    ) {
       continue;
     }
     const raw = hitCorpus(hit);
     const upper = raw.toUpperCase();
-    const seed = String(hit.metadata?.expansion_seed ?? "").toUpperCase();
+    const seed = String(
+      hit.metadata?.expansion_seed ?? hit.metadata?.containment_seed ?? "",
+    ).toUpperCase();
     const field = String(hit.metadata?.expansion_field ?? "").toUpperCase();
     const anchored =
       anchors.some((a) => a.length >= 2 && upper.includes(a)) ||
-      (seed && upper.includes(seed)) ||
+      (seed && (upper.includes(seed) || anchors.includes(seed))) ||
       (field && upper.includes(field)) ||
-      isConfigTableExpansionHit(hit);
+      isConfigTableExpansionHit(hit) ||
+      isSymbolContainmentHit(hit);
     if (!anchored && isBareTechnicalUsageHit(hit)) continue;
-    if (!anchored && !isConfigTableExpansionHit(hit)) continue;
+    if (
+      !anchored &&
+      !isConfigTableExpansionHit(hit) &&
+      !isSymbolContainmentHit(hit)
+    ) {
+      continue;
+    }
     params.supporting.add(hit.search_document_id);
     params.similar.delete(hit.search_document_id);
     const compact = normalizeToken(raw);
@@ -507,7 +523,8 @@ export function assessRelevanceGate(params: {
         !hasExactAuthoritativeFlag(hit) &&
         !isExactAuthoritativeHit(hit, technicalAnchors) &&
         !isBareTechnicalUsageHit(hit) &&
-        !isConfigTableExpansionHit(hit)
+        !isConfigTableExpansionHit(hit) &&
+        !isSymbolContainmentHit(hit)
       ) {
         similar.add(hit.search_document_id);
       }
@@ -668,7 +685,8 @@ export function assessRelevanceGate(params: {
             hasExactAuthoritativeFlag(h) ||
             isExactAuthoritativeHit(h, technicalAnchors) ||
             isBareTechnicalUsageHit(h) ||
-            isConfigTableExpansionHit(h)),
+            isConfigTableExpansionHit(h) ||
+            isSymbolContainmentHit(h)),
       ),
     );
     if (keptSupporting.length > 0) {
