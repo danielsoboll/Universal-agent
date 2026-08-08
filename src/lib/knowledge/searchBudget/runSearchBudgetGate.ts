@@ -26,6 +26,7 @@ import {
 import {
   mergePreserveConfirmedSeedEvidence,
 } from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
+import { mergePreserveConfigTableExpansion } from "@/lib/knowledge/configTableExpansion";
 
 export type SearchBudgetGateDecision = {
   stage: SearchBudgetStage;
@@ -74,8 +75,12 @@ export function decideSearchBudgetAfterLocalExact(params: {
       const base = coverage.local_exact_hits.length
         ? coverage.local_exact_hits
         : params.localHits;
-      // Keep confirmed seed-enrichment evidence when LOCAL_EXACT narrows the set.
-      return mergePreserveConfirmedSeedEvidence(base, params.localHits);
+      // Keep confirmed seed-enrichment + 1-hop config/table evidence when
+      // LOCAL_EXACT narrows the set (e.g. soft named entity like Edeka).
+      return mergePreserveConfigTableExpansion(
+        mergePreserveConfirmedSeedEvidence(base, params.localHits),
+        params.localHits,
+      );
     })(),
     anchors,
   );

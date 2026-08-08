@@ -44,6 +44,11 @@ import {
   selectBareTechnicalFallbackTokens,
   tokensNeedingUsageFallback,
 } from "@/lib/knowledge/bareTechnicalTokenFallback";
+import {
+  expandConfigTablesFromSeeds,
+  isConfigTableExpansionHit,
+} from "@/lib/knowledge/configTableExpansion";
+import { parseFieldLikeSeeds } from "@/lib/knowledge/seedEnrichment/enrichConfirmedFieldSeeds";
 
 export type AccessIndexSearchResult = {
   hits: KnowledgeHit[];
@@ -711,6 +716,10 @@ export function searchViaAccessIndexes(params: {
       s += 220;
     } else if (isSeedEnrichment) {
       s += 100;
+    } else if (isConfigTableExpansionHit(h)) {
+      // Direct config/table evidence from confirmed seed — above soft lexical,
+      // below authoritative inventory definition of the seed itself.
+      s += 95;
     } else if (isBareTechnicalUsageHit(h)) {
       s += 90;
     }
@@ -812,6 +821,82 @@ export function searchViaAccessIndexes(params: {
         ...h,
         rank: i + 1,
       }));
+    for (const h of hits) seenIds.add(h.search_document_id);
+  }
+
+  // Deterministic 1-hop config/table expansion from confirmed technical seeds
+  // (after enrichment so ZZ_* / TABLE-FIELD seeds are available).
+  const enrichmentFieldSeeds = (seed_enrichment?.field_enrichments ?? [])
+    .filter(
+      (e) =>
+        e.master_instances.total_attributes > 0 ||
+        e.code_usage.total > 0 ||
+        e.config_neighbors.length > 0 ||
+        e.observed_values.length > 0,
+    )
+    .flatMap((e) => [
+      e.seed.seed,
+      e.seed.field_name,
+      e.seed.table_name ? `${e.seed.table_name}-${e.seed.field_name}` : "",
+    ]);
+  const expansionSeeds = [
+    ...new Set(
+      parseFieldLikeSeeds([
+        ...confirmedSeeds,
+        ...fieldLike,
+        ...hitFieldSeeds,
+        ...enrichmentFieldSeeds,
+      ]).flatMap((s) => [s.seed, s.field_name]),
+    ),
+  ].filter(Boolean);
+  if (expansionSeeds.length > 0) {
+    const cfg = expandConfigTablesFromSeeds({
+      projectId,
+      confirmedSeeds: expansionSeeds,
+      alreadySeenIds: seenIds,
+    });
+    if (cfg.hits.length > 0) {
+      indexes_used.push(...cfg.indexes_used);
+      warnings.push(...cfg.warnings);
+      for (const h of cfg.hits) {
+        const existingIdx = hits.findIndex(
+          (x) => x.search_document_id === h.search_document_id,
+        );
+        if (existingIdx >= 0) {
+          // Remarqu graph/lexical hit with seed→table proximity (1-hop).
+          const prev = hits[existingIdx]!;
+          const terms = new Set([
+            ...(prev.matched_terms ?? []),
+            ...(h.matched_terms ?? []),
+          ]);
+          hits[existingIdx] = {
+            ...prev,
+            matched_terms: [...terms],
+            metadata: {
+              ...(prev.metadata ?? {}),
+              ...(h.metadata ?? {}),
+              config_table_expansion: true,
+            },
+            exact_score: Math.max(prev.exact_score, h.exact_score, 3),
+          };
+          continue;
+        }
+        seenIds.add(h.search_document_id);
+        hits.push(h);
+      }
+      if (cfg.trace.length) {
+        matchedTerms.push(`config_exp:${cfg.trace.length}`);
+        warnings.push(
+          `Config-Expansion Trace: ${cfg.trace
+            .slice(0, 6)
+            .map(
+              (t) =>
+                `${t.seed} --${t.relation_type}→ ${t.table_name} (${t.candidate_ids.length})`,
+            )
+            .join("; ")}`,
+        );
+      }
+    }
   }
 
   hits = markExactAuthoritativeHits(hits, [

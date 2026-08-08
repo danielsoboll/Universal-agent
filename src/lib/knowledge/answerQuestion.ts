@@ -81,6 +81,10 @@ import {
   isBareTechnicalUsageHit,
   shouldUseUsageOnlyAnswer,
 } from "@/lib/knowledge/bareTechnicalTokenFallback";
+import {
+  isConfigTableExpansionHit,
+  mergePreserveConfigTableExpansion,
+} from "@/lib/knowledge/configTableExpansion";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
 import {
@@ -872,9 +876,13 @@ async function answerQuestionCore(params: {
     // SEARCH_BUDGET / communication prioritization must not drop confirmed
     // deterministic enrichment evidence before the relevance gate / synthesis.
     const enrichHits = enrichmentPackToHits(seedEnrichment, 1);
+    const withSeeds = mergePreserveConfirmedSeedEvidence(retrieval!.hits, [
+      ...enrichHits,
+      ...retrieval!.hits,
+    ]);
     retrieval = {
       ...retrieval!,
-      hits: mergePreserveConfirmedSeedEvidence(retrieval!.hits, [
+      hits: mergePreserveConfigTableExpansion(withSeeds, [
         ...enrichHits,
         ...retrieval!.hits,
       ]),
@@ -925,8 +933,11 @@ async function answerQuestionCore(params: {
     } else if (searchBudget.hits.length > 0) {
       retrieval = {
         ...retrieval!,
-        hits: mergePreserveConfirmedSeedEvidence(
-          searchBudget.hits,
+        hits: mergePreserveConfigTableExpansion(
+          mergePreserveConfirmedSeedEvidence(
+            searchBudget.hits,
+            retrieval!.hits,
+          ),
           retrieval!.hits,
         ),
       };
@@ -1270,8 +1281,11 @@ async function answerQuestionCore(params: {
       : relevanceGate.supporting_source_ids.length > 0
         ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
         : retrieval!.hits;
-  const synthesisHits = mergePreserveConfirmedSeedEvidence(
-    synthesisHitsRaw,
+  const synthesisHits = mergePreserveConfigTableExpansion(
+    mergePreserveConfirmedSeedEvidence(
+      synthesisHitsRaw,
+      retrieval!.hits,
+    ),
     retrieval!.hits,
   );
 
@@ -1746,6 +1760,19 @@ async function answerQuestionCore(params: {
       relevanceGate.answerability === "partially_answerable"
     ) {
       sources = synthesisHits.slice(0, 8);
+    }
+    // Keep 1-hop config/table evidence visible even if the LLM did not cite ranks.
+    const cfgKeep = synthesisHits
+      .filter(isConfigTableExpansionHit)
+      .slice(0, 8);
+    if (cfgKeep.length > 0) {
+      const seen = new Set(sources.map((h) => h.search_document_id));
+      for (const h of cfgKeep) {
+        if (seen.has(h.search_document_id)) continue;
+        seen.add(h.search_document_id);
+        sources.push(h);
+      }
+      sources = sources.map((h, i) => ({ ...h, rank: i + 1 }));
     }
 
     const primaryForTech =

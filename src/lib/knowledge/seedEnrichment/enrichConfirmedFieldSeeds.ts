@@ -10,6 +10,7 @@ import {
   lookupPortableGraphNeighbors,
   lookupPortableSymbols,
 } from "@/lib/portableIndex/indexLoader";
+import { loadFieldToTablesIndex } from "@/lib/knowledge/configTableExpansion";
 import type {
   CodeUsageSample,
   ConfigNeighborSample,
@@ -323,6 +324,36 @@ function enrichOneField(params: {
         }
       }
     }
+  }
+
+  // Deterministic TABLE_HAS_FIELD from control-table definitions (1-hop).
+  const fieldTables =
+    loadFieldToTablesIndex(projectId).get(seed.field_name.toUpperCase()) ?? [];
+  for (const d of fieldTables) {
+    if (
+      seed.table_name &&
+      d.table_name === seed.table_name.toUpperCase() &&
+      !/^Z/i.test(d.table_name)
+    ) {
+      continue;
+    }
+    if (
+      config_neighbors.some(
+        (c) =>
+          c.object_name === d.table_name &&
+          c.relation_type === "TABLE_HAS_FIELD",
+      )
+    ) {
+      continue;
+    }
+    if (config_neighbors.length >= sampleLimit) break;
+    config_neighbors.push({
+      object_name: d.table_name,
+      object_type: "TABLE",
+      relation_type: "TABLE_HAS_FIELD",
+      node_id: `TABLE|${d.table_name}`,
+    });
+    graph_neighbor_names.push(d.table_name);
   }
 
   // Also surface symbol hits for TABLE-FIELD itself

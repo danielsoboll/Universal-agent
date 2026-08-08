@@ -12,6 +12,7 @@ import {
   isExactAuthoritativeHit,
 } from "@/lib/knowledge/exactAuthoritative";
 import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
+import { isConfigTableExpansionHit } from "@/lib/knowledge/configTableExpansion";
 
 const COMM_SET = new Set<string>(COMMUNICATION_OBJECT_TYPES);
 
@@ -52,6 +53,9 @@ export function isLocalExactHit(
   hit: KnowledgeHit,
   anchors: string[],
 ): boolean {
+  // Deterministic 1-hop config/table expansion is already seed-exact.
+  if (isConfigTableExpansionHit(hit)) return true;
+  if (isBareTechnicalUsageHit(hit)) return true;
   if (anchors.length === 0) return hit.exact_score > 0;
   const hay = hitHaystack(hit);
   const matchedTerms = (hit.matched_terms ?? []).map((t) => String(t).toUpperCase());
@@ -177,6 +181,8 @@ export function prioritizeCommunicationHits(
       s += 2500;
     } else if (hasDeterministicSeedEvidence(h)) {
       s += 2000;
+    } else if (isConfigTableExpansionHit(h)) {
+      s += 1900;
     } else if (isBareTechnicalUsageHit(h)) {
       s += 1800;
     } else if (h.exact_score >= 3 && h.knowledge_unit_type === "master_field") {

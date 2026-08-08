@@ -7,6 +7,7 @@ import {
   isExactAuthoritativeHit,
 } from "@/lib/knowledge/exactAuthoritative";
 import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
+import { isConfigTableExpansionHit } from "@/lib/knowledge/configTableExpansion";
 import { namedEntityTechnicalAnchors } from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
 
 /**
@@ -314,6 +315,8 @@ function hasSpecificEvidence(
   }
   // Exact literal / code-usage for a bare technical token is specific evidence.
   if (isBareTechnicalUsageHit(hit)) return true;
+  // 1-hop config/table expansion from a confirmed seed is specific evidence.
+  if (isConfigTableExpansionHit(hit)) return true;
   if ((hit.facts?.length ?? 0) > 0) return true;
   if ((hit.evidence?.length ?? 0) > 0) return true;
   if ((hit.evidence_refs?.length ?? 0) > 0) return true;
@@ -418,10 +421,20 @@ function retainBareTechnicalUsageEvidence(params: {
 }): void {
   const anchors = params.technicalAnchors.map((a) => a.toUpperCase());
   for (const hit of params.hits) {
-    if (!isBareTechnicalUsageHit(hit)) continue;
+    if (!isBareTechnicalUsageHit(hit) && !isConfigTableExpansionHit(hit)) {
+      continue;
+    }
     const raw = hitCorpus(hit);
     const upper = raw.toUpperCase();
-    if (!anchors.some((a) => a.length >= 2 && upper.includes(a))) continue;
+    const seed = String(hit.metadata?.expansion_seed ?? "").toUpperCase();
+    const field = String(hit.metadata?.expansion_field ?? "").toUpperCase();
+    const anchored =
+      anchors.some((a) => a.length >= 2 && upper.includes(a)) ||
+      (seed && upper.includes(seed)) ||
+      (field && upper.includes(field)) ||
+      isConfigTableExpansionHit(hit);
+    if (!anchored && isBareTechnicalUsageHit(hit)) continue;
+    if (!anchored && !isConfigTableExpansionHit(hit)) continue;
     params.supporting.add(hit.search_document_id);
     params.similar.delete(hit.search_document_id);
     const compact = normalizeToken(raw);
@@ -493,7 +506,8 @@ export function assessRelevanceGate(params: {
         !hasDeterministicSeedEvidence(hit) &&
         !hasExactAuthoritativeFlag(hit) &&
         !isExactAuthoritativeHit(hit, technicalAnchors) &&
-        !isBareTechnicalUsageHit(hit)
+        !isBareTechnicalUsageHit(hit) &&
+        !isConfigTableExpansionHit(hit)
       ) {
         similar.add(hit.search_document_id);
       }
@@ -653,7 +667,8 @@ export function assessRelevanceGate(params: {
           (hasDeterministicSeedEvidence(h) ||
             hasExactAuthoritativeFlag(h) ||
             isExactAuthoritativeHit(h, technicalAnchors) ||
-            isBareTechnicalUsageHit(h)),
+            isBareTechnicalUsageHit(h) ||
+            isConfigTableExpansionHit(h)),
       ),
     );
     if (keptSupporting.length > 0) {
