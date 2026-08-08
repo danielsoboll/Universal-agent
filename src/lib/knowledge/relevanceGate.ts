@@ -2,6 +2,12 @@ import type { KnowledgeHit } from "@/lib/knowledge/types";
 import type { DomainProfile } from "@/lib/domain/types";
 import type { GroundingReport } from "@/lib/knowledge/entityGrounding";
 import { hasDeterministicSeedEvidence } from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
+import {
+  hasExactAuthoritativeFlag,
+  isExactAuthoritativeHit,
+} from "@/lib/knowledge/exactAuthoritative";
+import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
+import { namedEntityTechnicalAnchors } from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
 
 /**
  * Deterministic relevance / evidence gate — runs BEFORE answer synthesis.
@@ -294,7 +300,20 @@ function conceptMatchesHit(concept: string, compact: string, spaced: string): bo
   return false;
 }
 
-function hasSpecificEvidence(hit: KnowledgeHit): boolean {
+function hasSpecificEvidence(
+  hit: KnowledgeHit,
+  technicalAnchors: string[] = [],
+): boolean {
+  // Exact technical identifier + authoritative inventory type is already
+  // specific evidence — do not require long snippets.
+  if (
+    hasExactAuthoritativeFlag(hit) ||
+    isExactAuthoritativeHit(hit, technicalAnchors)
+  ) {
+    return true;
+  }
+  // Exact literal / code-usage for a bare technical token is specific evidence.
+  if (isBareTechnicalUsageHit(hit)) return true;
   if ((hit.facts?.length ?? 0) > 0) return true;
   if ((hit.evidence?.length ?? 0) > 0) return true;
   if ((hit.evidence_refs?.length ?? 0) > 0) return true;
@@ -314,6 +333,7 @@ function expandSupportingViaSharedObject(
   hits: KnowledgeHit[],
   supporting: Set<string>,
   similar: Set<string>,
+  technicalAnchors: string[],
 ): void {
   if (supporting.size === 0) return;
   const objectNames = new Set(
@@ -326,7 +346,7 @@ function expandSupportingViaSharedObject(
   for (const hit of hits) {
     if (supporting.has(hit.search_document_id)) continue;
     if (!hit.object_name || !objectNames.has(hit.object_name)) continue;
-    if (!hasSpecificEvidence(hit)) continue;
+    if (!hasSpecificEvidence(hit, technicalAnchors)) continue;
     supporting.add(hit.search_document_id);
     similar.delete(hit.search_document_id);
   }
@@ -364,6 +384,58 @@ function retainConfirmedSeedEvidence(params: {
 }
 
 /**
+ * Keep exact authoritative inventory hits in supporting even when soft lexical
+ * concepts would otherwise prefer long text-only titles.
+ */
+function retainExactAuthoritativeEvidence(params: {
+  hits: KnowledgeHit[];
+  technicalAnchors: string[];
+  supporting: Set<string>;
+  similar: Set<string>;
+}): void {
+  for (const hit of params.hits) {
+    if (
+      !hasExactAuthoritativeFlag(hit) &&
+      !isExactAuthoritativeHit(hit, params.technicalAnchors)
+    ) {
+      continue;
+    }
+    params.supporting.add(hit.search_document_id);
+    params.similar.delete(hit.search_document_id);
+  }
+}
+
+/**
+ * Keep exact literal/code-usage hits for bare technical tokens in supporting.
+ */
+function retainBareTechnicalUsageEvidence(params: {
+  hits: KnowledgeHit[];
+  technicalAnchors: string[];
+  query_concepts: string[];
+  matched: Set<string>;
+  supporting: Set<string>;
+  similar: Set<string>;
+}): void {
+  const anchors = params.technicalAnchors.map((a) => a.toUpperCase());
+  for (const hit of params.hits) {
+    if (!isBareTechnicalUsageHit(hit)) continue;
+    const raw = hitCorpus(hit);
+    const upper = raw.toUpperCase();
+    if (!anchors.some((a) => a.length >= 2 && upper.includes(a))) continue;
+    params.supporting.add(hit.search_document_id);
+    params.similar.delete(hit.search_document_id);
+    const compact = normalizeToken(raw);
+    const spaced = raw
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "");
+    for (const c of params.query_concepts) {
+      if (conceptMatchesHit(c, compact, spaced)) params.matched.add(c);
+    }
+  }
+}
+
+/**
  * Assess whether retrieval hits can answer the question.
  * Score alone is not used as the sole decision.
  */
@@ -377,6 +449,7 @@ export function assessRelevanceGate(params: {
     params.question,
     params.domainProfile,
   );
+  const technicalAnchors = namedEntityTechnicalAnchors(params.question);
   const matched = new Set<string>();
   const supporting = new Set<string>();
   const similar = new Set<string>();
@@ -414,9 +487,14 @@ export function assessRelevanceGate(params: {
     }
 
     if (hitMatched.length === 0) {
-      // Confirmed seed enrichment may still be supporting even without soft
-      // lexical overlap — handled in retainConfirmedSeedEvidence below.
-      if (!hasDeterministicSeedEvidence(hit)) {
+      // Confirmed seed enrichment / exact authoritative may still be supporting
+      // even without soft lexical overlap — handled in retain* below.
+      if (
+        !hasDeterministicSeedEvidence(hit) &&
+        !hasExactAuthoritativeFlag(hit) &&
+        !isExactAuthoritativeHit(hit, technicalAnchors) &&
+        !isBareTechnicalUsageHit(hit)
+      ) {
         similar.add(hit.search_document_id);
       }
       continue;
@@ -426,7 +504,7 @@ export function assessRelevanceGate(params: {
       (c) => normalizeToken(c).length >= 4 || isEssentialConcept(c),
     );
     const ok =
-      hasSpecificEvidence(hit) &&
+      hasSpecificEvidence(hit, technicalAnchors) &&
       (query_concepts.length <= 1 ||
         substantial.length > 0 ||
         hitMatched.length >= Math.ceil(query_concepts.length * 0.5));
@@ -436,7 +514,28 @@ export function assessRelevanceGate(params: {
   }
 
   // Vocabulary-mismatch bridge: same object as an already-supporting hit
-  expandSupportingViaSharedObject(params.hits, supporting, similar);
+  expandSupportingViaSharedObject(
+    params.hits,
+    supporting,
+    similar,
+    technicalAnchors,
+  );
+
+  retainExactAuthoritativeEvidence({
+    hits: params.hits,
+    technicalAnchors,
+    supporting,
+    similar,
+  });
+
+  retainBareTechnicalUsageEvidence({
+    hits: params.hits,
+    technicalAnchors,
+    query_concepts,
+    matched,
+    supporting,
+    similar,
+  });
 
   // Deterministic seed enrichment must survive the gate when it carries real evidence.
   retainConfirmedSeedEvidence({
@@ -457,7 +556,7 @@ export function assessRelevanceGate(params: {
 
   const coverage =
     query_concepts.length === 0
-      ? params.hits.some(hasSpecificEvidence)
+      ? params.hits.some((h) => hasSpecificEvidence(h, technicalAnchors))
         ? 1
         : 0
       : matched_concepts.length / query_concepts.length;
@@ -503,14 +602,14 @@ export function assessRelevanceGate(params: {
   }
 
   if (query_concepts.length === 0) {
-    if (params.hits.some(hasSpecificEvidence)) {
+    if (params.hits.some((h) => hasSpecificEvidence(h, technicalAnchors))) {
       return {
         answerability: "answerable",
         query_concepts,
         matched_concepts,
         missing_concepts,
         supporting_source_ids: params.hits
-          .filter(hasSpecificEvidence)
+          .filter((h) => hasSpecificEvidence(h, technicalAnchors))
           .map((h) => h.search_document_id),
         contradicting_source_ids: [],
         similar_but_insufficient_source_ids: [],
@@ -545,25 +644,30 @@ export function assessRelevanceGate(params: {
         effectiveEssential.length;
 
   if (supporting.size === 0 || essentialCoverage < 0.34) {
-    // Confirmed seed evidence must not be wiped solely for soft lexical gaps.
-    const seedSupporting = [...supporting].filter((id) =>
+    // Confirmed seed / exact authoritative evidence must not be wiped solely
+    // for soft lexical gaps.
+    const keptSupporting = [...supporting].filter((id) =>
       params.hits.some(
         (h) =>
-          h.search_document_id === id && hasDeterministicSeedEvidence(h),
+          h.search_document_id === id &&
+          (hasDeterministicSeedEvidence(h) ||
+            hasExactAuthoritativeFlag(h) ||
+            isExactAuthoritativeHit(h, technicalAnchors) ||
+            isBareTechnicalUsageHit(h)),
       ),
     );
-    if (seedSupporting.length > 0) {
+    if (keptSupporting.length > 0) {
       return {
         answerability: "partially_answerable",
         query_concepts,
         matched_concepts,
         missing_concepts,
-        supporting_source_ids: seedSupporting,
+        supporting_source_ids: keptSupporting,
         contradicting_source_ids: [...contradicting],
         similar_but_insufficient_source_ids: [...similar].filter(
-          (id) => !seedSupporting.includes(id),
+          (id) => !keptSupporting.includes(id),
         ),
-        reason: `Bestätigte Seed-Evidence vorhanden; lexikalisch fehlend: ${missing_concepts.join(", ") || "—"}.`,
+        reason: `Bestätigte technische Evidence vorhanden; lexikalisch fehlend: ${missing_concepts.join(", ") || "—"}.`,
       };
     }
     return {

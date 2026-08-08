@@ -7,6 +7,11 @@ import {
   type CommunicationObjectType,
 } from "./types";
 import { hasDeterministicSeedEvidence } from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
+import {
+  hasExactAuthoritativeFlag,
+  isExactAuthoritativeHit,
+} from "@/lib/knowledge/exactAuthoritative";
+import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
 
 const COMM_SET = new Set<string>(COMMUNICATION_OBJECT_TYPES);
 
@@ -164,9 +169,17 @@ export function prioritizeCommunicationHits(
 ): KnowledgeHit[] {
   const rank = (h: KnowledgeHit): number => {
     let s = 0;
-    // Exact / seed enrichment outranks communication-family bias.
-    if (hasDeterministicSeedEvidence(h)) s += 2000;
-    else if (h.exact_score >= 3 && h.knowledge_unit_type === "master_field") {
+    // Exact authoritative inventory > seed enrichment > communication bias.
+    if (
+      hasExactAuthoritativeFlag(h) ||
+      isExactAuthoritativeHit(h, anchors)
+    ) {
+      s += 2500;
+    } else if (hasDeterministicSeedEvidence(h)) {
+      s += 2000;
+    } else if (isBareTechnicalUsageHit(h)) {
+      s += 1800;
+    } else if (h.exact_score >= 3 && h.knowledge_unit_type === "master_field") {
       s += 1500;
     } else if (h.exact_score >= 3) {
       s += 1200;

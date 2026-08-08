@@ -32,6 +32,18 @@ import {
   enrichmentPackToHits,
   type SeedEnrichmentPack,
 } from "@/lib/knowledge/seedEnrichment";
+import {
+  hasExactAuthoritativeFlag,
+  isExactAuthoritativeHit,
+  markExactAuthoritativeHits,
+} from "@/lib/knowledge/exactAuthoritative";
+import {
+  BARE_TECHNICAL_FALLBACK_BUDGETS,
+  isBareTechnicalUsageHit,
+  markBareTechnicalUsageHit,
+  selectBareTechnicalFallbackTokens,
+  tokensNeedingUsageFallback,
+} from "@/lib/knowledge/bareTechnicalTokenFallback";
 
 export type AccessIndexSearchResult = {
   hits: KnowledgeHit[];
@@ -198,6 +210,159 @@ function docToHit(
     relations: doc.relations ?? [],
     evidence: doc.evidence ?? [],
     doc_confidence: doc.confidence ?? null,
+  };
+}
+
+/**
+ * When a technical token has no inventory/symbol docs, pull exact literal +
+ * code-usage postings (budget-limited). No semantic expansion.
+ */
+function collectBareTechnicalTokenFallbackHits(params: {
+  projectId: string;
+  anchors: string[];
+  existingHits: KnowledgeHit[];
+  seenIds: Set<string>;
+}): {
+  hits: KnowledgeHit[];
+  indexes_used: string[];
+  warnings: string[];
+  graph_used: boolean;
+} {
+  const indexes_used: string[] = [];
+  const warnings: string[] = [];
+  let graph_used = false;
+
+  const candidates = selectBareTechnicalFallbackTokens(
+    params.anchors,
+    (token) => {
+      const m = lookupPortableSymbols(params.projectId, [token]);
+      return (m.get(token.toUpperCase())?.length ?? 0) > 0;
+    },
+  );
+  const tokens = tokensNeedingUsageFallback({
+    tokens: candidates,
+    existingHits: params.existingHits,
+  });
+  if (tokens.length === 0) {
+    return { hits: [], indexes_used, warnings, graph_used };
+  }
+
+  const out: KnowledgeHit[] = [];
+  const seenCodeSourceKeys = new Set<string>();
+  const objectNames = new Set<string>();
+
+  for (const token of tokens) {
+    indexes_used.push("literal-index/bare-token");
+    const lits = lookupPortableLiteralsExact({
+      projectId: params.projectId,
+      value: token,
+      limit: 40,
+    }).filter(
+      (row) => String(row.literal_value ?? "").toUpperCase() === token,
+    );
+    let litRank = params.existingHits.length + out.length + 1;
+    for (const row of lits.slice(
+      0,
+      BARE_TECHNICAL_FALLBACK_BUDGETS.literals,
+    )) {
+      const id = `literal:${row.literal_id}`;
+      if (
+        params.seenIds.has(id) ||
+        out.some((h) => h.search_document_id === id)
+      ) {
+        continue;
+      }
+      const hit = markBareTechnicalUsageHit(literalToHit(row, litRank++));
+      hit.matched_terms = [
+        ...new Set([...(hit.matched_terms ?? []), `sym:${token}`]),
+      ];
+      out.push(hit);
+      if (row.object_name) objectNames.add(row.object_name);
+    }
+
+    indexes_used.push("symbol-index/code_usage_postings/bare-token");
+    // Do not treat literal source_keys as already-seen code units — same
+    // program can contribute both kschl='ZRAH' and FORM usage evidence.
+    const codeHits = expandCodeUsagesFromCanonical({
+      projectKey: params.projectId,
+      tokens: [token],
+      limit: BARE_TECHNICAL_FALLBACK_BUDGETS.code_usage,
+      alreadySeen: seenCodeSourceKeys,
+    });
+    for (const ch of codeHits) {
+      if (
+        params.seenIds.has(ch.search_document_id) ||
+        out.some((h) => h.search_document_id === ch.search_document_id)
+      ) {
+        continue;
+      }
+      const hit = markBareTechnicalUsageHit({
+        ...ch,
+        exact_score: Math.max(ch.exact_score, 3),
+        matched_terms: [
+          ...new Set([...(ch.matched_terms ?? []), `sym:${token}`]),
+        ],
+      });
+      out.push(hit);
+      if (ch.object_name) objectNames.add(ch.object_name);
+      if (ch.source_key) seenCodeSourceKeys.add(ch.source_key);
+    }
+  }
+
+  const seedObjects = [...objectNames].slice(0, 6);
+  if (seedObjects.length > 0) {
+    indexes_used.push("graph-index/bare-token");
+    const g = lookupPortableGraphNeighbors({
+      projectId: params.projectId,
+      seedNames: seedObjects,
+      maxNeighborsPerSeed: 6,
+    });
+    if (g.edges.length > 0 || g.neighbor_nodes.length > 0) {
+      graph_used = true;
+      const neighborNames = [...g.seed_nodes, ...g.neighbor_nodes].map(
+        (n) => n.object_name,
+      );
+      const more = lookupPortableSymbols(params.projectId, neighborNames);
+      const neighborIds = [...more.values()]
+        .flat()
+        .slice(0, BARE_TECHNICAL_FALLBACK_BUDGETS.graph_neighbors);
+      const thin = lookupPortableSymbolRecords(params.projectId, neighborIds);
+      let rank = params.existingHits.length + out.length + 1;
+      for (const s of thin) {
+        if (
+          params.seenIds.has(s.document_id) ||
+          out.some((h) => h.search_document_id === s.document_id)
+        ) {
+          continue;
+        }
+        const hit = markBareTechnicalUsageHit(
+          docToHit(symbolToThinDoc(s), rank++, 2, [
+            "bare_technical_usage",
+            "graph:bare-token",
+          ]),
+        );
+        out.push(hit);
+      }
+      warnings.push(
+        `Bare-Token-Fallback Graph: ${g.seed_nodes.length} Seeds, ${g.neighbor_nodes.length} Nachbarn.`,
+      );
+    }
+  }
+
+  if (out.length > 0) {
+    warnings.push(
+      `Bare-Token-Fallback: ${tokens.join(", ")} → ${out.length} Literal/Code-Usage-Treffer (kein Inventory-Symbol).`,
+    );
+    askPerfNote(
+      `bare technical token fallback tokens=[${tokens.join(",")}] hits=${out.length}`,
+    );
+  }
+
+  return {
+    hits: out,
+    indexes_used: [...new Set(indexes_used)],
+    warnings,
+    graph_used,
   };
 }
 
@@ -433,8 +598,75 @@ export function searchViaAccessIndexes(params: {
     }
   }
 
+  let hits: KnowledgeHit[] = [];
+  let evidence_fetched = 0;
+
   if (candidateIds.size === 0) {
-    askPerfNote("access indexes: no candidates");
+    askPerfNote("access indexes: no symbol/lexical candidates");
+    warnings.push("ACCESS_INDEX: keine Symbol-/Lexical-Treffer.");
+  } else {
+    // Prefer full evidence for candidates; fall back to thin symbol records
+    indexes_used.push("evidence-store");
+    const idList = [...candidateIds].slice(0, 120);
+    let docs = fetchPortableEvidenceByIds(projectId, idList);
+    evidence_fetched = docs.size;
+    if (docs.size === 0) {
+      const thin = lookupPortableSymbolRecords(projectId, idList);
+      docs = new Map(thin.map((s) => [s.document_id, symbolToThinDoc(s)]));
+    } else {
+      // Fill gaps with thin symbols
+      for (const id of idList) {
+        if (docs.has(id)) continue;
+        const thin = lookupPortableSymbolRecords(projectId, [id])[0];
+        if (thin) docs.set(id, symbolToThinDoc(thin));
+      }
+    }
+
+    hits = [...docs.values()].map((doc, i) =>
+      docToHit(
+        doc,
+        i + 1,
+        anchors.some((a) =>
+          `${doc.title} ${doc.object_name} ${doc.source_key}`
+            .toUpperCase()
+            .includes(a),
+        )
+          ? 3
+          : 1,
+        matchedTerms,
+      ),
+    );
+  }
+
+  // Merge code-usage hits that may not live in evidence-store
+  const seenIds = new Set(hits.map((h) => h.search_document_id));
+  for (const ch of codeHitsMerged) {
+    if (seenIds.has(ch.search_document_id)) continue;
+    seenIds.add(ch.search_document_id);
+    hits.push(ch);
+  }
+
+  // Bare technical tokens (ZRAH, …) without inventory symbols: exact literal +
+  // code-usage only — no semantic broadening.
+  const bareFallback = collectBareTechnicalTokenFallbackHits({
+    projectId,
+    anchors,
+    existingHits: hits,
+    seenIds,
+  });
+  if (bareFallback.hits.length > 0) {
+    indexes_used.push(...bareFallback.indexes_used);
+    warnings.push(...bareFallback.warnings);
+    for (const h of bareFallback.hits) {
+      if (seenIds.has(h.search_document_id)) continue;
+      seenIds.add(h.search_document_id);
+      hits.push(h);
+    }
+    if (bareFallback.graph_used) graph_used = true;
+  }
+
+  if (hits.length === 0) {
+    askPerfNote("access indexes: no candidates after bare-token fallback");
     return {
       hits: [],
       document_count: 0,
@@ -445,54 +677,21 @@ export function searchViaAccessIndexes(params: {
       graph_used,
       evidence_fetched: 0,
       legacy_used: false,
-      warnings: [
-        ...warnings,
-        "ACCESS_INDEX: keine Symbol-/Lexical-Treffer.",
-      ],
+      warnings,
       lexical_diagnosis,
       lexical_expansion_tokens,
       seed_enrichment,
     };
   }
 
-  // Prefer full evidence for candidates; fall back to thin symbol records
-  indexes_used.push("evidence-store");
-  const idList = [...candidateIds].slice(0, 120);
-  let docs = fetchPortableEvidenceByIds(projectId, idList);
-  let evidence_fetched = docs.size;
-  if (docs.size === 0) {
-    const thin = lookupPortableSymbolRecords(projectId, idList);
-    docs = new Map(thin.map((s) => [s.document_id, symbolToThinDoc(s)]));
-  } else {
-    // Fill gaps with thin symbols
-    for (const id of idList) {
-      if (docs.has(id)) continue;
-      const thin = lookupPortableSymbolRecords(projectId, [id])[0];
-      if (thin) docs.set(id, symbolToThinDoc(thin));
-    }
-  }
-
-  let hits: KnowledgeHit[] = [...docs.values()].map((doc, i) =>
-    docToHit(doc, i + 1, anchors.some((a) =>
-      `${doc.title} ${doc.object_name} ${doc.source_key}`
-        .toUpperCase()
-        .includes(a),
-    )
-      ? 3
-      : 1, matchedTerms),
-  );
-
-  // Merge code-usage hits that may not live in evidence-store
-  const seenIds = new Set(hits.map((h) => h.search_document_id));
-  for (const ch of codeHitsMerged) {
-    if (seenIds.has(ch.search_document_id)) continue;
-    seenIds.add(ch.search_document_id);
-    hits.push(ch);
-  }
-
   // Prefer evidence proximity to confirmed seeds over source-family bias.
-  // exact/direct > deterministic seed enrichment > graph/symbol > lexical;
+  // exact authoritative definition/config > seed enrichment > graph/symbol > lexical;
   // message_idoc / other families are only a small secondary factor.
+  hits = markExactAuthoritativeHits(hits, [
+    ...confirmedSeeds,
+    ...namedEntityTechnicalAnchors(params.query),
+  ]);
+
   const scoreAccessHit = (h: KnowledgeHit): number => {
     let s = h.exact_score * 20 + h.combined_score;
     const terms = h.matched_terms ?? [];
@@ -500,7 +699,21 @@ export function searchViaAccessIndexes(params: {
       h.metadata?.seed_enrichment === true ||
       terms.some((t) => String(t).toLowerCase() === "seed_enrichment") ||
       String(h.search_document_id ?? "").startsWith("enrichment:");
-    if (isSeedEnrichment) s += 100;
+
+    // authoritative exact > seed > direct literal/code usage > soft lexical
+    if (
+      hasExactAuthoritativeFlag(h) ||
+      isExactAuthoritativeHit(h, [
+        ...confirmedSeeds,
+        ...namedEntityTechnicalAnchors(params.query),
+      ])
+    ) {
+      s += 220;
+    } else if (isSeedEnrichment) {
+      s += 100;
+    } else if (isBareTechnicalUsageHit(h)) {
+      s += 90;
+    }
 
     const blob =
       `${h.title} ${h.object_name} ${h.subobject_name} ${h.source_key}`.toUpperCase();
@@ -513,7 +726,8 @@ export function searchViaAccessIndexes(params: {
     }
 
     if (terms.some((t) => String(t).startsWith("sym:"))) s += 15;
-    if (terms.some((t) => String(t).startsWith("graph:"))) s += 12;
+    // Graph edge count is secondary — must not outrank exact authoritative.
+    if (terms.some((t) => String(t).startsWith("graph:"))) s += 8;
 
     // Secondary source-family weights (kept small on purpose).
     const kut = String(h.knowledge_unit_type ?? "");
@@ -599,6 +813,14 @@ export function searchViaAccessIndexes(params: {
         rank: i + 1,
       }));
   }
+
+  hits = markExactAuthoritativeHits(hits, [
+    ...confirmedSeeds,
+    ...namedEntityTechnicalAnchors(params.query),
+  ]).map((h, i) => ({ ...h, rank: i + 1 }));
+  // Keep exact authoritative docs ahead of non-authoritative after final mark.
+  hits.sort((a, b) => scoreAccessHit(b) - scoreAccessHit(a));
+  hits = hits.map((h, i) => ({ ...h, rank: i + 1 }));
 
   const primary_path =
     graph_used && confirmedSeeds.length > 0

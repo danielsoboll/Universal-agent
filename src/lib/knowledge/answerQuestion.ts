@@ -76,6 +76,11 @@ import {
   hitsByIds,
   type RelevanceGateResult,
 } from "@/lib/knowledge/relevanceGate";
+import {
+  buildUsageOnlyDirectAnswer,
+  isBareTechnicalUsageHit,
+  shouldUseUsageOnlyAnswer,
+} from "@/lib/knowledge/bareTechnicalTokenFallback";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
 import {
@@ -1072,6 +1077,103 @@ async function answerQuestionCore(params: {
 
   // Relevance gate: do not invent answers from only loosely related hits.
   if (relevanceGate.answerability === "insufficient") {
+    // Safety: bare technical token with exact code/literal usage still surfaces
+    // usages without inventing a definition (even if soft gate failed).
+    if (searchMode === "direct_rag") {
+      const usageOnlyGate = shouldUseUsageOnlyAnswer({
+        hits: retrieval!.hits,
+        technicalAnchors: namedEntityTechnicalAnchors(question),
+      });
+      if (usageOnlyGate.apply && usageOnlyGate.anchor) {
+        const usageHits = prioritizeCommunicationHits(
+          retrieval!.hits.filter(
+            (h) =>
+              isBareTechnicalUsageHit(h) ||
+              `${h.snippet} ${h.technical_summary} ${(h.hardcoded_values ?? []).join(" ")}`
+                .toUpperCase()
+                .includes(usageOnlyGate.anchor!.toUpperCase()),
+          ),
+          namedEntityTechnicalAnchors(question),
+        );
+        const pack =
+          usageHits.length > 0 ? usageHits : retrieval!.hits.slice(0, 12);
+        const direct = buildUsageOnlyDirectAnswer({
+          anchor: usageOnlyGate.anchor,
+          hits: pack,
+        });
+        const tech = buildTechnicalDetailsFromHits(pack, mode);
+        const pa: ProcessAnswer = {
+          ...EMPTY_PROCESS_ANSWER,
+          direct_answer: direct,
+          open_validation_questions: [
+            `Keine authoritative Definition von ${usageOnlyGate.anchor} in den geladenen Quellen.`,
+          ],
+          open: [
+            {
+              text: `Keine authoritative Definition von ${usageOnlyGate.anchor} in den geladenen Quellen.`,
+              level: "not_supported",
+              source_ranks: [],
+              source_ids: [],
+            },
+          ],
+          has_safe_process_claim: false,
+          no_process_claim_message: ANSWER_CONTRACT_NO_PROCESS_MSG,
+        };
+        return {
+          status: "ok",
+          question,
+          direct_answer: direct,
+          reasoning:
+            "Keine authoritative Inventory-Definition; belegte Code-/Literal-Verwendung ausgegeben.",
+          technical_objects: [
+            ...new Set(
+              pack
+                .map((h) => h.object_name)
+                .filter((n): n is string => Boolean(n && n.trim())),
+            ),
+          ].slice(0, 20),
+          uncertainties: pa.open_validation_questions,
+          process_answer: pa,
+          technical_answer: enrichTechnicalAnswerFromHits(
+            { ...EMPTY_TECHNICAL_ANSWER },
+            pack,
+          ),
+          technical_details: tech,
+          compact_technical_details: buildCompactTechnicalDetails({
+            hits: pack,
+            groundingResults: groundingReport.results,
+          }),
+          question_intent: questionIntent.intent,
+          evidence_context_report: null,
+          entity_grounding: groundingReport.results,
+          relevance_gate: {
+            ...relevanceGate,
+            answerability: "partially_answerable",
+            supporting_source_ids: pack.map((h) => h.search_document_id),
+            reason:
+              "Bare-Token Code-/Literal-Usage ohne authoritative Definition.",
+          },
+          sources: pack,
+          model: AI_CONFIG.chatModel,
+          token_usage: {
+            input: plannerTokens.input,
+            output: plannerTokens.output,
+            embedding: retrieval!.query_embedding_tokens,
+          },
+          estimated_cost:
+            estimateCost(plannerTokens.input, plannerTokens.output, 0) +
+            retrieval!.query_embedding_cost,
+          retrieval_summary: `${pack.length}/${retrieval!.document_count} Treffer (usage-only via gate safety)`,
+          retrieval_mode: mode,
+          searched_document_count: retrieval!.document_count,
+          top_score: topScore,
+          index_path: project.active_index_path,
+          vector_search_active: retrieval!.vector_search_active,
+          ...metaExtras,
+          duration_ms: Date.now() - started,
+        };
+      }
+    }
     const similarHits = hitsByIds(
       retrieval!.hits,
       relevanceGate.similar_but_insufficient_source_ids,
@@ -1172,6 +1274,86 @@ async function answerQuestionCore(params: {
     synthesisHitsRaw,
     retrieval!.hits,
   );
+
+  // Bare technical token with code/literal usage but no inventory definition:
+  // fail-closed on "what it is", but surface belegte Verwendungen (no LLM).
+  if (searchMode === "direct_rag") {
+    const usageOnly = shouldUseUsageOnlyAnswer({
+      hits: synthesisHits,
+      technicalAnchors: namedEntityTechnicalAnchors(question),
+    });
+    if (usageOnly.apply && usageOnly.anchor) {
+      const direct = buildUsageOnlyDirectAnswer({
+        anchor: usageOnly.anchor,
+        hits: synthesisHits,
+      });
+      const tech = buildTechnicalDetailsFromHits(synthesisHits, mode);
+      const pa: ProcessAnswer = {
+        ...EMPTY_PROCESS_ANSWER,
+        direct_answer: direct,
+        open_validation_questions: [
+          `Keine authoritative Definition von ${usageOnly.anchor} in den geladenen Quellen.`,
+        ],
+        open: [
+          {
+            text: `Keine authoritative Definition von ${usageOnly.anchor} in den geladenen Quellen.`,
+            level: "not_supported",
+            source_ranks: [],
+            source_ids: [],
+          },
+        ],
+        has_safe_process_claim: false,
+        no_process_claim_message: ANSWER_CONTRACT_NO_PROCESS_MSG,
+      };
+      return {
+        status: "ok",
+        question,
+        direct_answer: direct,
+        reasoning:
+          "Keine authoritative Inventory-Definition; belegte Code-/Literal-Verwendung ausgegeben.",
+        technical_objects: [
+          ...new Set(
+            synthesisHits
+              .map((h) => h.object_name)
+              .filter((n): n is string => Boolean(n && n.trim())),
+          ),
+        ].slice(0, 20),
+        uncertainties: pa.open_validation_questions,
+        process_answer: pa,
+        technical_answer: enrichTechnicalAnswerFromHits(
+          { ...EMPTY_TECHNICAL_ANSWER },
+          synthesisHits,
+        ),
+        technical_details: tech,
+        compact_technical_details: buildCompactTechnicalDetails({
+          hits: synthesisHits,
+          groundingResults: groundingReport.results,
+        }),
+        question_intent: questionIntent.intent,
+        evidence_context_report: null,
+        entity_grounding: groundingReport.results,
+        relevance_gate: relevanceGate,
+        sources: synthesisHits,
+        model: AI_CONFIG.chatModel,
+        token_usage: {
+          input: plannerTokens.input,
+          output: plannerTokens.output,
+          embedding: retrieval!.query_embedding_tokens,
+        },
+        estimated_cost:
+          estimateCost(plannerTokens.input, plannerTokens.output, 0) +
+          retrieval!.query_embedding_cost,
+        retrieval_summary: `${synthesisHits.length}/${retrieval!.document_count} Treffer (usage-only, no definition)`,
+        retrieval_mode: mode,
+        searched_document_count: retrieval!.document_count,
+        top_score: topScore,
+        index_path: project.active_index_path,
+        vector_search_active: retrieval!.vector_search_active,
+        ...metaExtras,
+        duration_ms: Date.now() - started,
+      };
+    }
+  }
 
   if (!process.env.OPENAI_API_KEY?.trim()) {
     const tech = buildTechnicalDetailsFromHits(synthesisHits, mode);
