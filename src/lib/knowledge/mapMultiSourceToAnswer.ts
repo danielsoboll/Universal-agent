@@ -249,5 +249,8 @@ export function mapMultiSourceToAnswerResult(params: {
     planned_run_id: run.run_id,
     topic_gate: null,
     full_analysis_report: null,
+    full_analysis_research: null,
+    search_budget: null,
+    knowledge_expansion: null,
   };
 }

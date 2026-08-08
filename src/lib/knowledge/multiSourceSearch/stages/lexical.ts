@@ -50,10 +50,10 @@ export async function runLexicalStage(params: {
           : ("semantic_weak" as const),
     evidence_type:
       h.doc.kind === "ddic_field"
-        ? "MASTER_DATA_BUSINESS_FIELD"
+        ? ("MASTER_DATA_BUSINESS_FIELD" as const)
         : h.doc.kind === "control_table" || h.doc.kind === "message_config"
-          ? "CONFIGURATION_OBJECT"
-          : undefined,
+          ? ("RELATIONSHIP_EVIDENCE" as const)
+          : ("SEMANTIC_CANDIDATE" as const),
     title: h.doc.technical_name,
     summary: [
       h.doc.field_text || h.doc.table_text || h.doc.code_summary || h.doc.title,

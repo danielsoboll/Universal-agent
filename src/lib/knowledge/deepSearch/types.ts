@@ -59,7 +59,11 @@ export type QueryUnderstanding = {
   requested_output: string[];
   preferred_search_plan: PreferredSearchPlan;
   search_plan_steps: string[];
+  /** Optional scope hint from callers (e.g. anchor RAG). */
+  requested_scope?: string | string[];
   irrelevant_question_words: string[];
+  /** Optional synonym for irrelevant_question_words in older callers. */
+  stopwords_removed?: string[];
   warnings: string[];
   model: string;
   prompt_version: string;

@@ -27,7 +27,7 @@ export type SearchAnchor = {
   value: string;
   /** Normalized uppercase for matching. */
   norm: string;
-  source: MultiSourceId | "question" | "plan";
+  source: MultiSourceId | "question" | "plan" | "lexical";
   confidence: number;
   note?: string;
 };
@@ -99,7 +99,7 @@ export type StageQueryLog = {
 
 export type StageEvidenceItem = {
   id: string;
-  source: MultiSourceId;
+  source: MultiSourceId | "lexical";
   rank_tier: "exact" | "value_check" | "relation" | "semantic_weak";
   evidence_type?: EvidenceType;
   title: string;
@@ -126,7 +126,7 @@ export type StageEvidenceItem = {
 };
 
 export type StageResult = {
-  stage: MultiSourceId;
+  stage: MultiSourceId | "lexical";
   round: number;
   inputs: {
     anchors: string[];

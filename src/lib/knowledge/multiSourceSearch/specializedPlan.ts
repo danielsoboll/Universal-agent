@@ -193,7 +193,7 @@ export type PrimaryAnchorCoverage = {
 };
 
 export function evaluatePrimaryAnchorCoverage(
-  stages: { stage: MultiSourceId; hits: StageEvidenceItem[] }[],
+  stages: { stage: MultiSourceId | "lexical"; hits: StageEvidenceItem[] }[],
   specialized: SpecializedSearchPlan,
 ): PrimaryAnchorCoverage {
   const anchor = specialized.primary_anchor;
@@ -220,11 +220,15 @@ export function evaluatePrimaryAnchorCoverage(
     "function_modules",
   ];
   const codeHits = stages
-    .filter((s) => codeStages.includes(s.stage))
+    .filter((s): s is typeof s & { stage: MultiSourceId } =>
+      s.stage !== "lexical" && codeStages.includes(s.stage),
+    )
     .flatMap((s) => s.hits);
   const hasCode =
     codeHits.some((h) => h.rank_tier === "exact" || h.evidence_type === "EXACT_CODE_USAGE");
-  const codeStagesRun = stages.some((s) => codeStages.includes(s.stage));
+  const codeStagesRun = stages.some(
+    (s) => s.stage !== "lexical" && codeStages.includes(s.stage),
+  );
 
   const ctRun = stages.some((s) => s.stage === "control_tables");
   const relRun = stages.some((s) => s.stage === "relations");

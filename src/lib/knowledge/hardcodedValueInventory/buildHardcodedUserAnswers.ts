@@ -260,7 +260,14 @@ export function buildHardcodedTechnicalDetails(
 
   return {
     ...EMPTY_TECHNICAL_DETAILS,
-    sources: (view.sources ?? []).slice(0, 8),
+    sources: (view.sources ?? []).slice(0, 8).map((s) => ({
+      object_kind: "",
+      class_or_program: "",
+      method_or_routine: "",
+      source_key: s,
+      title: s,
+      knowledge_unit_type: "",
+    })),
     conditions,
     hardcoded_values,
     evidence,

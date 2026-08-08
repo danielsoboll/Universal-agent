@@ -401,7 +401,7 @@ export function aggregateEntityList(params: {
     if (!bucket) {
       bucket = {
         entity_name: hit.object_name,
-        entity_type: mapped === "OTHER" ? "UNKNOWN" : mapped,
+        entity_type: mapped,
         methods: new Set(),
         topic_methods: new Set(),
         source_keys: [],

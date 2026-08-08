@@ -56,6 +56,8 @@ export type DatenbasisStepResult = {
     detail: string;
   }>;
   technical?: Record<string, unknown>;
+  /** Optional structured step payload (manifests, stats, …). */
+  details?: Record<string, unknown>;
 };
 
 export type DatenbasisStepState = {

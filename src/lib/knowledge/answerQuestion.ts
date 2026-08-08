@@ -956,7 +956,7 @@ async function answerQuestionCore(params: {
     }
     searchBudget.diagnostics.new_openai_calls = openaiCalls;
     searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
-  } else if (searchMode === "full_analysis" || searchMode === "deep_search") {
+  } else if (searchMode === "full_analysis") {
     searchBudget = {
       stage: "DEEP_ANALYSIS",
       hits: retrieval!.hits,
@@ -975,10 +975,7 @@ async function answerQuestionCore(params: {
       },
       diagnostics: {
         ...emptySearchBudgetDiagnostics("DEEP_ANALYSIS"),
-        escalation_reason:
-          searchMode === "full_analysis"
-            ? "Suchmodus Vollanalyse"
-            : "Suchmodus KI-Tiefensuche",
+        escalation_reason: "Suchmodus Vollanalyse",
         retrieval_hit_count: retrieval!.hits.length,
       },
     };

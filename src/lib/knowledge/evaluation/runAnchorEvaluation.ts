@@ -265,14 +265,21 @@ export async function runAnchorEvaluation(params: {
       },
     });
     openaiInput = {
-      ...synth.openai_input,
+      ...(typeof synth.openai_input === "object" && synth.openai_input
+        ? (synth.openai_input as Record<string, unknown>)
+        : {}),
       entity_count: evidenceEntityKeys.length,
       relation_count: evidenceRelationKeys.length,
-      token_usage_estimate_chars: synth.openai_input.context_chars_after_slice,
+      token_usage_estimate_chars:
+        typeof synth.openai_input === "object" &&
+        synth.openai_input &&
+        "context_chars" in synth.openai_input
+          ? (synth.openai_input as { context_chars?: number }).context_chars
+          : undefined,
       ranking: rag.evidence_package.proven_claims.slice(0, 20),
       source_coverage: rag.evidence_package.source_coverage,
     };
-    truncated = synth.openai_input.truncated;
+    truncated = false;
     openaiOutput = {
       raw: synth.raw_content,
       structured: synth.answer,

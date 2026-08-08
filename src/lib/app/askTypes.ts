@@ -41,6 +41,9 @@ export type AskQuestionInput = {
   question: string;
   customerId?: string | null;
   searchMode?: SearchMode;
+  /** Optional: analyse missing relation-relevant method analyses for this question. */
+  expandMissingRelationKnowledge?: boolean;
+  expandAnalysisBudget?: number;
 };
 
 export type AskQuestionResult = {
@@ -99,4 +102,26 @@ export type AskQuestionResult = {
     total_click_to_render_ms: number;
     server_timing_header?: string | null;
   };
+  /** Optional relation-knowledge expansion report (Flag AN). */
+  knowledgeExpansion?: {
+    enabled: boolean;
+    ran: boolean;
+    budget: number;
+    candidatesTotal: number;
+    alreadyCached: number;
+    analyzedNew: number;
+    analyzedSourceKeys: string[];
+    deferredSourceKeys: string[];
+    failed: Array<{ sourceKey: string; error: string }>;
+    durationMs: number;
+    reRanAnswer: boolean;
+    layers: {
+      preexisting: string[];
+      newlyAnalyzed: string[];
+      stillOpen: string[];
+    };
+    notes?: string[];
+  } | null;
+  /** full_analysis only — iterative research iterations / budgets / gaps. */
+  fullAnalysisResearch?: import("@/lib/knowledge/fullAnalysisResearch").FullAnalysisResearchReport | null;
 };

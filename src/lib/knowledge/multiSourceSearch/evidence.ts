@@ -87,7 +87,9 @@ export function bundleEvidence(params: {
       evidence_type: item.evidence_type ?? rankTierToEvidenceType(item),
       score: scoreEvidenceItem(item),
     };
-    bySource[item.source].push(enriched);
+    const bucket: MultiSourceId =
+      item.source === "lexical" ? "exact_symbol" : item.source;
+    bySource[bucket].push(enriched);
   }
 
   if (discarded.length) {
@@ -134,7 +136,11 @@ export function bundleEvidence(params: {
     function_modules: 0,
     relations: 0,
   } as Record<MultiSourceId, number>;
-  for (const s of selected) counts[s.source] += 1;
+  for (const s of selected) {
+    const bucket: MultiSourceId =
+      s.source === "lexical" ? "exact_symbol" : s.source;
+    counts[bucket] += 1;
+  }
 
   return {
     items: selected,

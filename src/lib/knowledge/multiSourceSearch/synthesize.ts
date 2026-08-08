@@ -18,10 +18,14 @@ export async function synthesizeMultiSourceAnswer(params: {
   question: string;
   finalContext: string;
   structuredContext?: StructuredSearchContext;
+  /** Soft cap for prompt context (callers may truncate before; kept for API compat). */
+  contextCharLimit?: number;
 }): Promise<{
   answer: MultiSourceAnswer;
   tokens: { input: number; output: number };
   model: string;
+  openai_input?: unknown;
+  raw_content?: string | null;
 }> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -70,7 +74,7 @@ export async function synthesizeMultiSourceAnswer(params: {
             : null,
           "",
           "Evidenzkontext:",
-          params.finalContext.slice(0, 28_000),
+          params.finalContext.slice(0, params.contextCharLimit ?? 28_000),
         ]
           .filter(Boolean)
           .join("\n"),
@@ -91,5 +95,12 @@ export async function synthesizeMultiSourceAnswer(params: {
       output: completion.usage?.completion_tokens ?? 0,
     },
     model: AI_CONFIG.chatModel,
+    openai_input: {
+      question: params.question,
+      context_chars: params.finalContext.length,
+      context_char_limit: params.contextCharLimit ?? 28_000,
+      has_structured_context: Boolean(params.structuredContext),
+    },
+    raw_content: completion.choices[0]?.message?.content ?? null,
   };
 }

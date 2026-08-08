@@ -33,6 +33,8 @@ export type AskCacheKeyParts = {
   indexVersion: string;
   searchProfileVersion: string;
   answerPromptVersion: string;
+  /** Optional Ask knowledge-expansion flag — separate cache entries. */
+  expandRelationKnowledge?: boolean;
 };
 
 export type AskCacheEntry = {
@@ -58,6 +60,7 @@ export function buildAskCacheKeyString(parts: AskCacheKeyParts): string {
     parts.indexVersion,
     parts.searchProfileVersion,
     parts.answerPromptVersion,
+    parts.expandRelationKnowledge ? "expand1" : "expand0",
   ].join("\u001f");
 }
 
@@ -66,8 +69,14 @@ export function askCacheIdentity(
   projectId: string,
   normalizedQuestion: string,
   searchMode: SearchMode,
+  expandRelationKnowledge = false,
 ): string {
-  return [projectId, normalizedQuestion, searchMode].join("\u001f");
+  return [
+    projectId,
+    normalizedQuestion,
+    searchMode,
+    expandRelationKnowledge ? "expand1" : "expand0",
+  ].join("\u001f");
 }
 
 function readCache(): AskSessionCacheFile {
@@ -122,16 +131,24 @@ export function getCachedAskResult(params: {
   projectId: string;
   normalizedQuestion: string;
   searchMode: SearchMode;
+  expandRelationKnowledge?: boolean;
 }): AskCacheEntry | null {
   const q = normalizeAskQuestion(params.normalizedQuestion);
   if (!q || !params.projectId) return null;
-  const identity = askCacheIdentity(params.projectId, q, params.searchMode);
+  const expand = Boolean(params.expandRelationKnowledge);
+  const identity = askCacheIdentity(
+    params.projectId,
+    q,
+    params.searchMode,
+    expand,
+  );
   const matches = readCache().entries.filter(
     (e) =>
       askCacheIdentity(
         e.key.projectId,
         e.key.normalizedQuestion,
         e.key.searchMode,
+        Boolean(e.key.expandRelationKnowledge),
       ) === identity,
   );
   if (!matches.length) return null;
@@ -204,5 +221,9 @@ export function cacheKeyFromAskResult(params: {
     indexVersion: indexPath,
     searchProfileVersion: params.result.searchProfileId ?? "",
     answerPromptVersion: params.result.promptVersion ?? "",
+    expandRelationKnowledge: Boolean(
+      params.result.knowledgeExpansion?.enabled &&
+        params.result.knowledgeExpansion?.ran,
+    ),
   };
 }

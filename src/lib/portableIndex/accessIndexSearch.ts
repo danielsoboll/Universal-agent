@@ -859,6 +859,12 @@ export function searchViaAccessIndexes(params: {
         }
         seed_enrichment = {
           enriched: true,
+          confirmed_seeds: [
+            ...new Set([
+              ...seed_enrichment.confirmed_seeds,
+              ...pass2.confirmed_seeds,
+            ]),
+          ],
           field_enrichments: [...bySeed.values()],
           notes: [...new Set([...seed_enrichment.notes, ...pass2.notes])],
         };

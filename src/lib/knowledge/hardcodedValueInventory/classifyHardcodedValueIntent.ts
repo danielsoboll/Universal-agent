@@ -60,9 +60,7 @@ export function classifyHardcodedValueIntent(
   // Strong: hardcoded cue + (material/customer/...) OR hardcoded + list + values
   const isHardcodedInventory =
     hasHard &&
-    (value.type !== "UNKNOWN" ||
-      (hasList && VALUE_RE.test(q)) ||
-      (hasList && value.type === "GENERIC"));
+    (value.type !== "UNKNOWN" || (hasList && VALUE_RE.test(q)));
 
   // Material-specific: "Materialnummern ... fest im Code / hart codiert"
   const materialHard =

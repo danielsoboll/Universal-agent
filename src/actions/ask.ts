@@ -18,6 +18,7 @@ export type {
   AskQuestionInput,
   AskQuestionResult,
 } from "@/lib/app/askTypes";
+
 function mapRelevanceGate(
   gate: Awaited<ReturnType<typeof answerQuestion>>["relevance_gate"],
 ): AskQuestionResult["relevanceGate"] {
@@ -31,6 +32,34 @@ function mapRelevanceGate(
     contradictingSourceIds: gate.contradicting_source_ids,
     similarButInsufficientSourceIds: gate.similar_but_insufficient_source_ids,
     reason: gate.reason,
+  };
+}
+
+function mapKnowledgeExpansion(
+  report: Awaited<ReturnType<typeof answerQuestion>>["knowledge_expansion"],
+): AskQuestionResult["knowledgeExpansion"] {
+  if (!report) return null;
+  return {
+    enabled: report.enabled,
+    ran: report.ran,
+    budget: report.budget,
+    candidatesTotal: report.candidates_total,
+    alreadyCached: report.already_cached,
+    analyzedNew: report.analyzed_new,
+    analyzedSourceKeys: report.analyzed_source_keys,
+    deferredSourceKeys: report.deferred_source_keys,
+    failed: report.failed.map((f) => ({
+      sourceKey: f.source_key,
+      error: f.error,
+    })),
+    durationMs: report.duration_ms,
+    reRanAnswer: report.re_ran_answer,
+    layers: {
+      preexisting: report.layers.preexisting,
+      newlyAnalyzed: report.layers.newly_analyzed,
+      stillOpen: report.layers.still_open,
+    },
+    notes: report.notes,
   };
 }
 
@@ -117,6 +146,19 @@ export async function askQuestionAction(
     };
   }
 
+  if (
+    input.expandMissingRelationKnowledge &&
+    !canMutateProjectSetup(ctx, customerId)
+  ) {
+    return {
+      status: "error",
+      answer: null,
+      evidence: [],
+      message:
+        "„Fehlendes Beziehungswissen ergänzen“ ist nur für General Admin und Projekt-Admin verfügbar.",
+    };
+  }
+
   const resolved = await resolveAskLocalProject(customerId);
   if (!resolved.ok) {
     if (resolved.detail) {
@@ -137,6 +179,8 @@ export async function askQuestionAction(
     userId: ctx.userId,
     question,
     searchMode: input.searchMode,
+    expandMissingRelationKnowledge: input.expandMissingRelationKnowledge,
+    expandAnalysisBudget: input.expandAnalysisBudget,
   });
 
   const evidence = mapEvidence(result);
@@ -177,6 +221,8 @@ export async function askQuestionAction(
       searchProfileId: result.search_profile_id,
       fullAnalysisReport: result.full_analysis_report,
       searchBudget: result.search_budget,
+      knowledgeExpansion: mapKnowledgeExpansion(result.knowledge_expansion),
+      fullAnalysisResearch: result.full_analysis_research,
     };
   }
 
@@ -215,5 +261,7 @@ export async function askQuestionAction(
     searchProfileId: result.search_profile_id,
     fullAnalysisReport: result.full_analysis_report,
     searchBudget: result.search_budget,
+    knowledgeExpansion: mapKnowledgeExpansion(result.knowledge_expansion),
+    fullAnalysisResearch: result.full_analysis_research,
   };
 }
