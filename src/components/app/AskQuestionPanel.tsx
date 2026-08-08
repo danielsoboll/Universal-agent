@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { askQuestionAction } from "@/actions/ask";
 import type { AskQuestionResult } from "@/lib/app/askTypes";
 import type {
   ClassifiedStatement,
@@ -40,7 +39,7 @@ const BASE_SEARCH_MODES: { key: SearchMode; label: string; help: string }[] = [
 const VOLLANALYSE_MODE: { key: SearchMode; label: string; help: string } = {
   key: "full_analysis",
   label: "Vollanalyse",
-  help: "Umfangreiche und kostenintensivere 1×-Vollanalyse eines spezifischen Themas zum Download.",
+  help: "Iterative Recherche (bis 3 Runden): Evidence erweitern, ggf. Method Analyses, dann Report zum Download. Kostenintensiver Admin-Modus.",
 };
 
 function modesForUser(canUseVollanalyse: boolean) {
@@ -389,6 +388,81 @@ function SearchModeSummary({
         </p>
       ) : null}
     </section>
+  );
+}
+
+function KnowledgeExpansionReportBlock({
+  report,
+}: {
+  report: NonNullable<AskQuestionResult["knowledgeExpansion"]>;
+}) {
+  return (
+    <details className="panel compact group">
+      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
+        Beziehungswissen ergänzt
+        <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+          neu {report.analyzedNew} · Cache {report.alreadyCached}
+          {report.deferredSourceKeys.length
+            ? ` · zurückgestellt ${report.deferredSourceKeys.length}`
+            : ""}
+        </span>
+      </summary>
+      <div className="space-y-2 border-t border-[var(--border)] px-4 py-3 text-xs">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+          <dt className="text-[var(--muted)]">Budget</dt>
+          <dd className="font-medium sm:col-span-2">{report.budget}</dd>
+          <dt className="text-[var(--muted)]">Kandidaten</dt>
+          <dd className="font-medium sm:col-span-2">
+            {report.candidatesTotal}
+          </dd>
+          <dt className="text-[var(--muted)]">Laufzeit Expansion</dt>
+          <dd className="font-medium sm:col-span-2">
+            {formatDuration(report.durationMs)}
+          </dd>
+        </dl>
+        {report.layers.newlyAnalyzed.length ? (
+          <div>
+            <p className="font-medium text-[var(--foreground)]">
+              Neu analysiert
+            </p>
+            <ul className="mt-1 list-disc pl-4 text-[var(--muted)]">
+              {report.layers.newlyAnalyzed.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-[var(--muted)]">
+            Keine neuen Method Analyses in diesem Lauf (alles im Cache oder
+            keine fehlenden relevanten Units).
+          </p>
+        )}
+        {report.layers.stillOpen.length ? (
+          <div>
+            <p className="font-medium text-[var(--foreground)]">
+              Weiterhin offen / mögliche Vertiefung
+            </p>
+            <ul className="mt-1 list-disc pl-4 text-[var(--muted)]">
+              {report.layers.stillOpen.slice(0, 12).map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {report.failed.length ? (
+          <div>
+            <p className="font-medium text-[var(--danger)]">Fehlgeschlagen</p>
+            <ul className="mt-1 list-disc pl-4 text-[var(--muted)]">
+              {report.failed.map((f) => (
+                <li key={f.sourceKey}>
+                  {f.sourceKey}: {f.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -1134,6 +1208,8 @@ export function AskQuestionPanel({
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [mode, setMode] = useState<SearchMode>("direct_rag");
+  /** Admin only: analyse missing relation-relevant method analyses for this question. */
+  const [expandRelationKnowledge, setExpandRelationKnowledge] = useState(false);
   const [result, setResult] = useState<AskQuestionResult | null>(null);
   const [cachedModes, setCachedModes] = useState<Set<SearchMode>>(
     () => new Set(),
@@ -1191,6 +1267,7 @@ export function AskQuestionPanel({
       projectId,
       normalizedQuestion: q,
       searchMode: next,
+      expandRelationKnowledge,
     });
     if (cached) {
       setResult(cached.result);
@@ -1200,6 +1277,30 @@ export function AskQuestionPanel({
       setSubmittedQuestion(q);
     }
     refreshCachedModesFor(q);
+  }
+
+  function onExpandRelationToggle(next: boolean) {
+    if (!canUseVollanalyse) return;
+    setExpandRelationKnowledge(next);
+    setApiError(null);
+    const q = normalizeAskQuestion(question);
+    if (!q || !projectId) {
+      clearActiveAnswerContext();
+      return;
+    }
+    const cached = getCachedAskResult({
+      projectId,
+      normalizedQuestion: q,
+      searchMode: mode,
+      expandRelationKnowledge: next,
+    });
+    if (cached) {
+      setResult(cached.result);
+      setSubmittedQuestion(q);
+    } else {
+      clearActiveAnswerContext();
+      setSubmittedQuestion(q);
+    }
   }
 
   async function runAsk(
@@ -1213,6 +1314,7 @@ export function AskQuestionPanel({
       projectId: customerId,
       searchMode,
       conversationMode: false as const,
+      expandMissingRelationKnowledge: expandRelationKnowledge || undefined,
     };
     const tClick = clickAtMs ?? performance.now();
     try {
@@ -1283,6 +1385,7 @@ export function AskQuestionPanel({
         fullAnalysisReport?: FullAnalysisReport | null;
         searchBudget?: AskQuestionResult["searchBudget"];
         askPerf?: AskQuestionResult["askPerf"];
+        knowledgeExpansion?: AskQuestionResult["knowledgeExpansion"];
       };
 
       const evidence =
@@ -1374,6 +1477,7 @@ export function AskQuestionPanel({
         fullAnalysisReport: data.fullAnalysisReport ?? null,
         searchBudget: data.searchBudget ?? null,
         askPerf: data.askPerf ?? null,
+        knowledgeExpansion: data.knowledgeExpansion ?? null,
         clientPerf: {
           button_click_to_request_sent_ms:
             Math.round((tRequestSent - tClick) * 10) / 10,
@@ -1384,8 +1488,17 @@ export function AskQuestionPanel({
           server_timing_header: serverTiming,
         },
       };
-    } catch {
-      return askQuestionAction({ question: q, customerId, searchMode });
+    } catch (err) {
+      // No server-action fallback: keeps Knowledge/Retriever out of the page
+      // module graph (lazy knowledge — request only via /api/app/ask).
+      const message =
+        err instanceof Error ? err.message : "Ask-API nicht erreichbar.";
+      return {
+        status: "error",
+        answer: null,
+        evidence: [],
+        message,
+      };
     }
   }
 
@@ -1483,6 +1596,27 @@ export function AskQuestionPanel({
           cachedModes={cachedModes}
           canUseVollanalyse={canUseVollanalyse}
         />
+        {canUseVollanalyse ? (
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--foreground)]">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={expandRelationKnowledge}
+              disabled={pending}
+              onChange={(e) => onExpandRelationToggle(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                Fehlendes Beziehungswissen ergänzen
+              </span>
+              <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                Analysiert nur fehlende Method Analyses im technischen
+                Zusammenhang dieser Frage (Budget standardmäßig 10). Kein
+                Klassen-Massenlauf.
+              </span>
+            </span>
+          </label>
+        ) : null}
         <label
           className="label text-[color-mix(in_srgb,var(--warning)_42%,var(--foreground))]"
           htmlFor="ask-question"
@@ -1508,6 +1642,7 @@ export function AskQuestionPanel({
                 projectId,
                 normalizedQuestion: norm,
                 searchMode: mode,
+                expandRelationKnowledge,
               });
               if (cached) {
                 setResult(cached.result);
@@ -1527,7 +1662,9 @@ export function AskQuestionPanel({
             {pending
               ? mode === "full_analysis"
                 ? "Vollanalyse läuft …"
-                : "Wird gesucht …"
+                : expandRelationKnowledge
+                  ? "Beziehungswissen wird ergänzt …"
+                  : "Wird gesucht …"
               : mode === "full_analysis"
                 ? "Vollanalyse starten"
                 : "Frage stellen"}
@@ -1630,6 +1767,12 @@ export function AskQuestionPanel({
           ) : null}
 
           <SearchModeSummary result={result} canUseVollanalyse={canUseVollanalyse} />
+
+          {result.knowledgeExpansion?.ran ? (
+            <KnowledgeExpansionReportBlock
+              report={result.knowledgeExpansion}
+            />
+          ) : null}
 
           {result.searchMode === "full_analysis" &&
           result.fullAnalysisReport ? (

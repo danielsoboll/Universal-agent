@@ -5,21 +5,10 @@ import {
   canMutateProjectSetup,
   getAccessContext,
 } from "@/lib/onboarding/access";
-import {
-  answerQuestion,
-  finalizeAskPerfOnResult,
-} from "@/lib/knowledge/answerQuestion";
-import { resolveAskLocalProject } from "@/lib/knowledge/resolveAskProject";
-import {
-  formatServerTiming,
-  askPerfMark,
-  askPerfNote,
-  runWithAskPerf,
-} from "@/lib/knowledge/askPerf";
 
 export const runtime = "nodejs";
-/** Lokaler Index + OpenAI — Vollanalyse kann länger laufen. */
-export const maxDuration = 180;
+/** Lokaler Index + OpenAI — Expansion/Vollanalyse kann länger laufen. */
+export const maxDuration = 600;
 
 const bodySchema = z.object({
   question: z.string().min(1).max(4000),
@@ -31,9 +20,36 @@ const bodySchema = z.object({
   conversationMode: z.literal(false).optional(),
   /** Measurement only: force cold warm-state for askPerf. */
   askPerfForceCold: z.boolean().optional(),
+  expandMissingRelationKnowledge: z.boolean().optional(),
+  expandAnalysisBudget: z.number().int().min(1).max(25).optional(),
 });
 
-function mapSource(s: Awaited<ReturnType<typeof answerQuestion>>["sources"][number]) {
+type AskSource = {
+  rank: number;
+  title: string;
+  source_key?: string;
+  knowledge_unit_type?: string;
+  object_type?: string;
+  object_name?: string;
+  subobject_name?: string;
+  snippet?: string;
+  combined_score?: number;
+  exact_score?: number;
+  fulltext_score?: number;
+  vector_score?: number;
+  evidence_refs?: string[];
+  facts?: string[];
+  inferences?: string[];
+  tables_read?: string[];
+  tables_written?: string[];
+  called_methods?: string[];
+  hardcoded_values?: string[];
+  evidence?: unknown;
+  doc_confidence?: number | null;
+  confidence?: number | null;
+};
+
+function mapSource(s: AskSource) {
   return {
     rank: s.rank,
     title: s.title,
@@ -91,7 +107,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { question, projectId, searchMode, askPerfForceCold } = parsed.data;
+  const {
+    question,
+    projectId,
+    searchMode,
+    askPerfForceCold,
+    expandMissingRelationKnowledge,
+    expandAnalysisBudget,
+  } = parsed.data;
 
   if (!canAccessApp(ctx, projectId)) {
     return NextResponse.json(
@@ -131,6 +154,31 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+
+  if (
+    expandMissingRelationKnowledge &&
+    !canMutateProjectSetup(ctx, projectId)
+  ) {
+    return NextResponse.json(
+      {
+        status: "error",
+        message:
+          "„Fehlendes Beziehungswissen ergänzen“ ist nur für General Admin und Projekt-Admin verfügbar.",
+      },
+      { status: 403 },
+    );
+  }
+
+  // Lazy: Knowledge modules only after auth + only inside this Ask request.
+  const [
+    { answerQuestion, finalizeAskPerfOnResult },
+    { resolveAskLocalProject },
+    { formatServerTiming, askPerfMark, askPerfNote, runWithAskPerf },
+  ] = await Promise.all([
+    import("@/lib/knowledge/answerQuestion"),
+    import("@/lib/knowledge/resolveAskProject"),
+    import("@/lib/knowledge/askPerf"),
+  ]);
 
   const forceColdHeader =
     request.headers.get("x-ask-perf-cold") === "1" ||
@@ -190,6 +238,8 @@ export async function POST(request: Request) {
         userId: ctx.userId,
         question,
         searchMode,
+        expandMissingRelationKnowledge,
+        expandAnalysisBudget,
       });
       askPerfMark("api_response_sent");
       const result = finalizeAskPerfOnResult(raw);
@@ -280,6 +330,34 @@ export async function POST(request: Request) {
           fullAnalysisReport: result.full_analysis_report,
           searchBudget: result.search_budget,
           askPerf: result.ask_perf,
+          knowledgeExpansion: result.knowledge_expansion
+            ? {
+                enabled: result.knowledge_expansion.enabled,
+                ran: result.knowledge_expansion.ran,
+                budget: result.knowledge_expansion.budget,
+                candidatesTotal: result.knowledge_expansion.candidates_total,
+                alreadyCached: result.knowledge_expansion.already_cached,
+                analyzedNew: result.knowledge_expansion.analyzed_new,
+                analyzedSourceKeys:
+                  result.knowledge_expansion.analyzed_source_keys,
+                deferredSourceKeys:
+                  result.knowledge_expansion.deferred_source_keys,
+                failed: result.knowledge_expansion.failed.map((f) => ({
+                  sourceKey: f.source_key,
+                  error: f.error,
+                })),
+                durationMs: result.knowledge_expansion.duration_ms,
+                reRanAnswer: result.knowledge_expansion.re_ran_answer,
+                layers: {
+                  preexisting: result.knowledge_expansion.layers.preexisting,
+                  newlyAnalyzed:
+                    result.knowledge_expansion.layers.newly_analyzed,
+                  stillOpen: result.knowledge_expansion.layers.still_open,
+                },
+                notes: result.knowledge_expansion.notes,
+              }
+            : null,
+          fullAnalysisResearch: result.full_analysis_research,
         },
         { status: httpStatus, headers },
       );

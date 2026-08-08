@@ -12,3 +12,4 @@ alwaysApply: true
 - Supabase: `pkcucpsrwgactejovdmp` (`https://pkcucpsrwgactejovdmp.supabase.co`)
 - UI-Sprache: Deutsch. Secrets nie committen. Push nur auf explizite Anfrage.
 - SAP-Rohdaten außerhalb des Repos: `LOCAL_DATA_ROOT` nur aus `.env.local`; Zugriff über `src/lib/localData` (`raw/` read-only; Writes nur canonical/analyses/embeddings/indexes/logs).
+- **NO KNOWLEDGE LOADING ON RENDER** — Knowledge nur serverseitig, request-driven (Ask-API). UI kennt kein `LOCAL_DATA_ROOT`. Details: `docs/LAZY_KNOWLEDGE.md`.

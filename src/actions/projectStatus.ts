@@ -9,7 +9,7 @@ import {
 import { getLocalDataRoot } from "@/lib/localData/root";
 import { resolveBoundProjectKey } from "@/lib/localData/resolveDataProjectKey";
 import { reconcileProjectStatus } from "@/lib/admin/projectStatus";
-import { loadScopedCustomers } from "@/lib/admin/loadDashboardSetup";
+import { loadScopedCustomers } from "@/lib/admin/loadScopedCustomers";
 
 /**
  * Read-only artifact reconciliation. Updates status metadata only.

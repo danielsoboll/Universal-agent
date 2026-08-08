@@ -24,6 +24,9 @@ export type ProjectSetupDashboardProps = {
   projects: ProjectSetupDashboardCustomer[];
   selectedCustomer: ProjectSetupDashboardCustomer | null;
   overview: SetupOverview | null;
+  /** snapshot = last admin refresh; none = still needs explicit refresh */
+  statusSource?: "snapshot" | "none";
+  statusUpdatedAt?: string | null;
   /** Real list-bar percents for non-demo projects (e.g. DGL), keyed by customer id. */
   listPercents?: Record<string, number>;
   readOnlyUser?: boolean;
@@ -86,6 +89,8 @@ export function ProjectSetupDashboard({
   projects,
   selectedCustomer,
   overview,
+  statusSource = overview ? "snapshot" : "none",
+  statusUpdatedAt = null,
   listPercents = {},
   readOnlyUser = false,
   showProjectList = false,
@@ -109,7 +114,7 @@ export function ProjectSetupDashboard({
     : null;
 
   const currentProjectBlock =
-    hasSetup && selectedCustomer && displayOverview ? (
+    selectedCustomer && selectedDisplayName ? (
       <section className="admin-card project-current rounded-[12px] border p-3">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[0.875rem] font-medium text-[var(--muted)]">
@@ -120,15 +125,28 @@ export function ProjectSetupDashboard({
         <h2 className="mt-0.5 text-[1.25rem] font-medium leading-snug tracking-tight break-words text-[var(--foreground)]">
           {selectedDisplayName}
         </h2>
-        <p className="mt-0.5 text-[0.875rem] text-[var(--muted)] break-words">
-          Status: {currentStatusText(displayOverview)}
-        </p>
+        {displayOverview ? (
+          <p className="mt-0.5 text-[0.875rem] text-[var(--muted)] break-words">
+            Status: {currentStatusText(displayOverview)}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-[0.875rem] text-[var(--muted)] break-words">
+            Status: noch nicht vom Datenbestand geprüft — bitte „Status
+            aktualisieren“.
+          </p>
+        )}
+        {statusSource === "snapshot" && statusUpdatedAt ? (
+          <p className="mt-1 text-[0.8125rem] text-[var(--muted)]">
+            Zuletzt geprüft:{" "}
+            {new Date(statusUpdatedAt).toLocaleString("de-DE")}
+          </p>
+        ) : null}
         {readOnlyUser ? (
           <p className="mt-2 text-[0.9375rem] text-[var(--muted)]">
             Ansicht für Projekt-Benutzer — Aktionen erledigt der Projekt-Admin.
           </p>
         ) : null}
-        {displayOverview.localDataError ? (
+        {displayOverview?.localDataError ? (
           <p className="mt-2 text-[0.9375rem] text-[var(--danger)] break-words">
             {displayOverview.localDataError}
           </p>
@@ -221,33 +239,40 @@ export function ProjectSetupDashboard({
             </ul>
           )}
         </section>
-      ) : (
-        currentProjectBlock
-      )}
+      ) : null}
 
-      {hasSetup && selectedCustomer && displayOverview ? (
+      {selectedCustomer ? (
         <>
-          {showProjectList ? currentProjectBlock : null}
+          {currentProjectBlock}
 
-          <SetupOverallProgress
-            percent={displayOverview.overallPercent}
-            doneCount={displayOverview.doneCount}
-            totalCount={displayOverview.totalCount}
-            sentence={displayOverview.overallSentence}
-          />
+          {hasSetup && displayOverview ? (
+            <>
+              <SetupOverallProgress
+                percent={displayOverview.overallPercent}
+                doneCount={displayOverview.doneCount}
+                totalCount={displayOverview.totalCount}
+                sentence={displayOverview.overallSentence}
+              />
 
-          <section className="space-y-1.5">
-            <p className="text-[0.8125rem] font-medium text-[var(--muted)]">
-              Hauptschritte
-            </p>
-            <ol className="space-y-1.5">
-              {displayOverview.steps.map((step) => (
-                <li key={step.id}>
-                  <SetupStepCard step={step} />
-                </li>
-              ))}
-            </ol>
-          </section>
+              <section className="space-y-1.5">
+                <p className="text-[0.8125rem] font-medium text-[var(--muted)]">
+                  Hauptschritte
+                </p>
+                <ol className="space-y-1.5">
+                  {displayOverview.steps.map((step) => (
+                    <li key={step.id}>
+                      <SetupStepCard step={step} />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </>
+          ) : (
+            <EmptyState
+              title="Setup-Status noch nicht geladen"
+              message="Navigation bleibt leicht — der Datenbestand wird erst bei „Status aktualisieren“ geprüft."
+            />
+          )}
 
           <WerkzeugePanel
             customerId={selectedCustomer.id}

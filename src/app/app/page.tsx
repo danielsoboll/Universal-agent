@@ -6,10 +6,8 @@ import {
 } from "@/lib/onboarding/access";
 import { EmptyState, InlineError } from "@/components/ui/states";
 import { SetupOverallProgress } from "@/components/admin/setup/SetupOverallProgress";
-import {
-  buildDashboardOverview,
-  loadScopedCustomers,
-} from "@/lib/admin/loadDashboardSetup";
+import { loadScopedCustomers } from "@/lib/admin/loadScopedCustomers";
+import { buildAppOverviewLightweight } from "@/lib/admin/loadAppOverview";
 
 export default async function AppOverviewPage({
   searchParams,
@@ -60,7 +58,7 @@ export default async function AppOverviewPage({
 
   const overview =
     customerId && selectedCustomer
-      ? await buildDashboardOverview({
+      ? await buildAppOverviewLightweight({
           ctx,
           customerId,
           selected: selectedCustomer,
@@ -78,6 +76,12 @@ export default async function AppOverviewPage({
         {selectedCustomer ? (
           <p className="mt-1 text-[0.9375rem] text-[var(--muted)] break-words">
             {selectedCustomer.name}
+            {selectedCustomer.status ? (
+              <span className="text-[var(--muted)]">
+                {" "}
+                · {selectedCustomer.status}
+              </span>
+            ) : null}
           </p>
         ) : null}
       </div>
@@ -122,12 +126,23 @@ export default async function AppOverviewPage({
       ) : null}
 
       {overview ? (
-        <SetupOverallProgress
-          percent={overview.overallPercent}
-          doneCount={overview.doneCount}
-          totalCount={overview.totalCount}
-          sentence={overview.overallSentence}
-        />
+        <div className="space-y-2">
+          <SetupOverallProgress
+            percent={overview.overallPercent}
+            doneCount={overview.doneCount}
+            totalCount={overview.totalCount}
+            sentence={overview.overallSentence}
+          />
+          {overview.source === "metadata" ? (
+            <p className="text-[0.8125rem] text-[var(--muted)]">
+              Leichte Metadatenansicht — kein lokaler Wissensbestand geladen.
+            </p>
+          ) : overview.updatedAt ? (
+            <p className="text-[0.8125rem] text-[var(--muted)]">
+              Stand: {new Date(overview.updatedAt).toLocaleString("de-DE")}
+            </p>
+          ) : null}
+        </div>
       ) : (
         <EmptyState
           title="Kein Projekt zugeordnet"

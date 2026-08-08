@@ -5,7 +5,7 @@ import {
   requireProjectConsoleAccess,
 } from "@/lib/onboarding/access";
 import { EmptyState } from "@/components/ui/states";
-import { loadScopedCustomers } from "@/lib/admin/loadDashboardSetup";
+import { loadScopedCustomers } from "@/lib/admin/loadScopedCustomers";
 
 /**
  * Placeholder page for the future Pipeline Analyzer.

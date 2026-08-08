@@ -7,12 +7,11 @@ import {
 import { InlineError } from "@/components/ui/states";
 import { ProjectSetupDashboard } from "@/components/admin/setup/ProjectSetupDashboard";
 import {
-  buildDashboardOverview,
-  loadScopedCustomers,
+  loadCachedDashboardOverview,
+  loadCachedOverallPercent,
 } from "@/lib/admin/loadDashboardSetup";
-import {
-  demoListPercent,
-} from "@/lib/admin/dashboardDemoDisplay";
+import { loadScopedCustomers } from "@/lib/admin/loadScopedCustomers";
+import { demoListPercent } from "@/lib/admin/dashboardDemoDisplay";
 
 export default async function AdminDashboardPage({
   searchParams,
@@ -52,39 +51,27 @@ export default async function AdminDashboardPage({
   const selectedCustomer =
     customers.find((c) => c.id === customerId) ?? null;
 
-  const overview =
+  const cached =
     customerId && selectedCustomer
-      ? await buildDashboardOverview({
-          ctx,
+      ? loadCachedDashboardOverview({
           customerId,
           selected: selectedCustomer,
         })
-      : null;
+      : { overview: null, source: "none" as const, updatedAt: null };
 
-  // Real list bars for projects without demo fake (DGL stays visible when
-  // another project is selected).
-  const listPercentEntries = await Promise.all(
-    customers.map(async (c) => {
-      if (demoListPercent(c.name) != null) return null;
-      if (c.id === customerId && overview) {
-        return [c.id, overview.overallPercent] as const;
-      }
-      try {
-        const o = await buildDashboardOverview({
-          ctx,
-          customerId: c.id,
-          selected: c,
-        });
-        return [c.id, o.overallPercent] as const;
-      } catch (err) {
-        console.error("[admin/dashboard] list percent", c.id, err);
-        return null;
-      }
-    }),
-  );
+  // List bars: snapshot percents only — never N× disk reconcile on render.
   const listPercents: Record<string, number> = {};
-  for (const entry of listPercentEntries) {
-    if (entry) listPercents[entry[0]] = entry[1];
+  for (const c of customers) {
+    if (demoListPercent(c.name) != null) continue;
+    if (c.id === customerId && cached.overview) {
+      listPercents[c.id] = cached.overview.overallPercent;
+      continue;
+    }
+    const pct = loadCachedOverallPercent({
+      customerId: c.id,
+      selected: c,
+    });
+    if (pct != null) listPercents[c.id] = pct;
   }
 
   return (
@@ -97,10 +84,11 @@ export default async function AdminDashboardPage({
           ? { id: selectedCustomer.id, name: selectedCustomer.name }
           : null
       }
-      overview={overview}
+      overview={cached.overview}
+      statusSource={cached.source}
+      statusUpdatedAt={cached.updatedAt}
       listPercents={listPercents}
       readOnlyUser={readOnlyUser}
-      // General Admin: all projects. Project Admin: membership-scoped (loadScopedCustomers).
       showProjectList
       showNewProject={isGeneralAdmin}
       showProjectAdmin={canMutate && Boolean(selectedCustomer)}

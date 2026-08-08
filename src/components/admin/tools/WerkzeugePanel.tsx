@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { syncProjectStatusAction } from "@/actions/projectStatus";
+import { refreshSetupStatusAction } from "@/actions/refreshSetupStatus";
 
 export type WerkzeugePanelProps = {
   customerId: string;
@@ -20,6 +21,20 @@ export function WerkzeugePanel({ customerId, canMutate }: WerkzeugePanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   const analyzerHref = `/admin/pipeline-analyzer?customer=${encodeURIComponent(customerId)}`;
+
+  function onRefreshSetupStatus() {
+    setMessage(null);
+    setError(null);
+    startTransition(async () => {
+      const res = await refreshSetupStatusAction({ customerId });
+      if (!res.ok) {
+        setError(res.message);
+        return;
+      }
+      setMessage(res.message);
+      router.refresh();
+    });
+  }
 
   function onSync() {
     setMessage(null);
@@ -41,6 +56,36 @@ export function WerkzeugePanel({ customerId, canMutate }: WerkzeugePanelProps) {
         Werkzeuge &amp; Qualitätssicherung
       </p>
       <div className="grid gap-1.5 sm:grid-cols-2">
+        <article className="admin-card rounded-[12px] border border-[var(--border)] bg-[var(--panel)] p-3.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-[1.0625rem] font-medium text-[var(--foreground)]">
+              Status aktualisieren
+            </h3>
+            <span className="shrink-0 rounded-md border border-[var(--border)] px-1.5 py-0.5 text-[0.75rem] text-[var(--muted)]">
+              Explizit
+            </span>
+          </div>
+          <p className="mt-1.5 text-[0.9375rem] leading-snug text-[var(--muted)]">
+            Prüft den lokalen Datenbestand (Control Tables, Exportgruppen,
+            Indices) und speichert einen kleinen Status-Snapshot. Läuft nicht
+            bei Navigation — nur auf Knopfdruck.
+          </p>
+          {canMutate ? (
+            <button
+              type="button"
+              className="btn-secondary-blue mt-3"
+              disabled={pending}
+              onClick={onRefreshSetupStatus}
+            >
+              {pending ? "Prüfe Datenbestand…" : "Datenbestand prüfen"}
+            </button>
+          ) : (
+            <p className="mt-3 text-[0.875rem] text-[var(--muted)]">
+              Nur Projekt-Admin kann den Setup-Status aktualisieren.
+            </p>
+          )}
+        </article>
+
         <article className="admin-card rounded-[12px] border border-[var(--border)] bg-[var(--panel)] p-3.5">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="text-[1.0625rem] font-medium text-[var(--foreground)]">
