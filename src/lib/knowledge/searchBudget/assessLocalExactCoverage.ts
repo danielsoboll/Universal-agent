@@ -6,6 +6,7 @@ import {
   COMMUNICATION_OBJECT_TYPES,
   type CommunicationObjectType,
 } from "./types";
+import { hasDeterministicSeedEvidence } from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
 
 const COMM_SET = new Set<string>(COMMUNICATION_OBJECT_TYPES);
 
@@ -163,7 +164,14 @@ export function prioritizeCommunicationHits(
 ): KnowledgeHit[] {
   const rank = (h: KnowledgeHit): number => {
     let s = 0;
-    if (isCommunicationHit(h)) s += 1000;
+    // Exact / seed enrichment outranks communication-family bias.
+    if (hasDeterministicSeedEvidence(h)) s += 2000;
+    else if (h.exact_score >= 3 && h.knowledge_unit_type === "master_field") {
+      s += 1500;
+    } else if (h.exact_score >= 3) {
+      s += 1200;
+    }
+    if (isCommunicationHit(h)) s += 100; // secondary family factor
     if (isLocalExactHit(h, anchors)) s += 400;
     s += Math.min(200, h.exact_score * 40);
     s += Math.min(100, h.combined_score);

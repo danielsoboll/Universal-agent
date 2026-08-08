@@ -27,6 +27,11 @@ import { expandCodeUsagesFromCanonical } from "@/lib/search/lexical/expandCodeUs
 import { normalizeLexicalQuery } from "@/lib/search/lexical/normalizeQuery";
 import type { SearchDocument } from "@/lib/search/searchDocumentSchema";
 import type { LexicalSearchDiagnosis } from "@/lib/search/lexical/types";
+import {
+  enrichConfirmedFieldSeeds,
+  enrichmentPackToHits,
+  type SeedEnrichmentPack,
+} from "@/lib/knowledge/seedEnrichment";
 
 export type AccessIndexSearchResult = {
   hits: KnowledgeHit[];
@@ -45,6 +50,7 @@ export type AccessIndexSearchResult = {
   warnings: string[];
   lexical_diagnosis?: LexicalSearchDiagnosis;
   lexical_expansion_tokens?: string[];
+  seed_enrichment?: SeedEnrichmentPack;
 };
 
 function forceLegacy(): boolean {
@@ -403,6 +409,30 @@ export function searchViaAccessIndexes(params: {
     }
   }
 
+  // Generic FIELD seed enrichment (master instances, values, code, config).
+  // Seeds: confirmed question anchors + field-like lexical/symbol hits
+  // (questions often say "virtuelles Lager" without naming ZZ_* explicitly).
+  let seed_enrichment: SeedEnrichmentPack | undefined;
+  const lexicalFieldSeeds = (lexical_expansion_tokens ?? []).filter(
+    (t) => typeof t === "string" && (t.includes("-") || /^ZZ_[A-Z0-9_]+$/i.test(t)),
+  );
+  const enrichmentSeedNames = [
+    ...new Set([...confirmedSeeds, ...fieldLike, ...lexicalFieldSeeds]),
+  ];
+  if (enrichmentSeedNames.length > 0) {
+    seed_enrichment = enrichConfirmedFieldSeeds({
+      projectId,
+      systemId: params.project.system_id || "D01",
+      confirmedSeeds: enrichmentSeedNames,
+    });
+    if (seed_enrichment.enriched) {
+      indexes_used.push("seed-enrichment/entities");
+      warnings.push(
+        `Seed-Enrichment: ${seed_enrichment.notes.join("; ")}`,
+      );
+    }
+  }
+
   if (candidateIds.size === 0) {
     askPerfNote("access indexes: no candidates");
     return {
@@ -421,6 +451,7 @@ export function searchViaAccessIndexes(params: {
       ],
       lexical_diagnosis,
       lexical_expansion_tokens,
+      seed_enrichment,
     };
   }
 
@@ -459,16 +490,40 @@ export function searchViaAccessIndexes(params: {
     hits.push(ch);
   }
 
-  // Prefer communication / exact anchor matches
-  hits.sort((a, b) => {
-    const score = (h: KnowledgeHit) => {
-      let s = h.exact_score * 20 + h.combined_score;
-      if (h.knowledge_unit_type === "message_idoc_object") s += 50;
-      if (h.knowledge_unit_type === "master_field") s += 30;
-      return s;
-    };
-    return score(b) - score(a);
-  });
+  // Prefer evidence proximity to confirmed seeds over source-family bias.
+  // exact/direct > deterministic seed enrichment > graph/symbol > lexical;
+  // message_idoc / other families are only a small secondary factor.
+  const scoreAccessHit = (h: KnowledgeHit): number => {
+    let s = h.exact_score * 20 + h.combined_score;
+    const terms = h.matched_terms ?? [];
+    const isSeedEnrichment =
+      h.metadata?.seed_enrichment === true ||
+      terms.some((t) => String(t).toLowerCase() === "seed_enrichment") ||
+      String(h.search_document_id ?? "").startsWith("enrichment:");
+    if (isSeedEnrichment) s += 100;
+
+    const blob =
+      `${h.title} ${h.object_name} ${h.subobject_name} ${h.source_key}`.toUpperCase();
+    for (const seed of enrichmentSeedNames) {
+      const needle = seed.trim().toUpperCase();
+      if (needle.length >= 3 && blob.includes(needle)) {
+        s += 45;
+        break;
+      }
+    }
+
+    if (terms.some((t) => String(t).startsWith("sym:"))) s += 15;
+    if (terms.some((t) => String(t).startsWith("graph:"))) s += 12;
+
+    // Secondary source-family weights (kept small on purpose).
+    const kut = String(h.knowledge_unit_type ?? "");
+    if (kut === "master_field") s += 8;
+    else if (kut === "code_unit") s += 5;
+    else if (kut === "message_idoc_object") s += 4;
+    return s;
+  };
+
+  hits.sort((a, b) => scoreAccessHit(b) - scoreAccessHit(a));
 
   const enriched = enrichWithEvidence(projectId, hits, limit);
   hits = enriched.hits.slice(0, Math.max(limit, 48)).map((h, i) => ({
@@ -477,13 +532,81 @@ export function searchViaAccessIndexes(params: {
   }));
   evidence_fetched = Math.max(evidence_fetched, enriched.fetched);
 
+  // Second-pass enrichment seeds from retrieved master_field / symbol hits
+  const hitFieldSeeds: string[] = [];
+  for (const h of hits.slice(0, 30)) {
+    const blob = `${h.title} ${h.object_name} ${h.source_key} ${(h.matched_terms ?? []).join(" ")}`;
+    for (const m of blob.matchAll(/\b([A-Z][A-Z0-9_]{2,30})-(ZZ_[A-Z0-9_]+|[A-Z][A-Z0-9_]{2,30})\b/g)) {
+      hitFieldSeeds.push(`${m[1]}-${m[2]}`.toUpperCase());
+    }
+    for (const m of blob.matchAll(/\b(ZZ_[A-Z0-9_]{2,40})\b/g)) {
+      hitFieldSeeds.push(m[1]!.toUpperCase());
+    }
+  }
+  if (hitFieldSeeds.length > 0) {
+    const pass2 = enrichConfirmedFieldSeeds({
+      projectId,
+      systemId: params.project.system_id || "D01",
+      confirmedSeeds: [...new Set(hitFieldSeeds)],
+    });
+    if (pass2.enriched) {
+      // Merge with pass-1 pack so later hit-derived seeds cannot wipe earlier
+      // confirmed enrichment (generic: keep richest evidence per seed).
+      if (seed_enrichment?.enriched) {
+        const bySeed = new Map(
+          seed_enrichment.field_enrichments.map((e) => [
+            e.seed.seed.toUpperCase(),
+            e,
+          ]),
+        );
+        for (const e of pass2.field_enrichments) {
+          const key = e.seed.seed.toUpperCase();
+          const prev = bySeed.get(key);
+          if (
+            !prev ||
+            e.master_instances.total_attributes >
+              prev.master_instances.total_attributes ||
+            e.code_usage.total > prev.code_usage.total
+          ) {
+            bySeed.set(key, e);
+          }
+        }
+        seed_enrichment = {
+          enriched: true,
+          field_enrichments: [...bySeed.values()],
+          notes: [...new Set([...seed_enrichment.notes, ...pass2.notes])],
+        };
+      } else {
+        seed_enrichment = pass2;
+      }
+      if (!indexes_used.includes("seed-enrichment/entities")) {
+        indexes_used.push("seed-enrichment/entities");
+      }
+      warnings.push(`Seed-Enrichment (from hits): ${pass2.notes.join("; ")}`);
+    }
+  }
+
+  if (seed_enrichment?.enriched) {
+    const enrichHits = enrichmentPackToHits(seed_enrichment, 1);
+    const enrichIds = new Set(enrichHits.map((h) => h.search_document_id));
+    const rest = hits.filter((h) => !enrichIds.has(h.search_document_id));
+    // Keep enrichment first, then re-score remainder with the same seed-proximity rule.
+    rest.sort((a, b) => scoreAccessHit(b) - scoreAccessHit(a));
+    hits = [...enrichHits, ...rest]
+      .slice(0, Math.max(limit, 56))
+      .map((h, i) => ({
+        ...h,
+        rank: i + 1,
+      }));
+  }
+
   const primary_path =
     graph_used && confirmedSeeds.length > 0
       ? "symbol+graph"
       : "lexical+symbol";
 
   askPerfNote(
-    `access path=${primary_path} hits=${hits.length} evidence=${evidence_fetched} graph=${graph_used}`,
+    `access path=${primary_path} hits=${hits.length} evidence=${evidence_fetched} graph=${graph_used} enrichment=${seed_enrichment?.enriched ? "yes" : "no"}`,
   );
 
   return {
@@ -499,5 +622,6 @@ export function searchViaAccessIndexes(params: {
     warnings,
     lexical_diagnosis,
     lexical_expansion_tokens,
+    seed_enrichment,
   };
 }

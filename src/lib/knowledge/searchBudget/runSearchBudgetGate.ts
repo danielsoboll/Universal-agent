@@ -23,6 +23,9 @@ import {
   type SearchBudgetDiagnostics,
   type SearchBudgetStage,
 } from "./types";
+import {
+  mergePreserveConfirmedSeedEvidence,
+} from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
 
 export type SearchBudgetGateDecision = {
   stage: SearchBudgetStage;
@@ -67,9 +70,13 @@ export function decideSearchBudgetAfterLocalExact(params: {
   });
 
   const prioritized = prioritizeCommunicationHits(
-    coverage.local_exact_hits.length
-      ? coverage.local_exact_hits
-      : params.localHits,
+    (() => {
+      const base = coverage.local_exact_hits.length
+        ? coverage.local_exact_hits
+        : params.localHits;
+      // Keep confirmed seed-enrichment evidence when LOCAL_EXACT narrows the set.
+      return mergePreserveConfirmedSeedEvidence(base, params.localHits);
+    })(),
     anchors,
   );
 

@@ -49,6 +49,8 @@ export type KnowledgeSearchResult = {
     graph_used: boolean;
     legacy_used: boolean;
   };
+  /** Generic cross-source enrichment after confirmed technical seeds. */
+  seed_enrichment?: import("@/lib/knowledge/seedEnrichment").SeedEnrichmentPack;
 };
 
 export function inspectProjectKnowledge(project: LocalProject): {
@@ -286,6 +288,7 @@ export async function knowledgeSearch(params: {
           },
           lexical_diagnosis: access.lexical_diagnosis,
           lexical_expansion_tokens: access.lexical_expansion_tokens,
+          seed_enrichment: access.seed_enrichment,
         };
       }
 

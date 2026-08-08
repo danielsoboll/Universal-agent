@@ -27,12 +27,12 @@ function hit(
     metadata_score: 0,
     confidence_bonus: 0,
     confidence: 0.8,
-    matched_terms: [],
+    matched_terms: opts.matched_terms ?? [],
     snippet: opts.snippet ?? "",
     evidence_refs: opts.evidence_refs ?? [],
     facts: opts.facts ?? [],
     inferences: opts.inferences ?? [],
-    metadata: {},
+    metadata: opts.metadata ?? {},
     object_name: opts.object_name ?? "",
     object_type: opts.object_type ?? "",
     subobject_name: opts.subobject_name ?? "",
@@ -222,6 +222,83 @@ function testSetKonzernfarbeAnswerable() {
   assert.ok(r.supporting_source_ids.includes("h1"));
 }
 
+function testConfirmedSeedEvidenceRetainedDespiteSoftConceptGap() {
+  const enrichment = hit("enrichment:field:TABLE-FIELD", {
+    title: "Enrichment TABLE-FIELD",
+    snippet: "TABLE-FIELD ist bei 12 Vertriebsbereichszuordnungen gesetzt.",
+    facts: [
+      "DDIC TABLE-FIELD: Kennzeichen virtuelles Lager",
+      "TABLE-FIELD ist bei 12 Vertriebsbereichszuordnungen gesetzt (4 Kunden).",
+      "Code-Usage zu TABLE-FIELD: 3 belegte Links.",
+      "Beispiel: 1000 ACME — VKORG 0100/01/00 = X",
+    ],
+    evidence: [
+      {
+        statement_type: "fact",
+        text: "DDIC TABLE-FIELD: Kennzeichen virtuelles Lager",
+        lines: [],
+      },
+      {
+        statement_type: "fact",
+        text: "TABLE-FIELD ist bei 12 Vertriebsbereichszuordnungen gesetzt (4 Kunden).",
+        lines: [],
+      },
+    ],
+    matched_terms: ["seed_enrichment"],
+    metadata: { seed_enrichment: true },
+    object_type: "ENRICHMENT",
+  });
+  const thematic = hit("sd_theme", {
+    title: "Kampagne Alpha",
+    snippet: "Alpha Kampagne ohne Feldbezug",
+    facts: ["Alpha ist ein Kunde"],
+    evidence_refs: ["#1"],
+  });
+  const r = assessRelevanceGate({
+    question: "Wie funktioniert das Alpha virtuelle Lager?",
+    hits: [enrichment, thematic],
+  });
+  assert.ok(
+    r.supporting_source_ids.includes("enrichment:field:TABLE-FIELD"),
+    `seed enrichment must stay supporting: ${JSON.stringify(r)}`,
+  );
+  assert.notEqual(
+    r.answerability,
+    "insufficient",
+    `confirmed seed evidence must not be fully gated out: ${r.answerability} ${r.reason}`,
+  );
+  assert.ok(
+    !r.missing_concepts.includes("virtuelle") ||
+      r.supporting_source_ids.includes("enrichment:field:TABLE-FIELD"),
+    "soft lexical gap must not drop seed evidence",
+  );
+}
+
+function testTechnicalAnchorStillFailClosed() {
+  const grounding: GroundingReport = {
+    query_entities: [],
+    results: [],
+    has_ungrounded_named_entity: false,
+    has_ungrounded_technical_anchor: true,
+    contradicted_entity_names: [],
+    ungrounded_technical_anchors: ["ZRAH"],
+    grounded_entity_names: [],
+  };
+  const r = assessRelevanceGate({
+    question: "Was macht ZRAH?",
+    hits: [
+      hit("nearby", {
+        title: "ZRAH_HELPER",
+        snippet: "Nachbarobjekt ohne Ankerbeleg",
+        facts: ["Hilfsroutine"],
+      }),
+    ],
+    grounding,
+  });
+  assert.equal(r.answerability, "insufficient");
+  assert.equal(r.supporting_source_ids.length, 0);
+}
+
 const tests = [
   testExtractOptitoolConcepts,
   testExtractTechnicalId,
@@ -231,6 +308,8 @@ const tests = [
   testInsufficientOnUngroundedNamedEntity,
   testPartialWhenOnlySubsetMatched,
   testSetKonzernfarbeAnswerable,
+  testConfirmedSeedEvidenceRetainedDespiteSoftConceptGap,
+  testTechnicalAnchorStillFailClosed,
 ];
 
 let failed = 0;

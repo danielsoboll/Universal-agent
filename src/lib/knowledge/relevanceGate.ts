@@ -1,6 +1,7 @@
 import type { KnowledgeHit } from "@/lib/knowledge/types";
 import type { DomainProfile } from "@/lib/domain/types";
 import type { GroundingReport } from "@/lib/knowledge/entityGrounding";
+import { hasDeterministicSeedEvidence } from "@/lib/knowledge/seedEnrichment/confirmedSeedEvidence";
 
 /**
  * Deterministic relevance / evidence gate — runs BEFORE answer synthesis.
@@ -99,6 +100,8 @@ const QUERY_STOPWORDS = new Set(
     "keine",
     "etwas",
     "etwas",
+    "wissen",
+    "wir",
     "spezifische",
     "spezifischen",
     "spezifischer",
@@ -330,6 +333,37 @@ function expandSupportingViaSharedObject(
 }
 
 /**
+ * Keep deterministic seed-enrichment evidence in the supporting set even when
+ * linguistic overlap with soft query wording is weak. Does not invent facts
+ * and does not fabricate concept coverage — only retains existing evidence ids.
+ */
+function retainConfirmedSeedEvidence(params: {
+  hits: KnowledgeHit[];
+  query_concepts: string[];
+  matched: Set<string>;
+  supporting: Set<string>;
+  similar: Set<string>;
+}): void {
+  const seedHits = params.hits.filter(hasDeterministicSeedEvidence);
+  if (seedHits.length === 0) return;
+
+  for (const hit of seedHits) {
+    params.supporting.add(hit.search_document_id);
+    params.similar.delete(hit.search_document_id);
+    // Credit concepts that actually appear in the enrichment corpus (no invention).
+    const raw = hitCorpus(hit);
+    const compact = normalizeToken(raw);
+    const spaced = raw
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "");
+    for (const c of params.query_concepts) {
+      if (conceptMatchesHit(c, compact, spaced)) params.matched.add(c);
+    }
+  }
+}
+
+/**
  * Assess whether retrieval hits can answer the question.
  * Score alone is not used as the sole decision.
  */
@@ -380,7 +414,11 @@ export function assessRelevanceGate(params: {
     }
 
     if (hitMatched.length === 0) {
-      similar.add(hit.search_document_id);
+      // Confirmed seed enrichment may still be supporting even without soft
+      // lexical overlap — handled in retainConfirmedSeedEvidence below.
+      if (!hasDeterministicSeedEvidence(hit)) {
+        similar.add(hit.search_document_id);
+      }
       continue;
     }
 
@@ -399,6 +437,15 @@ export function assessRelevanceGate(params: {
 
   // Vocabulary-mismatch bridge: same object as an already-supporting hit
   expandSupportingViaSharedObject(params.hits, supporting, similar);
+
+  // Deterministic seed enrichment must survive the gate when it carries real evidence.
+  retainConfirmedSeedEvidence({
+    hits: params.hits,
+    query_concepts,
+    matched,
+    supporting,
+    similar,
+  });
 
   const matched_concepts = query_concepts.filter((c) =>
     matched.has(c),
@@ -498,6 +545,27 @@ export function assessRelevanceGate(params: {
         effectiveEssential.length;
 
   if (supporting.size === 0 || essentialCoverage < 0.34) {
+    // Confirmed seed evidence must not be wiped solely for soft lexical gaps.
+    const seedSupporting = [...supporting].filter((id) =>
+      params.hits.some(
+        (h) =>
+          h.search_document_id === id && hasDeterministicSeedEvidence(h),
+      ),
+    );
+    if (seedSupporting.length > 0) {
+      return {
+        answerability: "partially_answerable",
+        query_concepts,
+        matched_concepts,
+        missing_concepts,
+        supporting_source_ids: seedSupporting,
+        contradicting_source_ids: [...contradicting],
+        similar_but_insufficient_source_ids: [...similar].filter(
+          (id) => !seedSupporting.includes(id),
+        ),
+        reason: `Bestätigte Seed-Evidence vorhanden; lexikalisch fehlend: ${missing_concepts.join(", ") || "—"}.`,
+      };
+    }
     return {
       answerability: "insufficient",
       query_concepts,

@@ -29,6 +29,21 @@ import {
 import { buildEvidenceContext } from "@/lib/knowledge/evidenceContext";
 import { classifyQuestionIntent } from "@/lib/knowledge/questionIntent";
 import {
+  applySeedEnrichmentToAnswer,
+  classifyPresentationHint,
+  enrichConfirmedFieldSeeds,
+  enrichmentPackToHits,
+  formatSeedEnrichmentPromptBlock,
+  mergePreserveConfirmedSeedEvidence,
+  type SeedEnrichmentPack,
+} from "@/lib/knowledge/seedEnrichment";
+import {
+  emptyKnowledgeExpansionReport,
+  formatExpansionLayersForPrompt,
+  runKnowledgeExpansion,
+  type KnowledgeExpansionReport,
+} from "@/lib/knowledge/expandRelationKnowledge";
+import {
   buildCompactTechnicalDetails,
   buildTechnicalDetailsFromHits,
   expandRelatedHits,
@@ -41,7 +56,8 @@ import {
   listAvailableKnowledgeUnitTypes,
 } from "@/lib/knowledge/executeQueryPlan";
 import { executePlannedRagRetrieval } from "@/lib/knowledge/executePlannedRag";
-import { executeFullAnalysisRetrieval } from "@/lib/knowledge/executeFullAnalysis";
+import { runIterativeFullAnalysis } from "@/lib/knowledge/fullAnalysisResearch";
+import type { FullAnalysisResearchReport } from "@/lib/knowledge/fullAnalysisResearch";
 import { FULL_ANALYSIS_SYNTHESIS_ADDENDUM } from "@/lib/knowledge/fullAnalysisPrompt";
 import {
   buildFullAnalysisReport,
@@ -166,8 +182,12 @@ export type AnswerQuestionResult = {
   } | null;
   /** full_analysis only — Markdown + Word download payload. */
   full_analysis_report: FullAnalysisReport | null;
+  /** full_analysis only — iterative research trace. */
+  full_analysis_research: FullAnalysisResearchReport | null;
   /** SEARCH_BUDGET_GATE diagnostics (stage, cache, OpenAI calls). */
   search_budget: SearchBudgetDiagnostics | null;
+  /** Optional: fehlendes Beziehungswissen ergänzen (Method Analyses). */
+  knowledge_expansion: import("@/lib/knowledge/expandRelationKnowledge").KnowledgeExpansionReport | null;
   /** Performance timings for this ask (null when not under askPerf ALS). */
   ask_perf?: AskPerfReport | null;
 };
@@ -219,7 +239,9 @@ function emptyResult(
     planned_run_id: null,
     topic_gate: null,
     full_analysis_report: null,
+    full_analysis_research: null,
     search_budget: null,
+    knowledge_expansion: null,
     ask_perf: null,
     ...extras,
   };
@@ -269,6 +291,9 @@ export async function answerQuestion(params: {
   project?: LocalProject;
   /** Manually selected search mode. Default: direct_rag */
   searchMode?: SearchMode;
+  /** Optional: analyse missing relation-relevant method analyses for this question. */
+  expandMissingRelationKnowledge?: boolean;
+  expandAnalysisBudget?: number;
 }): Promise<AnswerQuestionResult> {
   const result = await answerQuestionCore(params);
   askPerfMark("answer_complete");
@@ -296,6 +321,8 @@ async function answerQuestionCore(params: {
   limit?: number;
   project?: LocalProject;
   searchMode?: SearchMode;
+  expandMissingRelationKnowledge?: boolean;
+  expandAnalysisBudget?: number;
 }): Promise<AnswerQuestionResult> {
   const started = Date.now();
   askPerfMark("answer_question_entered");
@@ -362,6 +389,38 @@ async function answerQuestionCore(params: {
     workflow_template_id: capabilities.workflowTemplateId,
   };
 
+  let knowledgeExpansion: KnowledgeExpansionReport | null = null;
+  if (params.expandMissingRelationKnowledge) {
+    askPerfBegin("knowledge_expansion");
+    try {
+      knowledgeExpansion = await runKnowledgeExpansion({
+        project,
+        question,
+        budget: params.expandAnalysisBudget,
+        allowElevatedBudget: searchMode === "full_analysis",
+        systemId: project.system_id,
+      });
+      knowledgeExpansion.re_ran_answer = true;
+      warnings.push(
+        `Knowledge-Expansion: neu=${knowledgeExpansion.analyzed_new}, cache=${knowledgeExpansion.already_cached}, deferred=${knowledgeExpansion.deferred_source_keys.length}`,
+      );
+      for (const n of knowledgeExpansion.notes.slice(0, 6)) {
+        warnings.push(`Expansion: ${n}`);
+      }
+    } catch (e) {
+      knowledgeExpansion = emptyKnowledgeExpansionReport(true);
+      knowledgeExpansion.ran = true;
+      knowledgeExpansion.notes.push(
+        e instanceof Error ? e.message : String(e),
+      );
+      warnings.push(
+        `Knowledge-Expansion fehlgeschlagen: ${knowledgeExpansion.notes[0]}`,
+      );
+    } finally {
+      askPerfEnd("knowledge_expansion");
+    }
+  }
+
   type RetrievalBundle = {
     hits: KnowledgeHit[];
     document_count: number;
@@ -370,6 +429,7 @@ async function answerQuestionCore(params: {
     query_embedding_tokens: number;
     query_embedding_cost: number;
     warnings: string[];
+    seed_enrichment?: SeedEnrichmentPack;
   };
 
   let retrieval: RetrievalBundle;
@@ -378,6 +438,7 @@ async function answerQuestionCore(params: {
   let estimatedInputTokens = 0;
   let plannedRunId: string | null = null;
   let topicGate: AnswerQuestionResult["topic_gate"] = null;
+  let fullAnalysisResearch: FullAnalysisResearchReport | null = null;
 
   // --- KI-Tiefensuche: Query Understanding + Multi-Source (nicht direct_rag) ---
   if (searchMode === "deep_search") {
@@ -505,7 +566,7 @@ async function answerQuestionCore(params: {
         if (planned.repaired) {
           warnings.push("Suchplan nach einmaliger Repair-Anfrage validiert.");
         }
-        const executed = await executeFullAnalysisRetrieval({
+        const executed = await runIterativeFullAnalysis({
           project,
           originalQuestion: question,
           plan: planned.plan,
@@ -513,7 +574,11 @@ async function answerQuestionCore(params: {
           searchProfile: capabilities.searchProfile,
           limitPerSubquery: 16,
           finalLimit: params.limit ?? 40,
+          systemId: project.system_id || "D01",
+          onProgress: (msg) =>
+            console.info("[full_analysis:research]", msg),
         });
+        fullAnalysisResearch = executed.research;
         queryPlan = {
           ...planned.plan,
           subqueries: executed.refined_plan_subqueries,
@@ -533,6 +598,9 @@ async function answerQuestionCore(params: {
           })),
         };
         warnings.push(...executed.warnings);
+        warnings.push(
+          `Vollanalyse-Research: stop=${executed.research.stop_reason}; iterations=${executed.research.stats.iterations_run}; openai_calls=${executed.research.stats.openai_calls}; new_analyses=${executed.research.stats.new_method_analyses}`,
+        );
         console.info(
           "[full_analysis:synthesis_context]",
           JSON.stringify({
@@ -541,6 +609,22 @@ async function answerQuestionCore(params: {
             evidence_ids: executed.run_debug.final_evidence_ids,
             synthesis_context_ids: executed.run_debug.synthesis_context_ids,
             excluded: executed.run_debug.excluded,
+            research: {
+              stop_reason: executed.research.stop_reason,
+              iterations: executed.research.iterations.map((it) => ({
+                iteration: it.iteration,
+                evidence_count: it.evidence_count,
+                planner_status: it.planner?.status ?? null,
+                open_questions: it.open_questions.slice(0, 8),
+                next_actions: it.next_actions.map((a) => a.type),
+                delta: it.delta,
+                new_analyses: it.new_analyses,
+                stop_reason: it.stop_reason ?? null,
+              })),
+              known_claims: executed.research.known_claims.slice(0, 12),
+              open_questions: executed.research.open_questions.slice(0, 12),
+              stats: executed.research.stats,
+            },
           }),
         );
         retrieval = {
@@ -680,6 +764,7 @@ async function answerQuestionCore(params: {
             `SEARCH_BUDGET=${searchBudget.stage}`,
             searchBudget.diagnostics.blocked_reason ?? "",
           ].filter(Boolean),
+          seed_enrichment: local.seed_enrichment,
         };
         searchBudget.diagnostics.new_openai_calls = openaiCalls;
         searchBudget.diagnostics.estimated_input_tokens = estimatedInputTokens;
@@ -714,6 +799,7 @@ async function answerQuestionCore(params: {
             `SEARCH_BUDGET=${searchBudget.stage}`,
             searchBudget.diagnostics.escalation_reason ?? "",
           ].filter(Boolean),
+          seed_enrichment: full.seed_enrichment,
         };
         searchBudget.diagnostics.retrieval_hit_count = full.hits.length;
         searchBudget.diagnostics.new_openai_calls = openaiCalls;
@@ -744,6 +830,52 @@ async function answerQuestionCore(params: {
   }
 
   warnings.push(...retrieval!.warnings);
+
+  const presentationHint = classifyPresentationHint(question);
+  let seedEnrichment: SeedEnrichmentPack | undefined =
+    retrieval!.seed_enrichment;
+  if (!seedEnrichment?.enriched) {
+    const anchors = namedEntityTechnicalAnchors(question);
+    const hitFieldSeeds: string[] = [];
+    for (const h of retrieval!.hits.slice(0, 30)) {
+      const blob = `${h.title} ${h.object_name} ${h.source_key}`;
+      for (const m of blob.matchAll(
+        /\b([A-Z][A-Z0-9_]{2,30})-(ZZ_[A-Z0-9_]+|[A-Z][A-Z0-9_]{2,30})\b/g,
+      )) {
+        hitFieldSeeds.push(`${m[1]}-${m[2]}`.toUpperCase());
+      }
+      for (const m of blob.matchAll(/\b(ZZ_[A-Z0-9_]{2,40})\b/g)) {
+        hitFieldSeeds.push(m[1]!.toUpperCase());
+      }
+    }
+    const seeds = [
+      ...new Set([
+        ...anchors.filter((a) => a.includes("-") || /^ZZ_/i.test(a)),
+        ...hitFieldSeeds,
+      ]),
+    ];
+    if (seeds.length > 0) {
+      seedEnrichment = enrichConfirmedFieldSeeds({
+        projectId: project.customer_id?.trim() || "P01",
+        systemId: project.system_id,
+        confirmedSeeds: seeds,
+      });
+    }
+  }
+  if (seedEnrichment?.enriched) {
+    warnings.push(`Seed-Enrichment aktiv: ${seedEnrichment.notes.join("; ")}`);
+    // SEARCH_BUDGET / communication prioritization must not drop confirmed
+    // deterministic enrichment evidence before the relevance gate / synthesis.
+    const enrichHits = enrichmentPackToHits(seedEnrichment, 1);
+    retrieval = {
+      ...retrieval!,
+      hits: mergePreserveConfirmedSeedEvidence(retrieval!.hits, [
+        ...enrichHits,
+        ...retrieval!.hits,
+      ]),
+      seed_enrichment: seedEnrichment,
+    };
+  }
 
   const mode = retrievalModeLabel(
     retrieval!.vector_search_active,
@@ -788,7 +920,10 @@ async function answerQuestionCore(params: {
     } else if (searchBudget.hits.length > 0) {
       retrieval = {
         ...retrieval!,
-        hits: searchBudget.hits,
+        hits: mergePreserveConfirmedSeedEvidence(
+          searchBudget.hits,
+          retrieval!.hits,
+        ),
       };
     }
     searchBudget.diagnostics.new_openai_calls = openaiCalls;
@@ -860,7 +995,9 @@ async function answerQuestionCore(params: {
     planned_run_id: plannedRunId,
     topic_gate: topicGate,
     full_analysis_report: null as FullAnalysisReport | null,
+    full_analysis_research: fullAnalysisResearch,
     search_budget: budgetDiag,
+    knowledge_expansion: knowledgeExpansion,
   };
 
   const questionIntent = classifyQuestionIntent(question);
@@ -1022,12 +1159,19 @@ async function answerQuestionCore(params: {
     };
   }
 
-  const synthesisHits =
+  // Keep confirmed deterministic seed-enrichment evidence in the synthesis
+  // context even if a later relevance filter would otherwise drop it.
+  // Generic — not tied to intent/hint (no how_works force path).
+  const synthesisHitsRaw =
     searchMode === "full_analysis"
       ? retrieval!.hits
       : relevanceGate.supporting_source_ids.length > 0
         ? hitsByIds(retrieval!.hits, relevanceGate.supporting_source_ids)
         : retrieval!.hits;
+  const synthesisHits = mergePreserveConfirmedSeedEvidence(
+    synthesisHitsRaw,
+    retrieval!.hits,
+  );
 
   if (!process.env.OPENAI_API_KEY?.trim()) {
     const tech = buildTechnicalDetailsFromHits(synthesisHits, mode);
@@ -1173,9 +1317,39 @@ async function answerQuestionCore(params: {
       coverage: searchMode === "full_analysis" ? "exhaustive" : "normal",
     });
 
+    const enrichmentBlock = seedEnrichment
+      ? formatSeedEnrichmentPromptBlock(
+          seedEnrichment,
+          presentationHint.hint,
+        )
+      : "";
+    const expansionBlock = knowledgeExpansion
+      ? formatExpansionLayersForPrompt(knowledgeExpansion)
+      : "";
+    const researchBlock =
+      searchMode === "full_analysis" && fullAnalysisResearch
+        ? [
+            "",
+            "=== VOLLANALYSE RESEARCH (Planner-Ergebnis, keine neue Recherche) ===",
+            `Stop: ${fullAnalysisResearch.stop_reason}`,
+            `Iterationen: ${fullAnalysisResearch.stats.iterations_run}`,
+            `Bekannte Claims:`,
+            ...fullAnalysisResearch.known_claims
+              .slice(0, 20)
+              .map((c) => `- ${c}`),
+            `Offene Fragen / Lücken:`,
+            ...fullAnalysisResearch.open_questions
+              .slice(0, 20)
+              .map((c) => `- ${c}`),
+            "Claim-Klassen in der Antwort: AUTHORITATIVE / CODE_DERIVED / INFERRED.",
+            "UNSUPPORTED niemals ausgeben. Keine neue Recherche in diesem Schritt.",
+          ].join("\n")
+        : "";
+
     const intentBlock = [
       "",
       `Question-Intent (nur Synthese-Gewichtung, ändert Direct-RAG-Ranking nicht): ${questionIntent.intent}`,
+      `Presentation-Hint: ${presentationHint.hint} (signals=${presentationHint.signals.join(",") || "—"})`,
       `preferences: process=${questionIntent.preferences.prefer_process_weight} tech=${questionIntent.preferences.prefer_tech_weight} relations=${questionIntent.preferences.prefer_relations} comparison_both_sides=${questionIntent.preferences.require_both_comparison_sides}`,
     ].join("\n");
 
@@ -1186,6 +1360,10 @@ async function answerQuestionCore(params: {
       groundingBlock,
       relevanceBlock,
       topicGateBlock,
+      "",
+      enrichmentBlock,
+      expansionBlock,
+      researchBlock,
       "",
       evidenceContext.prompt_text,
     ].join("\n");
@@ -1422,6 +1600,53 @@ async function answerQuestionCore(params: {
           ? techHits
           : primaryForTech,
     );
+    if (seedEnrichment?.enriched && !insufficient) {
+      const applied = applySeedEnrichmentToAnswer({
+        process_answer,
+        technical_answer,
+        pack: seedEnrichment,
+        hint: presentationHint.hint,
+      });
+      process_answer = applied.process_answer;
+      technical_answer = applied.technical_answer;
+    }
+    if (knowledgeExpansion?.ran && !insufficient) {
+      const layerConfirmed = [
+        ...(knowledgeExpansion.layers.newly_analyzed.length
+          ? [
+              {
+                text: `Neu analysiertes Beziehungswissen in diesem Lauf: ${knowledgeExpansion.layers.newly_analyzed.join("; ")}`,
+                level: "confirmed" as const,
+                source_ranks: [] as number[],
+                source_ids: knowledgeExpansion.analyzed_source_keys,
+              },
+            ]
+          : []),
+      ];
+      const layerOpen = [
+        ...(knowledgeExpansion.layers.still_open.length
+          ? [
+              {
+                text: `Weiterhin offen / mögliche Vertiefung: ${knowledgeExpansion.layers.still_open.slice(0, 8).join("; ")}`,
+                level: "possible" as const,
+                source_ranks: [] as number[],
+                source_ids: [] as string[],
+              },
+            ]
+          : []),
+      ];
+      process_answer = {
+        ...process_answer,
+        confirmed: [...process_answer.confirmed, ...layerConfirmed],
+        open: [...process_answer.open, ...layerOpen],
+        open_validation_questions: [
+          ...process_answer.open_validation_questions,
+          ...layerOpen.map((s) => s.text),
+        ],
+        has_safe_process_claim:
+          process_answer.has_safe_process_claim || layerConfirmed.length > 0,
+      };
+    }
     if (insufficient && hasUngroundedNamedEntity) {
       technical_answer = {
         ...technical_answer,
@@ -1551,7 +1776,9 @@ async function answerQuestionCore(params: {
       planned_run_id: plannedRunId,
       topic_gate: topicGate,
       full_analysis_report: fullAnalysisReport,
+      full_analysis_research: fullAnalysisResearch,
       search_budget: searchBudget?.diagnostics ?? budgetDiag,
+      knowledge_expansion: knowledgeExpansion,
       ask_perf: null,
     };
 
