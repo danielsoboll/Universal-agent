@@ -89,6 +89,14 @@ import {
   isSymbolContainmentHit,
   mergePreserveSymbolContainment,
 } from "@/lib/knowledge/symbolContainment";
+import {
+  applyUnresolvedQualifierFraming,
+  assessUnresolvedQueryQualifiers,
+} from "@/lib/knowledge/unresolvedQueryQualifier";
+import {
+  dedupeClaimStatements,
+  dedupeFinalEvidenceHits,
+} from "@/lib/knowledge/dedupeFinalEvidence";
 import { resolveProjectCapabilities } from "@/lib/domain/capabilities";
 import type { DomainProfileId } from "@/lib/domain/types";
 import {
@@ -1110,8 +1118,10 @@ async function answerQuestionCore(params: {
           ),
           namedEntityTechnicalAnchors(question),
         );
-        const pack =
+        const packRaw =
           usageHits.length > 0 ? usageHits : retrieval!.hits.slice(0, 12);
+        const packDedup = dedupeFinalEvidenceHits(packRaw);
+        const pack = packDedup.hits;
         const direct = buildUsageOnlyDirectAnswer({
           anchor: usageOnlyGate.anchor,
           hits: pack,
@@ -1304,11 +1314,12 @@ async function answerQuestionCore(params: {
       technicalAnchors: namedEntityTechnicalAnchors(question),
     });
     if (usageOnly.apply && usageOnly.anchor) {
+      const usagePack = dedupeFinalEvidenceHits(synthesisHits).hits;
       const direct = buildUsageOnlyDirectAnswer({
         anchor: usageOnly.anchor,
-        hits: synthesisHits,
+        hits: usagePack,
       });
-      const tech = buildTechnicalDetailsFromHits(synthesisHits, mode);
+      const tech = buildTechnicalDetailsFromHits(usagePack, mode);
       const pa: ProcessAnswer = {
         ...EMPTY_PROCESS_ANSWER,
         direct_answer: direct,
@@ -1334,7 +1345,7 @@ async function answerQuestionCore(params: {
           "Keine authoritative Inventory-Definition; belegte Code-/Literal-Verwendung ausgegeben.",
         technical_objects: [
           ...new Set(
-            synthesisHits
+            usagePack
               .map((h) => h.object_name)
               .filter((n): n is string => Boolean(n && n.trim())),
           ),
@@ -1343,18 +1354,18 @@ async function answerQuestionCore(params: {
         process_answer: pa,
         technical_answer: enrichTechnicalAnswerFromHits(
           { ...EMPTY_TECHNICAL_ANSWER },
-          synthesisHits,
+          usagePack,
         ),
         technical_details: tech,
         compact_technical_details: buildCompactTechnicalDetails({
-          hits: synthesisHits,
+          hits: usagePack,
           groundingResults: groundingReport.results,
         }),
         question_intent: questionIntent.intent,
         evidence_context_report: null,
         entity_grounding: groundingReport.results,
         relevance_gate: relevanceGate,
-        sources: synthesisHits,
+        sources: usagePack,
         model: AI_CONFIG.chatModel,
         token_usage: {
           input: plannerTokens.input,
@@ -1651,6 +1662,18 @@ async function answerQuestionCore(params: {
       relevanceGate.answerability === "answerable" ||
       relevanceGate.answerability === "partially_answerable";
 
+    // Named qualifier (brand/company/…) may be missing from extractQueryEntities
+    // while topic evidence (e.g. virtuelles Lager) is strong — keep the qualifier
+    // visible as unresolved instead of answering as if it matched.
+    const qualifierAssessment = assessUnresolvedQueryQualifiers({
+      question,
+      hits: synthesisHits.length > 0 ? synthesisHits : retrieval!.hits,
+      grounding: groundingReport,
+      relevanceGate,
+    });
+    const unresolvedQualifierPartial =
+      qualifierAssessment.apply_partial_framing;
+
     // "Welche Kunden …?" without any concrete customer/partner ids in supporting
     // evidence must not become a positive process answer (DESADV-style false hits).
     const asksWhichCustomers = /für welche kunden|welche kunden\b/i.test(
@@ -1668,15 +1691,21 @@ async function answerQuestionCore(params: {
     const customerQuestionWithoutIds =
       asksWhichCustomers && !customerIdInEvidence;
 
+    // Ungrounded named subject without independent topic evidence → fail closed.
+    // With topic evidence + unresolved qualifier → partial framing (not wipe).
+    const hardUngroundedNamed =
+      hasUngroundedNamedEntity && !unresolvedQualifierPartial;
+
     const insufficient =
-      hasUngroundedNamedEntity ||
+      hardUngroundedNamed ||
       customerQuestionWithoutIds ||
       (validated.insufficient_evidence && !gateAllowsAnswer) ||
       (!validated.process_answer.summary.trim() &&
         validated.process_answer.statements.length === 0 &&
-        !gateAllowsAnswer);
+        !gateAllowsAnswer &&
+        !unresolvedQualifierPartial);
 
-    const insufficientMessage = hasUngroundedNamedEntity
+    const insufficientMessage = hardUngroundedNamed
       ? `Für „${ungroundedNamed.map((r) => r.query_entity).join(", ")}“ liegt im aktuell indexierten Wissensbestand keine belastbare, entitätsspezifische Regel vor.`
       : customerQuestionWithoutIds
         ? "Im aktuell indexierten Wissensbestand sind keine konkreten kundenspezifischen Anpassungen (mit belegten Kunden-/Partnernummern) für diese Frage nachweisbar."
@@ -1691,7 +1720,7 @@ async function answerQuestionCore(params: {
     });
 
     let process_answer = contract.process_answer;
-    if (insufficient && hasUngroundedNamedEntity) {
+    if (insufficient && hardUngroundedNamed) {
       const neighbors = similarNeighborEntities(groundingReport);
       const neighborNote =
         neighbors.length > 0
@@ -1723,6 +1752,34 @@ async function answerQuestionCore(params: {
           ...ungroundedNamed.map(
             (r) => `Für „${r.query_entity}“ (${r.entity_type}): ${r.reason}`,
           ),
+          ...process_answer.open_validation_questions,
+        ],
+      };
+    } else if (unresolvedQualifierPartial && qualifierAssessment.disclaimer) {
+      const framed = applyUnresolvedQualifierFraming({
+        directAnswer: process_answer.direct_answer,
+        disclaimer: qualifierAssessment.disclaimer,
+        unresolved: qualifierAssessment.unresolved,
+      });
+      warnings.push(
+        `Unresolved-Qualifier: ${qualifierAssessment.unresolved
+          .map((u) => u.raw)
+          .join(", ")} (Thema belegt, Qualifier nicht).`,
+      );
+      process_answer = {
+        ...process_answer,
+        direct_answer: framed.direct_answer,
+        open: [
+          ...framed.open_texts.map((text) => ({
+            text,
+            level: "not_supported" as const,
+            source_ranks: [],
+            source_ids: [],
+          })),
+          ...process_answer.open,
+        ],
+        open_validation_questions: [
+          ...framed.open_texts,
           ...process_answer.open_validation_questions,
         ],
       };
@@ -1798,7 +1855,7 @@ async function answerQuestionCore(params: {
     const primaryForTech =
       sources.length > 0 ? sources : synthesisHits.slice(0, 5);
     const techHits =
-      insufficient && hasUngroundedNamedEntity
+      insufficient && hardUngroundedNamed
         ? []
         : expandRelatedHits(primaryForTech, synthesisHits);
     const techBase = buildTechnicalDetailsFromHits(
@@ -1807,7 +1864,7 @@ async function answerQuestionCore(params: {
     );
     const technical_details = mergeTechnicalDetails(
       techBase,
-      insufficient && hasUngroundedNamedEntity
+      insufficient && hardUngroundedNamed
         ? { conditions: [], changed_fields: [], additional_evidence_notes: [] }
         : validated.technical_details,
     );
@@ -1823,7 +1880,7 @@ async function answerQuestionCore(params: {
 
     let technical_answer = enrichTechnicalAnswerFromHits(
       contract.technical_answer,
-      insufficient && hasUngroundedNamedEntity
+      insufficient && hardUngroundedNamed
         ? neighborHits
         : techHits.length > 0
           ? techHits
@@ -1876,7 +1933,7 @@ async function answerQuestionCore(params: {
           process_answer.has_safe_process_claim || layerConfirmed.length > 0,
       };
     }
-    if (insufficient && hasUngroundedNamedEntity) {
+    if (insufficient && hardUngroundedNamed) {
       technical_answer = {
         ...technical_answer,
         entry_point: technical_answer.entry_point.map((s) => ({
@@ -1887,8 +1944,8 @@ async function answerQuestionCore(params: {
       };
     }
 
-    const compact_technical_details: CompactTechnicalDetails =
-      insufficient && hasUngroundedNamedEntity
+    let compact_technical_details: CompactTechnicalDetails =
+      insufficient && hardUngroundedNamed
         ? (() => {
             const compact = buildCompactTechnicalDetails({
               hits: neighborHits,
@@ -1908,6 +1965,35 @@ async function answerQuestionCore(params: {
             extraSystemaktion: insufficient ? [] : validated.technical_details.changed_fields,
           });
 
+    // Final user-context evidence/claim dedup (retrieval may keep duplicates).
+    const dedupedSources = dedupeFinalEvidenceHits(sources);
+    if (dedupedSources.merged_groups > 0) {
+      warnings.push(
+        `Evidence-Dedup: ${dedupedSources.merged_groups} kanonische Gruppen zusammengeführt.`,
+      );
+    }
+    sources = dedupedSources.hits;
+    process_answer = {
+      ...process_answer,
+      confirmed: dedupeClaimStatements(process_answer.confirmed),
+      inferred: dedupeClaimStatements(process_answer.inferred),
+      open: dedupeClaimStatements(process_answer.open),
+    };
+    compact_technical_details = {
+      ...compact_technical_details,
+      quelle: [...new Set(compact_technical_details.quelle.map((q) => q.trim()).filter(Boolean))],
+      beleg: [...new Set(compact_technical_details.beleg.map((q) => q.trim()).filter(Boolean))],
+      ausloeser: [
+        ...new Set(
+          compact_technical_details.ausloeser.map((q) => q.trim()).filter(Boolean),
+        ),
+      ],
+      systemaktion: [
+        ...new Set(
+          compact_technical_details.systemaktion.map((q) => q.trim()).filter(Boolean),
+        ),
+      ],
+    };
     const reasoningParts = [
       process_answer.confirmed.length
         ? `Sicher belegt: ${process_answer.confirmed.map((s) => s.text).join(" ")}`

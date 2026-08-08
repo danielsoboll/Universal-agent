@@ -149,6 +149,28 @@ export function assessLocalExactCoverage(params: {
     };
   }
 
+  // Soft topic already resolved to technical seeds/config (e.g. virtuelles Lager
+  // → ZZ_VLAGER enrichment) without a bare technical query anchor: keep LOCAL_EXACT.
+  if (anchors.length === 0) {
+    const topicResolved = params.hits.filter(
+      (h) =>
+        hasDeterministicSeedEvidence(h) ||
+        isConfigTableExpansionHit(h) ||
+        hasExactAuthoritativeFlag(h),
+    );
+    if (topicResolved.length > 0) {
+      return {
+        sufficient: true,
+        local_exact_hits:
+          local_exact_hits.length > 0 ? local_exact_hits : topicResolved,
+        communication_hits,
+        cache_hits,
+        missing_code_analysis,
+        reason: `LOCAL_EXACT: weiches Thema bereits auf technische Seeds/Config aufgelöst (${topicResolved.length}).`,
+      };
+    }
+  }
+
   return {
     sufficient: false,
     local_exact_hits,

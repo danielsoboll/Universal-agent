@@ -9,7 +9,10 @@ import {
 import { isBareTechnicalUsageHit } from "@/lib/knowledge/bareTechnicalTokenFallback";
 import { isConfigTableExpansionHit } from "@/lib/knowledge/configTableExpansion";
 import { isSymbolContainmentHit } from "@/lib/knowledge/symbolContainment";
-import { namedEntityTechnicalAnchors } from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
+import {
+  extractNamedExternalEntities,
+  namedEntityTechnicalAnchors,
+} from "@/lib/knowledge/searchBudget/extractNamedExternalEntity";
 
 /**
  * Deterministic relevance / evidence gate — runs BEFORE answer synthesis.
@@ -302,6 +305,63 @@ function conceptMatchesHit(concept: string, compact: string, spaced: string): bo
   return false;
 }
 
+function hasResolvedTechnicalTopicEvidence(hit: KnowledgeHit): boolean {
+  return (
+    hasDeterministicSeedEvidence(hit) ||
+    hasExactAuthoritativeFlag(hit) ||
+    isConfigTableExpansionHit(hit) ||
+    isBareTechnicalUsageHit(hit)
+  );
+}
+
+/**
+ * Phrase-/entity-level coverage: when a soft query phrase already resolved to
+ * technical seeds/inventory (e.g. "virtuelles Lager" → ZZ_VLAGER), mark the
+ * constituent soft tokens as matched. Named qualifiers (Pepsi, Edwka, …) are
+ * never auto-consumed here.
+ */
+function consumeConceptsCoveredByResolvedPhrases(params: {
+  question: string;
+  queryConcepts: string[];
+  matched: Set<string>;
+  hits: KnowledgeHit[];
+}): void {
+  const topicHits = params.hits.filter(hasResolvedTechnicalTopicEvidence);
+  if (topicHits.length === 0) return;
+
+  const namedQualifierNorms = new Set(
+    extractNamedExternalEntities(params.question)
+      .filter((e) => e.kind !== "technical_symbol")
+      .map((e) => normalizeToken(e.normalized)),
+  );
+
+  const techCorpus = normalizeToken(
+    topicHits
+      .map(
+        (h) =>
+          `${h.title} ${h.object_name} ${h.subobject_name} ${h.source_key} ${h.snippet} ${h.technical_summary}`,
+      )
+      .join(" "),
+  );
+
+  for (const c of params.queryConcepts) {
+    if (params.matched.has(c)) continue;
+    const n = normalizeToken(c);
+    if (!n || n.length < 3) continue;
+    // True unresolved qualifiers stay open (Pepsi / Edwka / …).
+    if (namedQualifierNorms.has(n)) continue;
+    // Soft topic token covered by resolved technical evidence
+    // (lager ⊂ zvlager / virtuelles_lager; virtuell ⊂ virtuelles_lager).
+    const stem = n.length >= 6 ? n.slice(0, Math.max(4, n.length - 2)) : n;
+    if (
+      techCorpus.includes(n) ||
+      (stem.length >= 4 && techCorpus.includes(stem))
+    ) {
+      params.matched.add(c);
+    }
+  }
+}
+
 function hasSpecificEvidence(
   hit: KnowledgeHit,
   technicalAnchors: string[] = [],
@@ -551,6 +611,20 @@ export function assessRelevanceGate(params: {
     similar,
     technicalAnchors,
   );
+
+  // Soft phrase tokens covered by already-resolved technical seeds/inventory.
+  consumeConceptsCoveredByResolvedPhrases({
+    question: params.question,
+    queryConcepts: query_concepts,
+    matched,
+    hits: params.hits,
+  });
+  // Ensure resolved technical topic evidence stays supporting after consume.
+  for (const hit of params.hits) {
+    if (!hasResolvedTechnicalTopicEvidence(hit)) continue;
+    supporting.add(hit.search_document_id);
+    similar.delete(hit.search_document_id);
+  }
 
   retainExactAuthoritativeEvidence({
     hits: params.hits,

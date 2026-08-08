@@ -245,16 +245,26 @@ export async function knowledgeSearch(params: {
         params.query,
       ).length > 0;
       const strongExact =
-        hasTechnicalAnchor &&
         access.hits.some(
           (h) =>
+            h.metadata?.seed_enrichment === true ||
+            h.metadata?.config_table_expansion === true ||
+            h.metadata?.exact_authoritative === true ||
             h.knowledge_unit_type === "message_idoc_object" ||
             h.knowledge_unit_type === "master_field" ||
             h.exact_score >= 3 ||
             (h.matched_terms ?? []).some((t) => String(t).startsWith("sym:")),
-        );
+        ) &&
+        (hasTechnicalAnchor ||
+          access.hits.some(
+            (h) =>
+              h.metadata?.seed_enrichment === true ||
+              h.metadata?.config_table_expansion === true ||
+              h.metadata?.exact_authoritative === true,
+          ));
 
       // Exact/literal/relation with technical anchors: return access hits.
+      // Soft topic already resolved to seeds/config: keep access hits (no vector wipe).
       // Semantic Stage-1 (no technical anchor): allow vector even if soft lexical hits exist.
       if (!vectorRequested || (access.hits.length > 0 && strongExact)) {
         if (!vectorRequested) {

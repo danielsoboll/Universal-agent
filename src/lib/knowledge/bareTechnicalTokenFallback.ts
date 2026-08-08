@@ -9,6 +9,7 @@ import {
   isExactAuthoritativeHit,
   isTechnicalIdToken,
 } from "@/lib/knowledge/exactAuthoritative";
+import { extractRoutineIdentifier } from "@/lib/knowledge/dedupeFinalEvidence";
 
 const LITERAL_BUDGET = 12;
 const CODE_USAGE_BUDGET = 12;
@@ -150,7 +151,11 @@ export function buildUsageOnlyDirectAnswer(params: {
   const seen = new Set<string>();
   for (const h of usageHits) {
     const obj = (h.object_name || "").trim();
-    const sub = (h.subobject_name || "").trim();
+    const sub = (
+      h.subobject_name ||
+      extractRoutineIdentifier(h) ||
+      ""
+    ).trim();
     const loc = [obj, sub].filter(Boolean).join(" / ") || h.title || h.source_key;
     const preview = (
       h.snippet ||
